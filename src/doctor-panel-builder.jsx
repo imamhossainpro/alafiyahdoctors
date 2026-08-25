@@ -275,7 +275,7 @@ const CSS = `
 .dpb .doctor-mini-list{padding:4px 14px 12px;}
 .dpb .doctor-row{display:flex;align-items:center;justify-content:space-between;padding:9px 4px;border-top:1px dashed #e2e6ee;gap:10px;}
 .dpb .doctor-row-info{min-width:0;}
-.dpb .doctor-row-name{font-size:13.5px;font-weight:700;color:#1f2937;}
+.dpb .doctor-row-name{font-size:16px;font-weight:700;color:#1f2937;}
 .dpb .doctor-row-specialty{font-size:12px;color:#6b7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:280px;}
 .dpb .doctor-row-actions{display:flex;gap:2px;flex-shrink:0;}
 .dpb .add-doctor-btn{display:flex;align-items:center;gap:6px;width:100%;justify-content:center;border:1.5px dashed #e2e6ee;background:transparent;border-radius:9px;padding:8px;font-size:12.5px;color:#6b7280;margin-top:6px;}
@@ -320,9 +320,9 @@ const CSS = `
 .dpb .dept-ribbon{flex:1;margin-left:-12px;padding:7px 14px 7px 22px;color:#fff;font-weight:700;font-size:13.5px;clip-path:polygon(0 0,94% 0,100% 50%,94% 100%,0 100%);min-height:34px;display:flex;align-items:center;}
 
 .dpb .doctor-entry{margin-bottom:13px;padding:1px 0 1px 10px;border-left:3px solid #ccc;}
-.dpb .doctor-name{color:#1c5fa8;font-weight:700;font-size:13.5px;margin-bottom:1px;}
+.dpb .doctor-name{color:#1c5fa8;font-weight:700;font-size:18px;margin-bottom:1px;}
 .dpb .doctor-quals{color:#333;font-size:11.5px;line-height:1.45;white-space:pre-line;}
-.dpb .doctor-specialty{color:#9c2a7e;font-weight:700;font-size:12px;white-space:pre-line;margin-top:2px;}
+.dpb .doctor-specialty{color:#9c2a7e;font-weight:700;font-size:15px;white-space:pre-line;margin-top:2px;}
 .dpb .doctor-workplace{color:#333;font-size:11.5px;line-height:1.4;white-space:pre-line;margin-top:1px;}
 .dpb .doctor-time{color:#333;font-size:11.5px;margin-top:2px;}
 .dpb .doctor-time strong{color:#111;}
