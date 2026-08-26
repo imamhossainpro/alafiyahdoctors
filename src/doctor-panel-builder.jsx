@@ -194,7 +194,7 @@ function SaveIndicator({ status }) {
   return <span className="save-indicator">{text}</span>;
 }
 
-// ===================== Auth Component (ফিক্স করা হয়েছে) =====================
+// ===================== Auth Component (Enter চাপলে কাজ করবে) =====================
 function AuthPage({ onLogin, onClose }) {
   const [isRegister, setIsRegister] = useState(false);
   const [formData, setFormData] = useState({ name: '', password: '', designation: '' });
@@ -203,14 +203,15 @@ function AuthPage({ onLogin, onClose }) {
 
   const defaultAdmin = { username: 'admin', password: 'admin123', role: 'admin', approved: true };
 
-  const handleLogin = async () => {
+  const handleLogin = async (e) => {
+    e.preventDefault(); // ফর্ম রিফ্রেশ আটকাবে
     setError(''); setSuccess('');
     const name = formData.name.trim();
     const pass = formData.password.trim();
 
     if (name === defaultAdmin.username && pass === defaultAdmin.password) {
       onLogin({ ...defaultAdmin, username: name, isGuest: false });
-      onClose(); // 🔥 পপআপ বন্ধ হবে
+      onClose();
       return;
     }
 
@@ -223,11 +224,12 @@ function AuthPage({ onLogin, onClose }) {
       if (!userData.approved) { setError('অ্যাকাউন্টটি এখনো এপ্রুভ হয়নি।'); return; }
       
       onLogin({ ...userData, username: name, isGuest: false });
-      onClose(); // 🔥 পপআপ বন্ধ হবে
+      onClose();
     } catch (e) { console.error(e); setError('লগইন করতে সমস্যা হয়েছে।'); }
   };
 
-  const handleRegister = async () => {
+  const handleRegister = async (e) => {
+    e.preventDefault(); // ফর্ম রিফ্রেশ আটকাবে
     setError(''); setSuccess('');
     const name = formData.name.trim();
     const pass = formData.password.trim();
@@ -251,21 +253,22 @@ function AuthPage({ onLogin, onClose }) {
         {success && <div className="dpb-auth-success">{success}</div>}
         
         {isRegister ? (
-          <>
+          <form onSubmit={handleRegister}>
             <input type="text" placeholder="আপনার নাম" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
             <input type="password" placeholder="পাসওয়ার্ড" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} />
             <input type="text" placeholder="ডেসিগনেশন" value={formData.designation} onChange={(e) => setFormData({...formData, designation: e.target.value})} />
-            <button onClick={handleRegister}>নিবন্ধন করুন</button>
+            <button type="submit">নিবন্ধন করুন</button>
             <div className="dpb-auth-toggle">আগে থেকে অ্যাকাউন্ট আছে? <span onClick={() => { setIsRegister(false); setError(''); setSuccess(''); }}>লগইন করুন</span></div>
-          </>
+          </form>
         ) : (
-          <>
+          <form onSubmit={handleLogin}>
             <input type="text" placeholder="ইউজারনেম/নাম" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
             <input type="password" placeholder="পাসওয়ার্ড" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} />
-            <button onClick={handleLogin}>লগইন করুন</button>
+            <button type="submit">লগইন করুন</button>
             <div className="dpb-auth-toggle">নতুন ইউজার? <span onClick={() => { setIsRegister(true); setError(''); setSuccess(''); }}>রেজিস্ট্রেশন করুন</span></div>
-          </>
+          </form>
         )}
+        
         <div style={{textAlign:'center', marginTop:'15px', cursor:'pointer', color:'#6b7280'}} onClick={onClose}>বাতিল করুন</div>
       </div>
     </div>
@@ -505,7 +508,7 @@ export default function DoctorPanelBuilder() {
   const [user, setUser] = useState(GUEST_USER);
   const [showAuth, setShowAuth] = useState(false);
   const [allUsers, setAllUsers] = useState([]);
-  const [activeView, setActiveView] = useState('preview'); // প্রিভিউ, বিল্ডার, এডমিন, ডক্টর লিস্ট
+  const [activeView, setActiveView] = useState('preview');
   const [departments, setDepartments] = useState([]);
   const [panels, setPanels] = useState([]);
   const [activePanelId, setActivePanelId] = useState(null);
@@ -524,7 +527,6 @@ export default function DoctorPanelBuilder() {
   const isEditor = user?.role === 'editor';
   const isGuest = user?.isGuest === true;
 
-  // Load Data
   useEffect(() => {
     const loadData = async () => {
       const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000));
@@ -563,7 +565,6 @@ export default function DoctorPanelBuilder() {
     loadData();
   }, []);
 
-  // Admin এর জন্য ইউজার লোড
   useEffect(() => {
     if (!isAdmin) return;
     const loadUsers = async () => {
@@ -586,12 +587,10 @@ export default function DoctorPanelBuilder() {
   const allDoctorIds = departments.flatMap(d => d.doctors.map(doc => doc.id));
   const allChecked = allDoctorIds.length > 0 && allDoctorIds.every(id => checkedIds.has(id));
 
-  // ইউজার ম্যানেজমেন্ট
   const handleApprove = async (userId) => { try { await updateDoc(doc(db, 'users', userId), { approved: true }); setAllUsers(users => users.map(u => u.id === userId ? { ...u, approved: true } : u)); } catch (e) { console.error(e); } };
   const handleSetRole = async (userId, role) => { try { await updateDoc(doc(db, 'users', userId), { role }); setAllUsers(users => users.map(u => u.id === userId ? { ...u, role } : u)); } catch (e) { console.error(e); } };
   const handleDeleteUser = async (userId) => { try { await deleteDoc(doc(db, 'users', userId)); setAllUsers(users => users.filter(u => u.id !== userId)); } catch (e) { console.error(e); } };
 
-  // অন্যান্য হ্যান্ডলার
   const updatePanel = (updater, immediate) => { const updated = updater(activePanel); const newPanels = panels.map(p => p.id === activePanelId ? updated : p); setPanels(newPanels); if (immediate) { setSaveStatus('saving'); savePanelToFirebase(updated).then(() => setSaveStatus('saved')).catch(() => setSaveStatus('error')); setTimeout(() => setSaveStatus('idle'), 1500); } else { setSaveStatus('saving'); if (debounceRef.current) clearTimeout(debounceRef.current); debounceRef.current = setTimeout(() => { savePanelToFirebase(updated).then(() => setSaveStatus('saved')).catch(() => setSaveStatus('error')); setTimeout(() => setSaveStatus('idle'), 1500); }, 700); } };
   const updateDepartments = (updater, immediate) => { const newDepts = updater(departments); setDepartments(newDepts); if (immediate) { saveDepartments(newDepts); } else { if (debounceRef.current) clearTimeout(debounceRef.current); debounceRef.current = setTimeout(() => saveDepartments(newDepts), 700); } };
   const handleUpdateTitle = (title) => updatePanel(p => ({ ...p, title }), true);
@@ -616,12 +615,9 @@ export default function DoctorPanelBuilder() {
   const handleDeletePanel = async (panelId) => { if (panels.length <= 1) return; await deletePanelFromFirebase(panelId); const remaining = panels.filter(p => p.id !== panelId); setPanels(remaining); if (activePanelId === panelId) { setActivePanelId(remaining[0].id); setCheckedIds(new Set(remaining[0].activeDoctorIds || [])); } };
   const handleSavePanel = (fields) => { if (panelModal.mode === 'add') handleAddPanel(fields); else handleRenamePanel(fields); };
 
-  // 🔥 লগআউট ফাংশন (UI রিলোড করার জন্য)
   const handleLogout = () => {
     setUser(GUEST_USER);
-    setTimeout(() => {
-      window.location.reload();
-    }, 100);
+    setTimeout(() => { window.location.reload(); }, 100);
   };
 
   if (loading) { return (<div className="dpb"><style>{CSS}</style><div className="loading-screen"><Loader2 className="spin" size={26} /><span>লোড হচ্ছে...</span></div></div>); }
@@ -632,50 +628,23 @@ export default function DoctorPanelBuilder() {
       <div className="topbar no-print">
         <div className="topbar-title"><Stethoscope size={20} /><span>ডাক্তার প্যানেল</span></div>
         <div className="topbar-right">
-          
-          {/* টপবার ট্যাব (রোল অনুযায়ী) */}
           <div className="tabs">
-            {isGuest && (
-              <button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button>
-            )}
-            {!isGuest && user.role === 'viewer' && (
-              <button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button>
-            )}
-            {!isGuest && user.role === 'editor' && (
-              <>
-                <button className={activeView === 'edit' ? 'tab active' : 'tab'} onClick={() => setActiveView('edit')}>প্যানেল বিল্ডার</button>
-                <button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button>
-              </>
-            )}
-            {!isGuest && user.role === 'admin' && (
-              <>
-                <button className={activeView === 'doctors' ? 'tab active' : 'tab'} onClick={() => setActiveView('doctors')}>ডাক্তার লিস্ট</button>
-                <button className={activeView === 'edit' ? 'tab active' : 'tab'} onClick={() => setActiveView('edit')}>প্যানেল বিল্ডার</button>
-                <button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button>
-                <button className={activeView === 'admin' ? 'tab active' : 'tab'} onClick={() => setActiveView('admin')}>অ্যাডমিন প্যানেল</button>
-              </>
-            )}
+            {isGuest && (<button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button>)}
+            {!isGuest && user.role === 'viewer' && (<button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button>)}
+            {!isGuest && user.role === 'editor' && (<><button className={activeView === 'edit' ? 'tab active' : 'tab'} onClick={() => setActiveView('edit')}>প্যানেল বিল্ডার</button><button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button></>)}
+            {!isGuest && user.role === 'admin' && (<><button className={activeView === 'doctors' ? 'tab active' : 'tab'} onClick={() => setActiveView('doctors')}>ডাক্তার লিস্ট</button><button className={activeView === 'edit' ? 'tab active' : 'tab'} onClick={() => setActiveView('edit')}>প্যানেল বিল্ডার</button><button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button><button className={activeView === 'admin' ? 'tab active' : 'tab'} onClick={() => setActiveView('admin')}>অ্যাডমিন প্যানেল</button></>)}
           </div>
 
-          {/* লগইন / লগআউট বাটন */}
           {isGuest ? (
             <button className="login-btn" onClick={() => setShowAuth(true)}>লগইন / রেজিস্ট্রেশন</button>
           ) : (
             <button className="logout-btn" onClick={handleLogout}><LogOut size={14} /> লগআউট</button>
           )}
-
         </div>
       </div>
 
-      {/* ভিউ এরিয়া */}
-      {activeView === 'preview' && (
-        <PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} />
-      )}
-
-      {activeView === 'doctors' && isAdmin && (
-        <ManageDoctorsView departments={departments} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={handleDeleteDept} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={handleDeleteDoctor} isAdmin={true} />
-      )}
-
+      {activeView === 'preview' && (<PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} />)}
+      {activeView === 'doctors' && isAdmin && (<ManageDoctorsView departments={departments} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={handleDeleteDept} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={handleDeleteDoctor} isAdmin={true} />)}
       {activeView === 'edit' && !isGuest && (isEditor || isAdmin) && (
         <>
           <PanelSwitcher panels={panels} activePanelId={activePanelId} onSwitch={handleSwitchPanel} onAdd={() => setPanelModal({ mode: 'add', departments })} onRename={(panel) => setPanelModal({ mode: 'rename', panel })} onDelete={isAdmin ? handleDeletePanel : () => {}} />
@@ -686,15 +655,10 @@ export default function DoctorPanelBuilder() {
           )}
         </>
       )}
+      {activeView === 'admin' && isAdmin && (<AdminPanel users={allUsers} onApprove={handleApprove} onSetRole={handleSetRole} onDeleteUser={handleDeleteUser} />)}
 
-      {activeView === 'admin' && isAdmin && (
-        <AdminPanel users={allUsers} onApprove={handleApprove} onSetRole={handleSetRole} onDeleteUser={handleDeleteUser} />
-      )}
-
-      {/* Auth Modal */}
       {showAuth && <AuthPage onLogin={setUser} onClose={() => setShowAuth(false)} />}
 
-      {/* অন্যান্য মডাল */}
       {deptModal && <DepartmentModal initial={deptModal.mode === 'edit' ? deptModal.dept : null} onSave={handleSaveDept} onClose={() => setDeptModal(null)} />}
       {doctorModal && <DoctorModal initial={doctorModal.mode === 'edit' ? doctorModal.doctor : null} onSave={handleSaveDoctor} onClose={() => setDoctorModal(null)} />}
       {panelModal && <PanelModal mode={panelModal.mode} initial={panelModal.mode === 'rename' ? panelModal.panel : null} activeDeptCount={activePanel.activeDoctorIds?.length || 0} departments={departments} onSave={handleSavePanel} onClose={() => setPanelModal(null)} />}
