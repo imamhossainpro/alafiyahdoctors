@@ -11,6 +11,7 @@ import {
   deleteDoc,
   query,
   where,
+  connectFirestoreEmulator,
 } from 'firebase/firestore';
 
 // আপনার Firebase Config এখানে দিন
@@ -26,6 +27,10 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+
+// ব্রাউজারের অ্যাড-ব্লক থাকলে নিচের লাইনটি আনকমেন্ট (// সরিয়ে) করে 
+// টার্মিনালে `firebase emulators:start` কমান্ড দিয়ে চালু করুন:
+// connectFirestoreEmulator(db, 'localhost', 8080);
 
 // Firestore ফাংশনগুলো এক্সপোর্ট করুন
 export {
