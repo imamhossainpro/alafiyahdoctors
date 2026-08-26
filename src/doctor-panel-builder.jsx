@@ -8,7 +8,6 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { db, doc, getDoc, setDoc, getDocs, collection, deleteDoc, updateDoc, query, where } from './firebase';
 
-// ===================== CONSTANTS =====================
 const uid = () => Math.random().toString(36).slice(2, 10);
 const DAY_NAMES = ['শনিবার', 'রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার'];
 function titleForName(name) { return DAY_NAMES.indexOf(name) !== -1 ? name + 'ের ডক্টরস প্যানেল' : name; }
@@ -24,7 +23,6 @@ const DEFAULT_FOOTER = { address: 'বাকলিয়া এক্সেস �
 
 const GUEST_USER = { role: 'viewer', isGuest: true, name: 'অতিথি', approved: true };
 
-// ===================== CSS =====================
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700;800&display=swap');
 
@@ -173,7 +171,6 @@ const CSS = `
 @media print{ .no-print{display:none !important;} .dpb{background:#fff;} .dpb .preview-wrap{max-width:100%;padding:0;margin:0;} .dpb .poster-page{box-shadow:none;border:none;border-radius:0;} .dpb .poster-body{column-count:3 !important;} .dpb *{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;} }
 @page{margin:10mm;}
 
-/* ---------- Auth CSS ---------- */
 .dpb-auth{position:fixed;inset:0;background:rgba(15,23,42,0.8);display:flex;justify-content:center;align-items:center;z-index:200;padding:20px;}
 .dpb-auth-box{background:#fff;padding:30px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:100%;max-width:400px;}
 .dpb-auth-box h2{color:#1c5fa8;text-align:center;margin-bottom:20px;}
@@ -186,20 +183,17 @@ const CSS = `
 .dpb-auth-toggle span{color:#1c5fa8;font-weight:700;cursor:pointer;}
 `;
 
-// ===================== SaveIndicator =====================
 function SaveIndicator({ status }) {
   if (status === 'idle') return null;
   const text = status === 'saving' ? 'সংরক্ষণ হচ্ছে...' : status === 'saved' ? '✓ সংরক্ষিত হয়েছে' : 'সংরক্ষণ ব্যর্থ হয়েছে';
   return <span className="save-indicator">{text}</span>;
 }
 
-// ===================== Auth Component =====================
 function AuthPage({ onLogin, onClose }) {
   const [isRegister, setIsRegister] = useState(false);
   const [formData, setFormData] = useState({ name: '', password: '', designation: '' });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-
   const defaultAdmin = { username: 'admin', password: 'admin123', role: 'admin', approved: true };
 
   const handleLogin = async (e) => {
@@ -207,13 +201,10 @@ function AuthPage({ onLogin, onClose }) {
     setError(''); setSuccess('');
     const name = formData.name.trim();
     const pass = formData.password.trim();
-
     if (name === defaultAdmin.username && pass === defaultAdmin.password) {
       onLogin({ ...defaultAdmin, username: name, isGuest: false });
-      onClose();
-      return;
+      onClose(); return;
     }
-
     try {
       const q = query(collection(db, 'users'), where('name', '==', name));
       const querySnapshot = await getDocs(q);
@@ -221,7 +212,6 @@ function AuthPage({ onLogin, onClose }) {
       const userData = querySnapshot.docs[0].data();
       if (userData.password !== pass) { setError('ভুল পাসওয়ার্ড!'); return; }
       if (!userData.approved) { setError('অ্যাকাউন্টটি এখনো এপ্রুভ হয়নি।'); return; }
-      
       onLogin({ ...userData, username: name, isGuest: false });
       onClose();
     } catch (e) { console.error(e); setError('লগইন করতে সমস্যা হয়েছে।'); }
@@ -233,9 +223,7 @@ function AuthPage({ onLogin, onClose }) {
     const name = formData.name.trim();
     const pass = formData.password.trim();
     const desig = formData.designation.trim();
-
     if (!name || !pass || !desig) { setError('সব ঘর পূরণ করুন!'); return; }
-
     try {
       const newUser = { id: uid(), name, password: pass, designation: desig, role: 'pending', approved: false };
       await setDoc(doc(db, 'users', newUser.id), newUser);
@@ -267,14 +255,12 @@ function AuthPage({ onLogin, onClose }) {
             <div className="dpb-auth-toggle">নতুন ইউজার? <span onClick={() => { setIsRegister(true); setError(''); setSuccess(''); }}>রেজিস্ট্রেশন করুন</span></div>
           </form>
         )}
-        
         <div style={{textAlign:'center', marginTop:'15px', cursor:'pointer', color:'#6b7280'}} onClick={onClose}>বাতিল করুন</div>
       </div>
     </div>
   );
 }
 
-// ===================== Admin Panel =====================
 function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
   return (
     <div className="edit-panel">
@@ -315,15 +301,12 @@ function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
   );
 }
 
-// ===================== DoctorRow =====================
 function DoctorRow({ doc, index, total, checked, onToggleChecked, onEdit, onDelete, onMoveUp, onMoveDown, allowDelete = true, showCheckbox = true }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   useEffect(() => { if (!confirmDelete) return; const t = setTimeout(() => setConfirmDelete(false), 3000); return () => clearTimeout(t); }, [confirmDelete]);
   return (
     <div className="doctor-row">
-      {showCheckbox && (
-        <input type="checkbox" className="doctor-checkbox" checked={checked} onChange={onToggleChecked} title="প্রিভিউতে দেখাতে টিক দিন" />
-      )}
+      {showCheckbox && (<input type="checkbox" className="doctor-checkbox" checked={checked} onChange={onToggleChecked} title="প্রিভিউতে দেখাতে টিক দিন" />)}
       <div className="doctor-row-info"><div className="doctor-row-name">{doc.name || 'নামহীন ডাক্তার'}</div>{doc.specialty ? <div className="doctor-row-specialty">{doc.specialty}</div> : null}</div>
       <div className="doctor-row-actions">
         {onMoveUp && <button className="icon-btn" onClick={onMoveUp} disabled={index === 0} title="উপরে সরান"><ChevronUp size={14} /></button>}
@@ -335,7 +318,6 @@ function DoctorRow({ doc, index, total, checked, onToggleChecked, onEdit, onDele
   );
 }
 
-// ===================== DepartmentCard =====================
 function DepartmentCard({ dept, index, total, checkedIds, onEdit, onDelete, onMoveUp, onMoveDown, onAddDoctor, onEditDoctor, onDeleteDoctor, onMoveDoctorUp, onMoveDoctorDown, onToggleDoctorChecked, onToggleAllChecked, allowDeptDelete = true, allowDoctorDelete = true, showCheckbox = true, showSelectAll = true }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   useEffect(() => { if (!confirmDelete) return; const t = setTimeout(() => setConfirmDelete(false), 3000); return () => clearTimeout(t); }, [confirmDelete]);
@@ -349,9 +331,7 @@ function DepartmentCard({ dept, index, total, checkedIds, onEdit, onDelete, onMo
           <span className="dept-card-icon" style={{ background: dept.color }}><Icon size={15} color="#fff" /></span>
           <strong>{dept.name || 'নামহীন বিভাগ'}</strong>
           <span className="dept-doctor-count">{dept.doctors.length} জন ডাক্তার</span>
-          {showSelectAll && dept.doctors.length > 0 && (
-            <button className="dept-toggle-btn" onClick={onToggleAllChecked}>{allChecked ? 'সব বাদ দিন' : 'সব বাছুন'}</button>
-          )}
+          {showSelectAll && dept.doctors.length > 0 && (<button className="dept-toggle-btn" onClick={onToggleAllChecked}>{allChecked ? 'সব বাদ দিন' : 'সব বাছুন'}</button>)}
         </div>
         <div className="dept-card-actions">
           {onMoveUp && <button className="icon-btn" onClick={onMoveUp} disabled={index === 0} title="উপরে সরান"><ChevronUp size={16} /></button>}
@@ -362,10 +342,7 @@ function DepartmentCard({ dept, index, total, checkedIds, onEdit, onDelete, onMo
       </div>
       <div className="doctor-mini-list">
         {dept.doctors.map((doc, di) => (
-          <DoctorRow key={doc.id} doc={doc} index={di} total={dept.doctors.length} checked={checkedIds.has(doc.id)}
-            onToggleChecked={() => onToggleDoctorChecked(doc.id)} onEdit={() => onEditDoctor(doc)}
-            onDelete={() => onDeleteDoctor(doc.id)} onMoveUp={onMoveDoctorUp} onMoveDown={onMoveDoctorDown}
-            allowDelete={allowDoctorDelete} showCheckbox={showCheckbox} />
+          <DoctorRow key={doc.id} doc={doc} index={di} total={dept.doctors.length} checked={checkedIds.has(doc.id)} onToggleChecked={() => onToggleDoctorChecked(doc.id)} onEdit={() => onEditDoctor(doc)} onDelete={() => onDeleteDoctor(doc.id)} onMoveUp={onMoveDoctorUp} onMoveDown={onMoveDoctorDown} allowDelete={allowDoctorDelete} showCheckbox={showCheckbox} />
         ))}
         {allowDoctorDelete && <button className="add-doctor-btn" onClick={onAddDoctor}><Plus size={14} /> ডাক্তার যোগ করুন</button>}
       </div>
@@ -373,7 +350,6 @@ function DepartmentCard({ dept, index, total, checkedIds, onEdit, onDelete, onMo
   );
 }
 
-// ===================== MODALS =====================
 function DepartmentModal({ initial, onSave, onClose }) {
   const [name, setName] = useState(initial ? initial.name : '');
   const [icon, setIcon] = useState(initial ? initial.icon : 'Stethoscope');
@@ -423,7 +399,6 @@ function PanelModal({ mode, initial, activeDeptCount, departments, onSave, onClo
   );
 }
 
-// ===================== PanelSwitcher =====================
 function PanelSwitcher({ panels, activePanelId, onSwitch, onAdd, onRename, onDelete }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   useEffect(() => { if (!confirmDeleteId) return; const t = setTimeout(() => setConfirmDeleteId(null), 3000); return () => clearTimeout(t); }, [confirmDeleteId]);
@@ -443,7 +418,6 @@ function PanelSwitcher({ panels, activePanelId, onSwitch, onAdd, onRename, onDel
   );
 }
 
-// ===================== EditPanel =====================
 function EditPanel({ panel, departments, footer, checkedIds, allChecked, onUpdateTitle, onUpdateFooter, onUpdatePhone, onAddPhone, onRemovePhone, onAddDept, onEditDept, onDeleteDept, onMoveDept, onAddDoctor, onEditDoctor, onDeleteDoctor, onMoveDoctor, onToggleDoctorChecked, onToggleDeptAllChecked, onToggleAll, clearConfirm, onClearAll, onGoPreview }) {
   return (
     <div className="edit-panel">
@@ -478,7 +452,6 @@ function EditPanel({ panel, departments, footer, checkedIds, allChecked, onUpdat
   );
 }
 
-// ===================== Preview Components =====================
 function DeptHeader({ dept }) { const Icon = ICONS[dept.icon] || ICONS.Stethoscope; return (<div className="dept-header-wrap"><span className="dept-icon-box" style={{ borderColor: dept.color }}><Icon size={19} color={dept.color} /></span><div className="dept-ribbon" style={{ background: dept.color }}><span>{dept.name}</span></div></div>); }
 function DoctorEntry({ doc, accentColor }) { return (<div className="doctor-entry" style={{ borderLeftColor: accentColor }}><div className="doctor-name">{doc.name}</div>{doc.quals ? <div className="doctor-quals">{doc.quals}</div> : null}{doc.specialty ? <div className="doctor-specialty">{doc.specialty}</div> : null}{doc.workplace ? <div className="doctor-workplace">{doc.workplace}</div> : null}{doc.time ? <div className="doctor-time">সাক্ষাতের সময়: <strong>{doc.time}</strong></div> : null}</div>); }
 function PreviewPanel({ panel, departments, checkedIds, footer }) {
@@ -495,7 +468,6 @@ function PreviewPanel({ panel, departments, checkedIds, footer }) {
   );
 }
 
-// ===================== Manage Doctors View (চেকবক্স ও সব বাছুন বাদ) =====================
 function ManageDoctorsView({ departments, onAddDept, onEditDept, onDeleteDept, onAddDoctor, onEditDoctor, onDeleteDoctor, isAdmin, onRefreshData }) {
   return (
     <div className="edit-panel">
@@ -548,7 +520,7 @@ export default function DoctorPanelBuilder() {
   const isEditor = user?.role === 'editor';
   const isGuest = user?.isGuest === true;
 
-  // Load Data (টাইমআউট সমস্যা সরানো হয়েছে)
+  // Load Data
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
@@ -562,11 +534,33 @@ export default function DoctorPanelBuilder() {
         const panelsSnapshot = await getDocs(collection(db, 'panels'));
         const panelList = [];
         panelsSnapshot.forEach((doc) => { panelList.push({ id: doc.id, ...doc.data() }); });
+
+        // 🔥 ফিক্স: যদি প্যানেল না থাকে অথবা খালি থাকে, মাস্টার লিস্টের সব ডাক্তার অটো-সিলেক্ট করুন
+        if (panelList.length === 0) {
+          const defaultPanel = {
+            id: 'শনিবার',
+            name: 'শনিবার',
+            title: 'শনিবারের ডক্টরস প্যানেল',
+            activeDoctorIds: depts.flatMap(d => d.doctors.map(doc => doc.id)),
+          };
+          await setDoc(doc(db, 'panels', 'শনিবার'), defaultPanel);
+          panelList.push(defaultPanel);
+        } else if (panelList[0].activeDoctorIds?.length === 0 && depts.length > 0) {
+          // প্রথম প্যানেলে ডাক্তার না থাকলে সব ডাক্তার যোগ করে সেভ করা হচ্ছে
+          const allIds = depts.flatMap(d => d.doctors.map(doc => doc.id));
+          const updatedPanel = { ...panelList[0], activeDoctorIds: allIds };
+          await setDoc(doc(db, 'panels', updatedPanel.id), updatedPanel);
+          panelList[0] = updatedPanel;
+        }
+
         setPanels(panelList);
         if (panelList.length > 0) {
           setActivePanelId(panelList[0].id);
           setCheckedIds(new Set(panelList[0].activeDoctorIds || []));
-        } else { setActivePanelId(null); setCheckedIds(new Set()); }
+        } else {
+          setActivePanelId(null);
+          setCheckedIds(new Set());
+        }
 
         const footerDocRef = doc(db, 'master', 'footer');
         const footerDoc = await getDoc(footerDocRef);
@@ -632,14 +626,8 @@ export default function DoctorPanelBuilder() {
   const handleDeletePanel = async (panelId) => { if (panels.length <= 1) return; await deletePanelFromFirebase(panelId); const remaining = panels.filter(p => p.id !== panelId); setPanels(remaining); if (activePanelId === panelId) { setActivePanelId(remaining[0].id); setCheckedIds(new Set(remaining[0].activeDoctorIds || [])); } };
   const handleSavePanel = (fields) => { if (panelModal.mode === 'add') handleAddPanel(fields); else handleRenamePanel(fields); };
 
-  const handleRefreshData = () => {
-    setReloadKey(prev => prev + 1);
-  };
-
-  const handleLogout = () => {
-    setUser(GUEST_USER);
-    setTimeout(() => { window.location.reload(); }, 100);
-  };
+  const handleRefreshData = () => { setReloadKey(prev => prev + 1); };
+  const handleLogout = () => { setUser(GUEST_USER); setTimeout(() => { window.location.reload(); }, 100); };
 
   if (loading) { return (<div className="dpb"><style>{CSS}</style><div className="loading-screen"><Loader2 className="spin" size={26} /><span>লোড হচ্ছে...</span></div></div>); }
 
@@ -655,12 +643,7 @@ export default function DoctorPanelBuilder() {
             {!isGuest && user.role === 'editor' && (<><button className={activeView === 'edit' ? 'tab active' : 'tab'} onClick={() => setActiveView('edit')}>প্যানেল বিল্ডার</button><button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button></>)}
             {!isGuest && user.role === 'admin' && (<><button className={activeView === 'doctors' ? 'tab active' : 'tab'} onClick={() => setActiveView('doctors')}>ডাক্তার লিস্ট</button><button className={activeView === 'edit' ? 'tab active' : 'tab'} onClick={() => setActiveView('edit')}>প্যানেল বিল্ডার</button><button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button><button className={activeView === 'admin' ? 'tab active' : 'tab'} onClick={() => setActiveView('admin')}>অ্যাডমিন প্যানেল</button></>)}
           </div>
-
-          {isGuest ? (
-            <button className="login-btn" onClick={() => setShowAuth(true)}>লগইন / রেজিস্ট্রেশন</button>
-          ) : (
-            <button className="logout-btn" onClick={handleLogout}><LogOut size={14} /> লগআউট</button>
-          )}
+          {isGuest ? (<button className="login-btn" onClick={() => setShowAuth(true)}>লগইন / রেজিস্ট্রেশন</button>) : (<button className="logout-btn" onClick={handleLogout}><LogOut size={14} /> লগআউট</button>)}
         </div>
       </div>
 
@@ -679,7 +662,6 @@ export default function DoctorPanelBuilder() {
       {activeView === 'admin' && isAdmin && (<AdminPanel users={allUsers} onApprove={handleApprove} onSetRole={handleSetRole} onDeleteUser={handleDeleteUser} />)}
 
       {showAuth && <AuthPage onLogin={setUser} onClose={() => setShowAuth(false)} />}
-
       {deptModal && <DepartmentModal initial={deptModal.mode === 'edit' ? deptModal.dept : null} onSave={handleSaveDept} onClose={() => setDeptModal(null)} />}
       {doctorModal && <DoctorModal initial={doctorModal.mode === 'edit' ? doctorModal.doctor : null} onSave={handleSaveDoctor} onClose={() => setDoctorModal(null)} />}
       {panelModal && <PanelModal mode={panelModal.mode} initial={panelModal.mode === 'rename' ? panelModal.panel : null} activeDeptCount={activePanel.activeDoctorIds?.length || 0} departments={departments} onSave={handleSavePanel} onClose={() => setPanelModal(null)} />}
