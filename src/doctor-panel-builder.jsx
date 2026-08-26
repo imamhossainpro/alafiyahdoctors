@@ -135,40 +135,7 @@ const SEED_PANEL = makePanel({
         }),
       ],
     }),
-    // ----- সার্জারী বিভাগ -----
-    makeDepartment({
-      name: 'সার্জারী বিভাগ', icon: 'Scissors', color: '#2f9e52',
-      doctors: [
-        makeDoctor({
-          name: 'ডাঃ মিশমা ইসলাম',
-          quals: 'এম.এস (জেনারেল সার্জারী), ডি.এম.ইউ, এ.এম.আর.ডি.এস (কোর্স)',
-          specialty: 'জেনারেল, ল্যাপারস্কোপিক, ব্রেস্ট এন্ড কোলোরেক্টাল সার্জন',
-          workplace: 'সহকারী অধ্যাপক, সার্জারী বিভাগ\nচট্টগ্রাম মেডিকেল কলেজ হাসপাতাল',
-          time: 'দুপুর ২টা - বিকাল ৪টা',
-        }),
-        makeDoctor({
-          name: 'ডাঃ মোঃ আকরামুল আলম সাইমন',
-          quals: 'এমবিবিএস, এমএস (জেনারেল সার্জারী),\nএমআরসিএস (শেষ পর্ব), ডিএমইউ',
-          specialty: 'জেনারেল, ল্যাপারস্কোপিক এন্ড কোলোরেক্টাল সার্জন',
-          workplace: 'সহকারী অধ্যাপক (সার্জারী বিভাগ)\nচট্টগ্রাম ইন্টারন্যাশনাল মেডিকেল কলেজ',
-          time: 'বিকাল ৪.০০টা - সন্ধ্যা ৬.০০টা',
-        }),
-        makeDoctor({
-          name: 'ডাঃ তাসফিয়া রহমান',
-          quals: 'এমবিবিএস, এম এস (সার্জিক্যাল অনকোলোজি)-কোর্স \nপিজিটি - (জেনারেল সার্জারী, সি এম সি)',
-          specialty: 'জেনারেল,কোলোরেক্টাল এন্ড ব্রেস্ট সার্জারীতে অভিজ্ঞ',
-          workplace: 'বাংলাদেশ মেডিকেল বিশ্ববিদ্যালয়, ঢাকা।',
-          time: 'বিকাল ৪টা - রাত ৮টা',
-        }),
-        makeDoctor({
-          name: 'ডা. মো. আসফাকুল আসিফ',
-          quals: 'এমবিবিএস (চট্টগ্রাম মেডিকেল কলেজ) বিসিএস (স্বাস্থ্য) \nএমএস (জেনারেল সার্জারি), বিএমইউ,সিসিডি (বারডেম)',
-          specialty: 'জেনারেল, ল্যাপারোস্কপিক, কলোরেক্টাল এন্ড ব্রেস্ট সার্জন',
-          workplace: 'কনসালটেন্ট, সার্জারি রেজিস্ট্রার \nচট্টগ্রাম মেডিকেল কলেজ এন্ড হাসপাতাল',
-          time: 'দুপুর ২টা - বিকাল ৪টা',
-        }),
-      ],
-    }),
+    
     // ----- গাইনী বিভাগ -----
     makeDepartment({
       name: 'গাইনী বিভাগ', icon: 'Heart', color: '#9c3a9c',
@@ -317,6 +284,40 @@ const SEED_PANEL = makePanel({
           time: 'সকাল ১১টা - দুপুর ১টা',
         }),
         
+      ],
+    }),
+    // ----- সার্জারী বিভাগ -----
+    makeDepartment({
+      name: 'সার্জারী বিভাগ', icon: 'Scissors', color: '#2f9e52',
+      doctors: [
+        makeDoctor({
+          name: 'ডাঃ মিশমা ইসলাম',
+          quals: 'এম.এস (জেনারেল সার্জারী), ডি.এম.ইউ, এ.এম.আর.ডি.এস (কোর্স)',
+          specialty: 'জেনারেল, ল্যাপারস্কোপিক, ব্রেস্ট এন্ড কোলোরেক্টাল সার্জন',
+          workplace: 'সহকারী অধ্যাপক, সার্জারী বিভাগ\nচট্টগ্রাম মেডিকেল কলেজ হাসপাতাল',
+          time: 'দুপুর ২টা - বিকাল ৪টা',
+        }),
+        makeDoctor({
+          name: 'ডাঃ মোঃ আকরামুল আলম সাইমন',
+          quals: 'এমবিবিএস, এমএস (জেনারেল সার্জারী),\nএমআরসিএস (শেষ পর্ব), ডিএমইউ',
+          specialty: 'জেনারেল, ল্যাপারস্কোপিক এন্ড কোলোরেক্টাল সার্জন',
+          workplace: 'সহকারী অধ্যাপক (সার্জারী বিভাগ)\nচট্টগ্রাম ইন্টারন্যাশনাল মেডিকেল কলেজ',
+          time: 'বিকাল ৪.০০টা - সন্ধ্যা ৬.০০টা',
+        }),
+        makeDoctor({
+          name: 'ডাঃ তাসফিয়া রহমান',
+          quals: 'এমবিবিএস, এম এস (সার্জিক্যাল অনকোলোজি)-কোর্স \nপিজিটি - (জেনারেল সার্জারী, সি এম সি)',
+          specialty: 'জেনারেল,কোলোরেক্টাল এন্ড ব্রেস্ট সার্জারীতে অভিজ্ঞ',
+          workplace: 'বাংলাদেশ মেডিকেল বিশ্ববিদ্যালয়, ঢাকা।',
+          time: 'বিকাল ৪টা - রাত ৮টা',
+        }),
+        makeDoctor({
+          name: 'ডা. মো. আসফাকুল আসিফ',
+          quals: 'এমবিবিএস (চট্টগ্রাম মেডিকেল কলেজ) বিসিএস (স্বাস্থ্য) \nএমএস (জেনারেল সার্জারি), বিএমইউ,সিসিডি (বারডেম)',
+          specialty: 'জেনারেল, ল্যাপারোস্কপিক, কলোরেক্টাল এন্ড ব্রেস্ট সার্জন',
+          workplace: 'কনসালটেন্ট, সার্জারি রেজিস্ট্রার \nচট্টগ্রাম মেডিকেল কলেজ এন্ড হাসপাতাল',
+          time: 'দুপুর ২টা - বিকাল ৪টা',
+        }),
       ],
     }),
     // ----- শিশু বিভাগ -----
@@ -554,7 +555,7 @@ const CSS = `
 
 .dpb .dept-header-wrap{display:flex;align-items:center;margin-bottom:10px;}
 .dpb .dept-icon-box{width:34px;height:34px;background:#fff;border:2px solid;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;position:relative;z-index:2;box-shadow:0 1px 3px rgba(0,0,0,0.15);}
-.dpb .dept-ribbon{flex:1;margin-left:-12px;padding:7px 14px 7px 22px;color:#fff;font-weight:700;font-size:13.5px;clip-path:polygon(0 0,94% 0,100% 50%,94% 100%,0 100%);min-height:34px;display:flex;align-items:center;}
+.dpb .dept-ribbon{flex:1;margin-left:-12px;padding:7px 14px 7px 22px;color:#fff;font-weight:700;font-size:20px;clip-path:polygon(0 0,94% 0,100% 50%,94% 100%,0 100%);min-height:34px;display:flex;align-items:center;}
 
 .dpb .doctor-entry{margin-bottom:13px;padding:1px 0 1px 10px;border-left:3px solid #ccc; text-align: left;}
 .dpb .doctor-name{color:#1c5fa8;font-weight:700;font-size:22px;margin-bottom:1px;}
