@@ -20,7 +20,7 @@ const ICONS = {
   Stethoscope, Scissors, Heart, Baby, Bone, Syringe, Pill, Activity, Brain, Eye, Utensils, Smile, Sparkles, User, Droplet, Thermometer, Ear,
 };
 const ICON_KEYS = Object.keys(ICONS);
-const COLOR_THEMES = [ '#1c5fa8', '#2f9e52', '#9c3a9c', '#d1392f', '#0e8ca3', '#e0653a', '#2b3f8f', '#159a72', '#8a6a2e', '#7a2d5c', '#4438ab', '#475569' ];
+const COLOR_THEMES = ['#1c5fa8', '#2f9e52', '#9c3a9c', '#d1392f', '#0e8ca3', '#e0653a', '#2b3f8f', '#159a72', '#8a6a2e', '#7a2d5c', '#4438ab', '#475569'];
 
 function makeDoctor(overrides) { return { id: uid(), name: '', quals: '', specialty: '', workplace: '', time: '', ...(overrides || {}) }; }
 function makeDepartment(overrides) { return { id: uid(), name: '', icon: 'Stethoscope', color: COLOR_THEMES[0], doctors: [], ...(overrides || {}) }; }
@@ -177,7 +177,7 @@ const CSS = `
 @media print{ .no-print{display:none !important;} .dpb{background:#fff;} .dpb .preview-wrap{max-width:100%;padding:0;margin:0;} .dpb .poster-page{box-shadow:none;border:none;border-radius:0;} .dpb .poster-body{column-count:3 !important;} .dpb *{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;} }
 @page{margin:10mm;}
 
-/* ---------- Login & Registration CSS ---------- */
+/* ---------- Auth CSS ---------- */
 .dpb-auth{display:flex;justify-content:center;align-items:center;height:100vh;background:#f4f6fa;padding:20px;}
 .dpb-auth-box{background:#fff;padding:30px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:100%;max-width:400px;}
 .dpb-auth-box h2{color:#1c5fa8;text-align:center;margin-bottom:20px;}
@@ -190,35 +190,37 @@ const CSS = `
 .dpb-auth-toggle span{color:#1c5fa8;font-weight:700;cursor:pointer;}
 `;
 
-// ===================== AUTH (LOGIN & REGISTRATION) =====================
+// ===================== AUTH COMPONENT =====================
 function AuthPage({ onLogin }) {
   const [isRegister, setIsRegister] = useState(false);
   const [formData, setFormData] = useState({ name: '', password: '', designation: '' });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Hardcoded Admin for first time
   const defaultAdmin = { username: 'admin', password: 'admin123', role: 'admin', approved: true };
 
   const handleLogin = async () => {
     setError('');
     setSuccess('');
     
-    // Check hardcoded admin first
-    if (formData.name === defaultAdmin.username && formData.password === defaultAdmin.password) {
-      onLogin(defaultAdmin);
+    // Trim করছি যাতে স্পেস না থাকে
+    const name = formData.name.trim();
+    const pass = formData.password.trim();
+
+    if (name === defaultAdmin.username && pass === defaultAdmin.password) {
+      onLogin({ ...defaultAdmin, username: name });
       return;
     }
 
     try {
-      const q = query(collection(db, 'users'), where('name', '==', formData.name));
+      const q = query(collection(db, 'users'), where('name', '==', name));
       const querySnapshot = await getDocs(q);
       if (querySnapshot.empty) {
         setError('ইউজার খুঁজে পাওয়া যায়নি!');
         return;
       }
       const userData = querySnapshot.docs[0].data();
-      if (userData.password !== formData.password) {
+      if (userData.password !== pass) {
         setError('ভুল পাসওয়ার্ড!');
         return;
       }
@@ -226,7 +228,7 @@ function AuthPage({ onLogin }) {
         setError('আপনার অ্যাকাউন্টটি এখনো এপ্রুভ হয়নি। অ্যাডমিনের অনুমোদনের অপেক্ষায় থাকুন।');
         return;
       }
-      onLogin({ username: formData.name, ...userData });
+      onLogin({ username: name, ...userData });
     } catch (e) {
       console.error(e);
       setError('লগইন করতে সমস্যা হয়েছে।');
@@ -237,7 +239,11 @@ function AuthPage({ onLogin }) {
     setError('');
     setSuccess('');
     
-    if (!formData.name || !formData.password || !formData.designation) {
+    const name = formData.name.trim();
+    const pass = formData.password.trim();
+    const desig = formData.designation.trim();
+
+    if (!name || !pass || !desig) {
       setError('সব ঘর পূরণ করুন!');
       return;
     }
@@ -245,9 +251,9 @@ function AuthPage({ onLogin }) {
     try {
       const newUser = {
         id: uid(),
-        name: formData.name,
-        password: formData.password,
-        designation: formData.designation,
+        name: name,
+        password: pass,
+        designation: desig,
         role: 'pending', // Default pending
         approved: false
       };
@@ -352,12 +358,7 @@ function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
 // ===================== DoctorRow =====================
 function DoctorRow({ doc, index, total, checked, onToggleChecked, onEdit, onDelete, onMoveUp, onMoveDown, allowDelete = true }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
-  useEffect(() => {
-    if (!confirmDelete) return;
-    const t = setTimeout(() => setConfirmDelete(false), 3000);
-    return () => clearTimeout(t);
-  }, [confirmDelete]);
-
+  useEffect(() => { if (!confirmDelete) return; const t = setTimeout(() => setConfirmDelete(false), 3000); return () => clearTimeout(t); }, [confirmDelete]);
   return (
     <div className="doctor-row">
       <input type="checkbox" className="doctor-checkbox" checked={checked} onChange={onToggleChecked} title="প্রিভিউতে দেখাতে টিক দিন" />
@@ -382,16 +383,10 @@ function DoctorRow({ doc, index, total, checked, onToggleChecked, onEdit, onDele
 // ===================== DepartmentCard =====================
 function DepartmentCard({ dept, index, total, checkedIds, onEdit, onDelete, onMoveUp, onMoveDown, onAddDoctor, onEditDoctor, onDeleteDoctor, onMoveDoctorUp, onMoveDoctorDown, onToggleDoctorChecked, onToggleAllChecked, allowDeptDelete = true, allowDoctorDelete = true }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
-  useEffect(() => {
-    if (!confirmDelete) return;
-    const t = setTimeout(() => setConfirmDelete(false), 3000);
-    return () => clearTimeout(t);
-  }, [confirmDelete]);
-
+  useEffect(() => { if (!confirmDelete) return; const t = setTimeout(() => setConfirmDelete(false), 3000); return () => clearTimeout(t); }, [confirmDelete]);
   const Icon = ICONS[dept.icon] || ICONS.Stethoscope;
   const deptDoctorIds = dept.doctors.map(doc => doc.id);
   const allChecked = deptDoctorIds.length > 0 && deptDoctorIds.every(id => checkedIds.has(id));
-
   return (
     <div className="dept-card" style={{ borderLeftColor: dept.color }}>
       <div className="dept-card-header">
@@ -399,19 +394,13 @@ function DepartmentCard({ dept, index, total, checkedIds, onEdit, onDelete, onMo
           <span className="dept-card-icon" style={{ background: dept.color }}><Icon size={15} color="#fff" /></span>
           <strong>{dept.name || 'নামহীন বিভাগ'}</strong>
           <span className="dept-doctor-count">{dept.doctors.length} জন ডাক্তার</span>
-          {dept.doctors.length > 0 && (
-            <button className="dept-toggle-btn" onClick={onToggleAllChecked}>{allChecked ? 'সব বাদ দিন' : 'সব বাছুন'}</button>
-          )}
+          {dept.doctors.length > 0 && (<button className="dept-toggle-btn" onClick={onToggleAllChecked}>{allChecked ? 'সব বাদ দিন' : 'সব বাছুন'}</button>)}
         </div>
         <div className="dept-card-actions">
           <button className="icon-btn" onClick={onMoveUp} disabled={index === 0} title="উপরে সরান"><ChevronUp size={16} /></button>
           <button className="icon-btn" onClick={onMoveDown} disabled={index === total - 1} title="নিচে সরান"><ChevronDown size={16} /></button>
           <button className="icon-btn" onClick={onEdit} title="সম্পাদনা"><Pencil size={16} /></button>
-          {allowDeptDelete && (
-            <button className={confirmDelete ? 'icon-btn danger-confirm' : 'icon-btn'} onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))} title="মুছুন">
-              {confirmDelete ? 'নিশ্চিত?' : <Trash2 size={16} />}
-            </button>
-          )}
+          {allowDeptDelete && (<button className={confirmDelete ? 'icon-btn danger-confirm' : 'icon-btn'} onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))} title="মুছুন">{confirmDelete ? 'নিশ্চিত?' : <Trash2 size={16} />}</button>)}
         </div>
       </div>
       <div className="doctor-mini-list">
@@ -432,17 +421,11 @@ function DepartmentModal({ initial, onSave, onClose }) {
   useEffect(() => { const onKey = (e) => { if (e.key === 'Escape') onClose(); }; window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey); }, [onClose]);
   const handleSave = () => { if (!name.trim()) return; onSave({ name: name.trim(), icon, color }); };
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header"><h3>{initial ? 'বিভাগ সম্পাদনা করুন' : 'নতুন বিভাগ যোগ করুন'}</h3><button className="icon-btn" onClick={onClose}><X size={18} /></button></div>
-        <div className="modal-body">
-          <label>বিভাগের নাম</label><input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="যেমনঃ মেডিসিন বিভাগ" />
-          <label>আইকন বেছে নিন</label><div className="icon-grid">{ICON_KEYS.map((key) => { const IconComp = ICONS[key]; const selected = icon === key; return (<button key={key} className={selected ? 'icon-choice selected' : 'icon-choice'} style={selected ? { borderColor: color, background: color } : {}} onClick={() => setIcon(key)} title={key}><IconComp size={17} color={selected ? '#fff' : '#555'} /></button>); })}</div>
-          <label>রঙ বেছে নিন</label><div className="color-grid">{COLOR_THEMES.map((c) => (<button key={c} className={color === c ? 'color-choice selected' : 'color-choice'} style={{ background: c }} onClick={() => setColor(c)} title={c} />))}</div>
-        </div>
-        <div className="modal-footer"><button className="btn btn-secondary" onClick={onClose}>বাতিল</button><button className="btn btn-primary" onClick={handleSave} disabled={!name.trim()}>সংরক্ষণ করুন</button></div>
-      </div>
-    </div>
+    <div className="modal-overlay" onClick={onClose}><div className="modal-box" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-header"><h3>{initial ? 'বিভাগ সম্পাদনা করুন' : 'নতুন বিভাগ যোগ করুন'}</h3><button className="icon-btn" onClick={onClose}><X size={18} /></button></div>
+      <div className="modal-body"><label>বিভাগের নাম</label><input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="যেমনঃ মেডিসিন বিভাগ" /><label>আইকন বেছে নিন</label><div className="icon-grid">{ICON_KEYS.map((key) => { const IconComp = ICONS[key]; const selected = icon === key; return (<button key={key} className={selected ? 'icon-choice selected' : 'icon-choice'} style={selected ? { borderColor: color, background: color } : {}} onClick={() => setIcon(key)} title={key}><IconComp size={17} color={selected ? '#fff' : '#555'} /></button>); })}</div><label>রঙ বেছে নিন</label><div className="color-grid">{COLOR_THEMES.map((c) => (<button key={c} className={color === c ? 'color-choice selected' : 'color-choice'} style={{ background: c }} onClick={() => setColor(c)} title={c} />))}</div></div>
+      <div className="modal-footer"><button className="btn btn-secondary" onClick={onClose}>বাতিল</button><button className="btn btn-primary" onClick={handleSave} disabled={!name.trim()}>সংরক্ষণ করুন</button></div>
+    </div></div>
   );
 }
 
@@ -455,19 +438,11 @@ function DoctorModal({ initial, onSave, onClose }) {
   useEffect(() => { const onKey = (e) => { if (e.key === 'Escape') onClose(); }; window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey); }, [onClose]);
   const handleSave = () => { if (!name.trim()) return; onSave({ name: name.trim(), quals, specialty, workplace, time }); };
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header"><h3>{initial ? 'ডাক্তারের তথ্য সম্পাদনা' : 'নতুন ডাক্তার যোগ করুন'}</h3><button className="icon-btn" onClick={onClose}><X size={18} /></button></div>
-        <div className="modal-body">
-          <label>ডাক্তারের নাম</label><input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="যেমনঃ ডাঃ মোহাম্মদ নূর" />
-          <label>শিক্ষাগত যোগ্যতা / ডিগ্রি</label><textarea className="textarea" rows={3} value={quals} onChange={(e) => setQuals(e.target.value)} placeholder="প্রতি লাইনে একটি করে ডিগ্রি লিখুন" />
-          <label>বিশেষত্ব</label><textarea className="textarea" rows={2} value={specialty} onChange={(e) => setSpecialty(e.target.value)} placeholder="যেমনঃ মেডিসিন বিশেষজ্ঞ" />
-          <label>কর্মস্থল / পদবী</label><textarea className="textarea" rows={2} value={workplace} onChange={(e) => setWorkplace(e.target.value)} placeholder="যেমনঃ চট্টগ্রাম মেডিকেল কলেজ হাসপাতাল" />
-          <label>সাক্ষাতের সময়</label><input className="input" value={time} onChange={(e) => setTime(e.target.value)} placeholder="যেমনঃ সন্ধ্যা ৬টা - রাত ৯টা" />
-        </div>
-        <div className="modal-footer"><button className="btn btn-secondary" onClick={onClose}>বাতিল</button><button className="btn btn-primary" onClick={handleSave} disabled={!name.trim()}>সংরক্ষণ করুন</button></div>
-      </div>
-    </div>
+    <div className="modal-overlay" onClick={onClose}><div className="modal-box" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-header"><h3>{initial ? 'ডাক্তারের তথ্য সম্পাদনা' : 'নতুন ডাক্তার যোগ করুন'}</h3><button className="icon-btn" onClick={onClose}><X size={18} /></button></div>
+      <div className="modal-body"><label>ডাক্তারের নাম</label><input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="যেমনঃ ডাঃ মোহাম্মদ নূর" /><label>শিক্ষাগত যোগ্যতা / ডিগ্রি</label><textarea className="textarea" rows={3} value={quals} onChange={(e) => setQuals(e.target.value)} placeholder="প্রতি লাইনে একটি করে ডিগ্রি লিখুন" /><label>বিশেষত্ব</label><textarea className="textarea" rows={2} value={specialty} onChange={(e) => setSpecialty(e.target.value)} placeholder="যেমনঃ মেডিসিন বিশেষজ্ঞ" /><label>কর্মস্থল / পদবী</label><textarea className="textarea" rows={2} value={workplace} onChange={(e) => setWorkplace(e.target.value)} placeholder="যেমনঃ চট্টগ্রাম মেডিকেল কলেজ হাসপাতাল" /><label>সাক্ষাতের সময়</label><input className="input" value={time} onChange={(e) => setTime(e.target.value)} placeholder="যেমনঃ সন্ধ্যা ৬টা - রাত ৯টা" /></div>
+      <div className="modal-footer"><button className="btn btn-secondary" onClick={onClose}>বাতিল</button><button className="btn btn-primary" onClick={handleSave} disabled={!name.trim()}>সংরক্ষণ করুন</button></div>
+    </div></div>
   );
 }
 
@@ -480,25 +455,11 @@ function PanelModal({ mode, initial, activeDeptCount, departments, onSave, onClo
   const toggleDoctor = (id) => { setSelectedIds(prev => { const newSet = new Set(prev); if (newSet.has(id)) newSet.delete(id); else newSet.add(id); return newSet; }); };
   const toggleAll = () => { const allIds = []; departments.forEach(dept => dept.doctors.forEach(doc => allIds.push(doc.id))); if (selectedIds.size === allIds.length) setSelectedIds(new Set()); else setSelectedIds(new Set(allIds)); };
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
-        <div className="modal-header"><h3>{mode === 'add' ? 'নতুন দিন/প্যানেল যোগ করুন' : 'প্যানেল সম্পাদনা করুন'}</h3><button className="icon-btn" onClick={onClose}><X size={18} /></button></div>
-        <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-          <label>দিন বা প্যানেলের নাম</label>
-          {mode === 'add' ? (<div className="day-buttons">{DAY_NAMES.map((d) => (<button key={d} className="day-btn" onClick={() => setName(d)}>{d}</button>))}</div>) : null}
-          <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="যেমনঃ শনিবার, অথবা নিজের মতো নাম" />
-          {mode === 'add' && (
-            <>
-              <label style={{ marginTop: '14px', display: 'block' }}>ডাক্তার বেছে নিন (টিক দিন)</label>
-              <button className="btn btn-secondary" onClick={toggleAll} style={{ marginBottom: '10px' }}>{selectedIds.size === departments.flatMap(d => d.doctors).length ? 'সব বাদ দিন' : 'সব বাছুন'}</button>
-              {departments.map(dept => (<div key={dept.id} style={{ marginBottom: '10px' }}><strong style={{ color: dept.color }}>{dept.name}</strong>{dept.doctors.map(doc => (<div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: '4px 0' }}><input type="checkbox" checked={selectedIds.has(doc.id)} onChange={() => toggleDoctor(doc.id)} /><label>{doc.name}</label></div>))}</div>))}
-              <label className="checkbox-row" style={{ marginTop: '14px' }}><input type="checkbox" checked={duplicate} onChange={(e) => setDuplicate(e.target.checked)} /><span>বর্তমান দিনের ডাক্তার সিলেকশন কপি করুন</span></label>
-            </>
-          )}
-        </div>
-        <div className="modal-footer"><button className="btn btn-secondary" onClick={onClose}>বাতিল</button><button className="btn btn-primary" onClick={handleSave} disabled={!name.trim()}>সংরক্ষণ করুন</button></div>
-      </div>
-    </div>
+    <div className="modal-overlay" onClick={onClose}><div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+      <div className="modal-header"><h3>{mode === 'add' ? 'নতুন দিন/প্যানেল যোগ করুন' : 'প্যানেল সম্পাদনা করুন'}</h3><button className="icon-btn" onClick={onClose}><X size={18} /></button></div>
+      <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}><label>দিন বা প্যানেলের নাম</label>{mode === 'add' ? (<div className="day-buttons">{DAY_NAMES.map((d) => (<button key={d} className="day-btn" onClick={() => setName(d)}>{d}</button>))}</div>) : null}<input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="যেমনঃ শনিবার, অথবা নিজের মতো নাম" />{mode === 'add' && (<><label style={{ marginTop: '14px', display: 'block' }}>ডাক্তার বেছে নিন (টিক দিন)</label><button className="btn btn-secondary" onClick={toggleAll} style={{ marginBottom: '10px' }}>{selectedIds.size === departments.flatMap(d => d.doctors).length ? 'সব বাদ দিন' : 'সব বাছুন'}</button>{departments.map(dept => (<div key={dept.id} style={{ marginBottom: '10px' }}><strong style={{ color: dept.color }}>{dept.name}</strong>{dept.doctors.map(doc => (<div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: '4px 0' }}><input type="checkbox" checked={selectedIds.has(doc.id)} onChange={() => toggleDoctor(doc.id)} /><label>{doc.name}</label></div>))}</div>))}<label className="checkbox-row" style={{ marginTop: '14px' }}><input type="checkbox" checked={duplicate} onChange={(e) => setDuplicate(e.target.checked)} /><span>বর্তমান দিনের ডাক্তার সিলেকশন কপি করুন</span></label></>)}</div>
+      <div className="modal-footer"><button className="btn btn-secondary" onClick={onClose}>বাতিল</button><button className="btn btn-primary" onClick={handleSave} disabled={!name.trim()}>সংরক্ষণ করুন</button></div>
+    </div></div>
   );
 }
 
@@ -575,11 +536,7 @@ function PreviewPanel({ panel, departments, checkedIds, footer }) {
   const visibleDepartments = departments.map((dept) => ({ ...dept, doctors: dept.doctors.filter((doc) => checkedIds.has(doc.id)) })).filter((dept) => dept.doctors.length > 0);
   return (
     <div className="preview-wrap">
-      <div className="preview-toolbar no-print">
-        <button className="btn btn-primary" onClick={handlePrint}><Printer size={16} /> প্রিন্ট</button>
-        <button className="btn btn-secondary" onClick={downloadPNG}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> PNG ডাউনলোড</button>
-        <button className="btn btn-secondary" onClick={downloadPDF}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> PDF ডাউনলোড</button>
-      </div>
+      <div className="preview-toolbar no-print"><button className="btn btn-primary" onClick={handlePrint}><Printer size={16} /> প্রিন্ট</button><button className="btn btn-secondary" onClick={downloadPNG}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> PNG ডাউনলোড</button><button className="btn btn-secondary" onClick={downloadPDF}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> PDF ডাউনলোড</button></div>
       <div id="dpb-print-area" className="poster-page" ref={printRef}>
         <div className="poster-header"><h1>{panel.title}</h1></div>
         {visibleDepartments.length === 0 ? (<div className="poster-empty-note" style={{ padding: '30px', textAlign: 'center', color: '#6b7280' }}>"{panel.name}"-এর জন্য কোনো ডাক্তার নির্বাচন করা হয়নি।</div>) : (<div className="poster-body">{visibleDepartments.map((dept) => (<div className="dept-block" key={dept.id}><DeptHeader dept={dept} />{dept.doctors.map((doc) => <DoctorEntry key={doc.id} doc={doc} accentColor={dept.color} />)}</div>))}</div>)}
@@ -628,33 +585,39 @@ export default function DoctorPanelBuilder() {
 
   const isAdmin = user?.role === 'admin';
 
-  // Initial Data Load
+  // Load Data with Timeout
   useEffect(() => {
     const loadData = async () => {
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000));
       try {
-        const deptDocRef = doc(db, 'master', 'departments');
-        const deptDoc = await getDoc(deptDocRef);
-        let depts = [];
-        if (deptDoc.exists()) { depts = deptDoc.data().departments; }
-        setDepartments(depts);
+        await Promise.race([
+          (async () => {
+            const deptDocRef = doc(db, 'master', 'departments');
+            const deptDoc = await getDoc(deptDocRef);
+            let depts = [];
+            if (deptDoc.exists()) { depts = deptDoc.data().departments; }
+            setDepartments(depts);
 
-        const panelsSnapshot = await getDocs(collection(db, 'panels'));
-        const panelList = [];
-        panelsSnapshot.forEach((doc) => { panelList.push({ id: doc.id, ...doc.data() }); });
-        setPanels(panelList);
-        if (panelList.length > 0) {
-          setActivePanelId(panelList[0].id);
-          setCheckedIds(new Set(panelList[0].activeDoctorIds || []));
-        } else { setActivePanelId(null); setCheckedIds(new Set()); }
+            const panelsSnapshot = await getDocs(collection(db, 'panels'));
+            const panelList = [];
+            panelsSnapshot.forEach((doc) => { panelList.push({ id: doc.id, ...doc.data() }); });
+            setPanels(panelList);
+            if (panelList.length > 0) {
+              setActivePanelId(panelList[0].id);
+              setCheckedIds(new Set(panelList[0].activeDoctorIds || []));
+            } else { setActivePanelId(null); setCheckedIds(new Set()); }
 
-        const footerDocRef = doc(db, 'master', 'footer');
-        const footerDoc = await getDoc(footerDocRef);
-        if (footerDoc.exists()) { setFooter(footerDoc.data()); }
-        else { await setDoc(footerDocRef, DEFAULT_FOOTER); setFooter(DEFAULT_FOOTER); }
+            const footerDocRef = doc(db, 'master', 'footer');
+            const footerDoc = await getDoc(footerDocRef);
+            if (footerDoc.exists()) { setFooter(footerDoc.data()); }
+            else { await setDoc(footerDocRef, DEFAULT_FOOTER); setFooter(DEFAULT_FOOTER); }
 
-        setLoading(false);
+            setLoading(false);
+          })(),
+          timeoutPromise
+        ]);
       } catch (error) {
-        console.error('Firebase load error:', error);
+        console.error('Firebase load error or timeout:', error);
         setLoading(false);
       }
     };
@@ -684,27 +647,12 @@ export default function DoctorPanelBuilder() {
   const allDoctorIds = departments.flatMap(d => d.doctors.map(doc => doc.id));
   const allChecked = allDoctorIds.length > 0 && allDoctorIds.every(id => checkedIds.has(id));
 
-  // User Management Functions (Admin)
-  const handleApprove = async (userId) => {
-    try {
-      await updateDoc(doc(db, 'users', userId), { approved: true });
-      setAllUsers(users => users.map(u => u.id === userId ? { ...u, approved: true } : u));
-    } catch (e) { console.error(e); }
-  };
-  const handleSetRole = async (userId, role) => {
-    try {
-      await updateDoc(doc(db, 'users', userId), { role });
-      setAllUsers(users => users.map(u => u.id === userId ? { ...u, role } : u));
-    } catch (e) { console.error(e); }
-  };
-  const handleDeleteUser = async (userId) => {
-    try {
-      await deleteDoc(doc(db, 'users', userId));
-      setAllUsers(users => users.filter(u => u.id !== userId));
-    } catch (e) { console.error(e); }
-  };
+  // User Management Functions
+  const handleApprove = async (userId) => { try { await updateDoc(doc(db, 'users', userId), { approved: true }); setAllUsers(users => users.map(u => u.id === userId ? { ...u, approved: true } : u)); } catch (e) { console.error(e); } };
+  const handleSetRole = async (userId, role) => { try { await updateDoc(doc(db, 'users', userId), { role }); setAllUsers(users => users.map(u => u.id === userId ? { ...u, role } : u)); } catch (e) { console.error(e); } };
+  const handleDeleteUser = async (userId) => { try { await deleteDoc(doc(db, 'users', userId)); setAllUsers(users => users.filter(u => u.id !== userId)); } catch (e) { console.error(e); } };
 
-  // Other handlers (Same as before)
+  // Other Handlers (Same as before)
   const updatePanel = (updater, immediate) => { const updated = updater(activePanel); const newPanels = panels.map(p => p.id === activePanelId ? updated : p); setPanels(newPanels); if (immediate) { setSaveStatus('saving'); savePanelToFirebase(updated).then(() => setSaveStatus('saved')).catch(() => setSaveStatus('error')); setTimeout(() => setSaveStatus('idle'), 1500); } else { setSaveStatus('saving'); if (debounceRef.current) clearTimeout(debounceRef.current); debounceRef.current = setTimeout(() => { savePanelToFirebase(updated).then(() => setSaveStatus('saved')).catch(() => setSaveStatus('error')); setTimeout(() => setSaveStatus('idle'), 1500); }, 700); } };
   const updateDepartments = (updater, immediate) => { const newDepts = updater(departments); setDepartments(newDepts); if (immediate) { saveDepartments(newDepts); } else { if (debounceRef.current) clearTimeout(debounceRef.current); debounceRef.current = setTimeout(() => saveDepartments(newDepts), 700); } };
   const handleUpdateTitle = (title) => updatePanel(p => ({ ...p, title }), true);
@@ -732,9 +680,7 @@ export default function DoctorPanelBuilder() {
 
   if (loading) { return (<div className="dpb"><style>{CSS}</style><div className="loading-screen"><Loader2 className="spin" size={26} /><span>লোড হচ্ছে...</span></div></div>); }
 
-  if (!user) {
-    return (<div className="dpb"><style>{CSS}</style><AuthPage onLogin={setUser} /></div>);
-  }
+  if (!user) { return (<div className="dpb"><style>{CSS}</style><AuthPage onLogin={setUser} /></div>); }
 
   return (
     <div className="dpb">
@@ -744,9 +690,9 @@ export default function DoctorPanelBuilder() {
         <div className="topbar-right">
           <SaveIndicator status={saveStatus} />
           <div className="tabs">
-            <button className={activeView === 'manage' ? 'tab active' : 'tab'} onClick={() => setActiveView('manage')}>ডাক্তার তালিকা</button>
             {isAdmin && (
               <>
+                <button className={activeView === 'manage' ? 'tab active' : 'tab'} onClick={() => setActiveView('manage')}>ডাক্তার তালিকা</button>
                 <button className={activeView === 'builder' ? 'tab active' : 'tab'} onClick={() => setActiveView('builder')}>প্যানেল বিল্ডার</button>
                 <button className={activeView === 'admin' ? 'tab active' : 'tab'} onClick={() => setActiveView('admin')}>অ্যাডমিন প্যানেল</button>
                 {activeView === 'builder' && (
@@ -765,72 +711,33 @@ export default function DoctorPanelBuilder() {
         </div>
       </div>
 
-      {activeView === 'manage' && (
-        <ManageDoctorsView
-          departments={departments}
-          onAddDept={handleAddDept}
-          onEditDept={handleEditDept}
-          onDeleteDept={handleDeleteDept}
-          onAddDoctor={handleAddDoctor}
-          onEditDoctor={handleEditDoctor}
-          onDeleteDoctor={handleDeleteDoctor}
-          isAdmin={isAdmin}
-        />
+      {/* Admin Views */}
+      {isAdmin && activeView === 'manage' && (
+        <ManageDoctorsView departments={departments} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={handleDeleteDept} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={handleDeleteDoctor} isAdmin={true} />
       )}
-
-      {activeView === 'builder' && (
+      {isAdmin && activeView === 'builder' && (
         <>
-          <PanelSwitcher
-            panels={panels}
-            activePanelId={activePanelId}
-            onSwitch={handleSwitchPanel}
-            onAdd={() => setPanelModal({ mode: 'add', departments })}
-            onRename={(panel) => setPanelModal({ mode: 'rename', panel })}
-            onDelete={handleDeletePanel}
-          />
+          <PanelSwitcher panels={panels} activePanelId={activePanelId} onSwitch={handleSwitchPanel} onAdd={() => setPanelModal({ mode: 'add', departments })} onRename={(panel) => setPanelModal({ mode: 'rename', panel })} onDelete={handleDeletePanel} />
           {mode === 'edit' ? (
             <EditPanel
-              panel={activePanel}
-              departments={departments}
-              footer={footer}
-              checkedIds={checkedIds}
-              allChecked={allChecked}
-              onUpdateTitle={handleUpdateTitle}
-              onUpdateFooter={handleUpdateFooter}
-              onUpdatePhone={handleUpdatePhone}
-              onAddPhone={handleAddPhone}
-              onRemovePhone={handleRemovePhone}
-              onAddDept={handleAddDept}
-              onEditDept={handleEditDept}
-              onDeleteDept={handleDeleteDept}
-              onMoveDept={() => {}}
-              onAddDoctor={handleAddDoctor}
-              onEditDoctor={handleEditDoctor}
-              onDeleteDoctor={() => {}}
-              onMoveDoctor={() => {}}
-              onToggleDoctorChecked={handleToggleDoctorChecked}
-              onToggleDeptAllChecked={handleToggleDeptAllChecked}
-              onToggleAll={handleToggleAll}
-              clearConfirm={clearConfirm}
-              onClearAll={handleClearActivePanelChecks}
-              onGoPreview={() => setMode('preview')}
+              panel={activePanel} departments={departments} footer={footer} checkedIds={checkedIds} allChecked={allChecked}
+              onUpdateTitle={handleUpdateTitle} onUpdateFooter={handleUpdateFooter} onUpdatePhone={handleUpdatePhone} onAddPhone={handleAddPhone} onRemovePhone={handleRemovePhone}
+              onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={handleDeleteDept} onMoveDept={() => {}}
+              onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={() => {}} onMoveDoctor={() => {}}
+              onToggleDoctorChecked={handleToggleDoctorChecked} onToggleDeptAllChecked={handleToggleDeptAllChecked} onToggleAll={handleToggleAll}
+              clearConfirm={clearConfirm} onClearAll={handleClearActivePanelChecks} onGoPreview={() => setMode('preview')}
             />
           ) : (
             <PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} />
           )}
         </>
       )}
-
-      {activeView === 'admin' && isAdmin && (
-        <AdminPanel
-          users={allUsers}
-          onApprove={handleApprove}
-          onSetRole={handleSetRole}
-          onDeleteUser={handleDeleteUser}
-        />
+      {isAdmin && activeView === 'admin' && (
+        <AdminPanel users={allUsers} onApprove={handleApprove} onSetRole={handleSetRole} onDeleteUser={handleDeleteUser} />
       )}
 
-      {!isAdmin && activeView === 'manage' && (
+      {/* Viewer Views */}
+      {!isAdmin && (
         <PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} />
       )}
 
