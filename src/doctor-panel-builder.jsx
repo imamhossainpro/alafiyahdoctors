@@ -34,6 +34,15 @@ function makeDepartment(overrides) {
   return { id: uid(), name: '', icon: 'Stethoscope', color: COLOR_THEMES[0], doctors: [], ...(overrides || {}) };
 }
 
+// ===================== DEFAULT FOOTER (নতুন যোগ করা হয়েছে) =====================
+const DEFAULT_FOOTER = {
+  address: 'বাকলিয়া এক্সেস রোড,\nবাকলিয়া, চট্টগ্রাম।',
+  website: 'alafiyahhospital.com',
+  logo: '../logo.pngn', // আপনার public ফোল্ডারে logo.png রাখুন
+  contactLabel: 'সিরিয়ালের এবং তথ্যের জন্যে যোগাযোগ',
+  phones: ['01886 776 512', '01886 776 513'],
+};
+
 // ===================== CSS =====================
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700;800&display=swap');
@@ -784,7 +793,7 @@ export default function DoctorPanelBuilder() {
   const [departments, setDepartments] = useState([]);
   const [panels, setPanels] = useState([]);
   const [activePanelId, setActivePanelId] = useState(null);
-  const [footer, setFooter] = useState({ address: '', website: '', logo: '', contactLabel: '', phones: [] });
+  const [footer, setFooter] = useState(DEFAULT_FOOTER); // ডিফল্ট ফুটার দিয়ে শুরু হচ্ছে
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState('edit');
   const [saveStatus, setSaveStatus] = useState('idle');
@@ -829,6 +838,10 @@ export default function DoctorPanelBuilder() {
         const footerDoc = await getDoc(footerDocRef);
         if (footerDoc.exists()) {
           setFooter(footerDoc.data());
+        } else {
+          // ডাটাবেসে ফুটার না থাকলে ডিফল্টটি সেভ করে দিচ্ছি
+          await setDoc(footerDocRef, DEFAULT_FOOTER);
+          setFooter(DEFAULT_FOOTER);
         }
 
         setLoading(false);

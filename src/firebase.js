@@ -25,7 +25,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 
-// লোকাল ইম্যুলেটর ব্যবহার করলে নিচের লাইনটি আনকমেন্ট করবেন (ক্লাউড ব্যবহার করলে কমেন্ট থাকবে)
+// লোকাল ইম্যুলেটর ব্যবহার করলে নিচের লাইনটি আনকমেন্ট করবেন
 // connectFirestoreEmulator(db, 'localhost', 8080);
 
 export {
