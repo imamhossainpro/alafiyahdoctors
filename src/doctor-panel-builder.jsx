@@ -342,7 +342,10 @@ function DepartmentCard({ dept, index, total, checkedIds, onEdit, onDelete, onMo
       </div>
       <div className="doctor-mini-list">
         {dept.doctors.map((doc, di) => (
-          <DoctorRow key={doc.id} doc={doc} index={di} total={dept.doctors.length} checked={checkedIds.has(doc.id)} onToggleChecked={() => onToggleDoctorChecked(doc.id)} onEdit={() => onEditDoctor(doc)} onDelete={() => onDeleteDoctor(doc.id)} onMoveUp={onMoveDoctorUp} onMoveDown={onMoveDoctorDown} allowDelete={allowDoctorDelete} showCheckbox={showCheckbox} />
+          <DoctorRow key={doc.id} doc={doc} index={di} total={dept.doctors.length} checked={checkedIds.has(doc.id)}
+            onToggleChecked={() => onToggleDoctorChecked(doc.id)} onEdit={() => onEditDoctor(doc)}
+            onDelete={() => onDeleteDoctor(doc.id)} onMoveUp={() => onMoveDoctorUp(doc.id)} onMoveDown={() => onMoveDoctorDown(doc.id)}
+            allowDelete={allowDoctorDelete} showCheckbox={showCheckbox} />
         ))}
         {allowDoctorDelete && <button className="add-doctor-btn" onClick={onAddDoctor}><Plus size={14} /> ডাক্তার যোগ করুন</button>}
       </div>
@@ -430,7 +433,16 @@ function EditPanel({ panel, departments, footer, checkedIds, allChecked, onUpdat
         <div className="section-header"><label>বিভাগ ও ডাক্তার তালিকা — {panel.name}</label><button className="btn btn-primary" onClick={onAddDept}><Plus size={15} /> নতুন বিভাগ</button></div>
         <p className="section-hint">প্রতিটি ডাক্তারের পাশের বক্সে টিক দিয়ে বেছে নিন কারা "{panel.name}"-এর পোস্টারে দেখাবে।</p>
         {departments.length === 0 ? (<div className="empty-state">এখনো কোনো বিভাগ যোগ করা হয়নি।</div>) : null}
-        {departments.map((dept, i) => (<DepartmentCard key={dept.id} dept={dept} index={i} total={departments.length} checkedIds={checkedIds} onEdit={() => onEditDept(dept)} onDelete={() => onDeleteDept(dept.id)} onMoveUp={() => onMoveDept(dept.id, -1)} onMoveDown={() => onMoveDept(dept.id, 1)} onAddDoctor={() => onAddDoctor(dept.id)} onEditDoctor={(doc) => onEditDoctor(dept.id, doc)} onDeleteDoctor={(docId) => onDeleteDoctor(dept.id, docId)} onMoveDoctorUp={(docId) => onMoveDoctor(dept.id, docId, -1)} onMoveDoctorDown={(docId) => onMoveDoctor(dept.id, docId, 1)} onToggleDoctorChecked={onToggleDoctorChecked} onToggleAllChecked={() => onToggleDeptAllChecked(dept.id)} allowDeptDelete={false} allowDoctorDelete={false} />))}
+        {departments.map((dept, i) => (
+          <DepartmentCard key={dept.id} dept={dept} index={i} total={departments.length} checkedIds={checkedIds}
+            onEdit={() => onEditDept(dept)} onDelete={() => onDeleteDept(dept.id)}
+            onMoveUp={() => onMoveDept(dept.id, -1)} onMoveDown={() => onMoveDept(dept.id, 1)}
+            onAddDoctor={() => onAddDoctor(dept.id)} onEditDoctor={(doc) => onEditDoctor(dept.id, doc)}
+            onDeleteDoctor={(docId) => onDeleteDoctor(dept.id, docId)}
+            onMoveDoctorUp={(docId) => onMoveDoctor(dept.id, docId, -1)} onMoveDoctorDown={(docId) => onMoveDoctor(dept.id, docId, 1)}
+            onToggleDoctorChecked={onToggleDoctorChecked} onToggleAllChecked={() => onToggleDeptAllChecked(dept.id)}
+            allowDeptDelete={false} allowDoctorDelete={false} />
+        ))}
       </section>
       <section className="panel-section">
         <label>ফুটার তথ্য</label>
@@ -468,7 +480,7 @@ function PreviewPanel({ panel, departments, checkedIds, footer }) {
   );
 }
 
-function ManageDoctorsView({ departments, onAddDept, onEditDept, onDeleteDept, onAddDoctor, onEditDoctor, onDeleteDoctor, isAdmin, onRefreshData }) {
+function ManageDoctorsView({ departments, onAddDept, onEditDept, onDeleteDept, onMoveDept, onAddDoctor, onEditDoctor, onDeleteDoctor, onMoveDoctor, isAdmin, onRefreshData }) {
   return (
     <div className="edit-panel">
       <section className="panel-section">
@@ -482,10 +494,10 @@ function ManageDoctorsView({ departments, onAddDept, onEditDept, onDeleteDept, o
         {departments.map((dept, i) => (
           <DepartmentCard key={dept.id} dept={dept} index={i} total={departments.length} checkedIds={new Set()}
             onEdit={() => onEditDept(dept)} onDelete={() => onDeleteDept(dept.id)}
-            onMoveUp={() => {}} onMoveDown={() => {}}
+            onMoveUp={() => onMoveDept(dept.id, -1)} onMoveDown={() => onMoveDept(dept.id, 1)}
             onAddDoctor={() => onAddDoctor(dept.id)} onEditDoctor={(doc) => onEditDoctor(dept.id, doc)}
             onDeleteDoctor={(docId) => onDeleteDoctor(dept.id, docId)}
-            onMoveDoctorUp={() => {}} onMoveDoctorDown={() => {}}
+            onMoveDoctorUp={(docId) => onMoveDoctor(dept.id, docId, -1)} onMoveDoctorDown={(docId) => onMoveDoctor(dept.id, docId, 1)}
             onToggleDoctorChecked={() => {}} onToggleAllChecked={() => {}}
             allowDeptDelete={isAdmin} allowDoctorDelete={isAdmin}
             showCheckbox={false} showSelectAll={false} />
@@ -520,7 +532,6 @@ export default function DoctorPanelBuilder() {
   const isEditor = user?.role === 'editor';
   const isGuest = user?.isGuest === true;
 
-  // Load Data
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
@@ -535,7 +546,6 @@ export default function DoctorPanelBuilder() {
         const panelList = [];
         panelsSnapshot.forEach((doc) => { panelList.push({ id: doc.id, ...doc.data() }); });
 
-        // 🔥 ফিক্স: যদি প্যানেল না থাকে অথবা খালি থাকে, মাস্টার লিস্টের সব ডাক্তার অটো-সিলেক্ট করুন
         if (panelList.length === 0) {
           const defaultPanel = {
             id: 'শনিবার',
@@ -546,7 +556,6 @@ export default function DoctorPanelBuilder() {
           await setDoc(doc(db, 'panels', 'শনিবার'), defaultPanel);
           panelList.push(defaultPanel);
         } else if (panelList[0].activeDoctorIds?.length === 0 && depts.length > 0) {
-          // প্রথম প্যানেলে ডাক্তার না থাকলে সব ডাক্তার যোগ করে সেভ করা হচ্ছে
           const allIds = depts.flatMap(d => d.doctors.map(doc => doc.id));
           const updatedPanel = { ...panelList[0], activeDoctorIds: allIds };
           await setDoc(doc(db, 'panels', updatedPanel.id), updatedPanel);
@@ -613,10 +622,32 @@ export default function DoctorPanelBuilder() {
   const handleEditDept = (dept) => setDeptModal({ mode: 'edit', dept });
   const handleSaveDept = (fields) => { if (deptModal.mode === 'add') { updateDepartments(d => [...d, makeDepartment(fields)], true); } else { const deptId = deptModal.dept.id; updateDepartments(d => d.map(dept => dept.id === deptId ? { ...dept, ...fields } : dept), true); } setDeptModal(null); };
   const handleDeleteDept = (deptId) => { const removedIds = departments.find(d => d.id === deptId)?.doctors.map(doc => doc.id) || []; updateDepartments(d => d.filter(dept => dept.id !== deptId), true); const newPanels = panels.map(p => ({ ...p, activeDoctorIds: p.activeDoctorIds.filter(id => !removedIds.includes(id)) })); setPanels(newPanels); newPanels.forEach(p => savePanelToFirebase(p)); };
+  const handleMoveDept = (deptId, dir) => {
+    const idx = departments.findIndex(d => d.id === deptId);
+    const ni = idx + dir;
+    if (ni < 0 || ni >= departments.length) return;
+    const newDepts = [...departments];
+    [newDepts[idx], newDepts[ni]] = [newDepts[ni], newDepts[idx]];
+    updateDepartments(() => newDepts, true);
+  };
   const handleAddDoctor = (deptId) => setDoctorModal({ deptId, mode: 'add' });
   const handleEditDoctor = (deptId, doctor) => setDoctorModal({ deptId, mode: 'edit', doctor });
   const handleSaveDoctor = (fields) => { const deptId = doctorModal.deptId; if (doctorModal.mode === 'add') { const newDoctor = makeDoctor(fields); updateDepartments(d => d.map(dept => dept.id === deptId ? { ...dept, doctors: [...dept.doctors, newDoctor] } : dept), true); if (activePanel) { updatePanel(p => ({ ...p, activeDoctorIds: [...p.activeDoctorIds, newDoctor.id] }), true); } } else { const doctorId = doctorModal.doctor.id; updateDepartments(d => d.map(dept => dept.id === deptId ? { ...dept, doctors: dept.doctors.map(doc => doc.id === doctorId ? { ...doc, ...fields } : doc) } : dept), true); } setDoctorModal(null); };
   const handleDeleteDoctor = (deptId, doctorId) => { updateDepartments(d => d.map(dept => dept.id === deptId ? { ...dept, doctors: dept.doctors.filter(doc => doc.id !== doctorId) } : dept), true); const newPanels = panels.map(p => ({ ...p, activeDoctorIds: p.activeDoctorIds.filter(id => id !== doctorId) })); setPanels(newPanels); newPanels.forEach(p => savePanelToFirebase(p)); };
+  const handleMoveDoctor = (deptId, doctorId, dir) => {
+    const dept = departments.find(d => d.id === deptId);
+    if (!dept) return;
+    const idx = dept.doctors.findIndex(doc => doc.id === doctorId);
+    const ni = idx + dir;
+    if (ni < 0 || ni >= dept.doctors.length) return;
+    const newDepts = departments.map(d => {
+      if (d.id !== deptId) return d;
+      const newDoctors = [...d.doctors];
+      [newDoctors[idx], newDoctors[ni]] = [newDoctors[ni], newDoctors[idx]];
+      return { ...d, doctors: newDoctors };
+    });
+    updateDepartments(() => newDepts, true);
+  };
   const handleToggleDoctorChecked = (doctorId) => { const newIds = checkedIds.has(doctorId) ? [...checkedIds].filter(id => id !== doctorId) : [...checkedIds, doctorId]; setCheckedIds(new Set(newIds)); updatePanel(p => ({ ...p, activeDoctorIds: newIds }), true); };
   const handleToggleDeptAllChecked = (deptId) => { const dept = departments.find(d => d.id === deptId); if (!dept) return; const deptIds = dept.doctors.map(doc => doc.id); const allChecked = deptIds.every(id => checkedIds.has(id)); let newIds; if (allChecked) newIds = [...checkedIds].filter(id => !deptIds.includes(id)); else newIds = [...checkedIds].filter(id => !deptIds.includes(id)).concat(deptIds); setCheckedIds(new Set(newIds)); updatePanel(p => ({ ...p, activeDoctorIds: newIds }), true); };
   const handleToggleAll = () => { let newIds; if (allChecked) newIds = []; else newIds = allDoctorIds; setCheckedIds(new Set(newIds)); updatePanel(p => ({ ...p, activeDoctorIds: newIds }), true); };
@@ -648,12 +679,12 @@ export default function DoctorPanelBuilder() {
       </div>
 
       {activeView === 'preview' && (<PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} />)}
-      {activeView === 'doctors' && isAdmin && (<ManageDoctorsView departments={departments} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={handleDeleteDept} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={handleDeleteDoctor} isAdmin={true} onRefreshData={handleRefreshData} />)}
+      {activeView === 'doctors' && isAdmin && (<ManageDoctorsView departments={departments} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={handleDeleteDept} onMoveDept={handleMoveDept} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={handleDeleteDoctor} onMoveDoctor={handleMoveDoctor} isAdmin={true} onRefreshData={handleRefreshData} />)}
       {activeView === 'edit' && !isGuest && (isEditor || isAdmin) && (
         <>
           <PanelSwitcher panels={panels} activePanelId={activePanelId} onSwitch={handleSwitchPanel} onAdd={() => setPanelModal({ mode: 'add', departments })} onRename={(panel) => setPanelModal({ mode: 'rename', panel })} onDelete={isAdmin ? handleDeletePanel : () => {}} />
           {mode === 'edit' ? (
-            <EditPanel panel={activePanel} departments={departments} footer={footer} checkedIds={checkedIds} allChecked={allChecked} onUpdateTitle={handleUpdateTitle} onUpdateFooter={handleUpdateFooter} onUpdatePhone={handleUpdatePhone} onAddPhone={handleAddPhone} onRemovePhone={handleRemovePhone} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={isAdmin ? handleDeleteDept : () => {}} onMoveDept={() => {}} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={() => {}} onMoveDoctor={() => {}} onToggleDoctorChecked={handleToggleDoctorChecked} onToggleDeptAllChecked={handleToggleDeptAllChecked} onToggleAll={handleToggleAll} clearConfirm={clearConfirm} onClearAll={() => {}} onGoPreview={() => setMode('preview')} />
+            <EditPanel panel={activePanel} departments={departments} footer={footer} checkedIds={checkedIds} allChecked={allChecked} onUpdateTitle={handleUpdateTitle} onUpdateFooter={handleUpdateFooter} onUpdatePhone={handleUpdatePhone} onAddPhone={handleAddPhone} onRemovePhone={handleRemovePhone} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={isAdmin ? handleDeleteDept : () => {}} onMoveDept={handleMoveDept} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={() => {}} onMoveDoctor={handleMoveDoctor} onToggleDoctorChecked={handleToggleDoctorChecked} onToggleDeptAllChecked={handleToggleDeptAllChecked} onToggleAll={handleToggleAll} clearConfirm={clearConfirm} onClearAll={() => {}} onGoPreview={() => setMode('preview')} />
           ) : (
             <PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} />
           )}
