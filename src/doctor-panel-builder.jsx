@@ -34,11 +34,10 @@ function makeDepartment(overrides) {
   return { id: uid(), name: '', icon: 'Stethoscope', color: COLOR_THEMES[0], doctors: [], ...(overrides || {}) };
 }
 
-// ===================== DEFAULT FOOTER (নতুন যোগ করা হয়েছে) =====================
 const DEFAULT_FOOTER = {
   address: 'বাকলিয়া এক্সেস রোড,\nবাকলিয়া, চট্টগ্রাম।',
   website: 'alafiyahhospital.com',
-  logo: '../logo.pngn', // আপনার public ফোল্ডারে logo.png রাখুন
+  logo: '/logo.png',
   contactLabel: 'সিরিয়ালের এবং তথ্যের জন্যে যোগাযোগ',
   phones: ['01886 776 512', '01886 776 513'],
 };
@@ -213,8 +212,8 @@ function SaveIndicator({ status }) {
   return <span className="save-indicator">{text}</span>;
 }
 
-// ===================== DoctorRow =====================
-function DoctorRow({ doc, index, total, checked, onToggleChecked, onEdit, onDelete, onMoveUp, onMoveDown }) {
+// ===================== DoctorRow (with allowDelete prop) =====================
+function DoctorRow({ doc, index, total, checked, onToggleChecked, onEdit, onDelete, onMoveUp, onMoveDown, allowDelete = true }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   useEffect(() => {
     if (!confirmDelete) return;
@@ -239,20 +238,23 @@ function DoctorRow({ doc, index, total, checked, onToggleChecked, onEdit, onDele
         <button className="icon-btn" onClick={onMoveUp} disabled={index === 0} title="উপরে সরান"><ChevronUp size={14} /></button>
         <button className="icon-btn" onClick={onMoveDown} disabled={index === total - 1} title="নিচে সরান"><ChevronDown size={14} /></button>
         <button className="icon-btn" onClick={onEdit} title="সম্পাদনা"><Pencil size={14} /></button>
-        <button
-          className={confirmDelete ? 'icon-btn danger-confirm' : 'icon-btn'}
-          onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))}
-          title="মুছুন"
-        >
-          {confirmDelete ? 'নিশ্চিত?' : <Trash2 size={14} />}
-        </button>
+        
+        {allowDelete && (
+          <button
+            className={confirmDelete ? 'icon-btn danger-confirm' : 'icon-btn'}
+            onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))}
+            title="মুছুন"
+          >
+            {confirmDelete ? 'নিশ্চিত?' : <Trash2 size={14} />}
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-// ===================== DepartmentCard =====================
-function DepartmentCard({ dept, index, total, checkedIds, onEdit, onDelete, onMoveUp, onMoveDown, onAddDoctor, onEditDoctor, onDeleteDoctor, onMoveDoctorUp, onMoveDoctorDown, onToggleDoctorChecked, onToggleAllChecked }) {
+// ===================== DepartmentCard (with allowDelete props) =====================
+function DepartmentCard({ dept, index, total, checkedIds, onEdit, onDelete, onMoveUp, onMoveDown, onAddDoctor, onEditDoctor, onDeleteDoctor, onMoveDoctorUp, onMoveDoctorDown, onToggleDoctorChecked, onToggleAllChecked, allowDeptDelete = true, allowDoctorDelete = true }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   useEffect(() => {
     if (!confirmDelete) return;
@@ -283,13 +285,16 @@ function DepartmentCard({ dept, index, total, checkedIds, onEdit, onDelete, onMo
           <button className="icon-btn" onClick={onMoveUp} disabled={index === 0} title="উপরে সরান"><ChevronUp size={16} /></button>
           <button className="icon-btn" onClick={onMoveDown} disabled={index === total - 1} title="নিচে সরান"><ChevronDown size={16} /></button>
           <button className="icon-btn" onClick={onEdit} title="সম্পাদনা"><Pencil size={16} /></button>
-          <button
-            className={confirmDelete ? 'icon-btn danger-confirm' : 'icon-btn'}
-            onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))}
-            title="মুছুন"
-          >
-            {confirmDelete ? 'নিশ্চিত?' : <Trash2 size={16} />}
-          </button>
+          
+          {allowDeptDelete && (
+            <button
+              className={confirmDelete ? 'icon-btn danger-confirm' : 'icon-btn'}
+              onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))}
+              title="মুছুন"
+            >
+              {confirmDelete ? 'নিশ্চিত?' : <Trash2 size={16} />}
+            </button>
+          )}
         </div>
       </div>
       <div className="doctor-mini-list">
@@ -305,6 +310,7 @@ function DepartmentCard({ dept, index, total, checkedIds, onEdit, onDelete, onMo
             onDelete={() => onDeleteDoctor(doc.id)}
             onMoveUp={() => onMoveDoctorUp(doc.id)}
             onMoveDown={() => onMoveDoctorDown(doc.id)}
+            allowDelete={allowDoctorDelete} // নতুন প্রপ পাস করা হয়েছে
           />
         ))}
         <button className="add-doctor-btn" onClick={onAddDoctor}>
@@ -611,6 +617,8 @@ function EditPanel({
             onMoveDoctorDown={(docId) => onMoveDoctor(dept.id, docId, 1)}
             onToggleDoctorChecked={onToggleDoctorChecked}
             onToggleAllChecked={() => onToggleDeptAllChecked(dept.id)}
+            allowDeptDelete={false} // বিভাগ ডিলিট বন্ধ
+            allowDoctorDelete={false} // ডাক্তার ডিলিট বন্ধ
           />
         ))}
       </section>
@@ -788,12 +796,53 @@ function PreviewPanel({ panel, departments, checkedIds, footer }) {
   );
 }
 
+// ===================== NEW: Manage Doctos View =====================
+function ManageDoctorsView({ departments, onAddDept, onEditDept, onDeleteDept, onAddDoctor, onEditDoctor, onDeleteDoctor }) {
+  return (
+    <div className="edit-panel">
+      <section className="panel-section">
+        <div className="section-header">
+          <label>মাস্টার ডাক্তার তালিকা (বিভাগ ও ডাক্তার)</label>
+          <button className="btn btn-primary" onClick={onAddDept}><Plus size={15} /> নতুন বিভাগ</button>
+        </div>
+        <p className="section-hint">এখানে বিভাগ তৈরি করুন এবং সেই বিভাগের ভেতরে ডাক্তার যোগ, সম্পাদনা বা মুছে ফেলুন।</p>
+        {departments.length === 0 ? (
+          <div className="empty-state">এখনো কোনো বিভাগ যোগ করা হয়নি। "নতুন বিভাগ" বাটনে চাপ দিয়ে শুরু করুন।</div>
+        ) : null}
+        {departments.map((dept, i) => (
+          <DepartmentCard
+            key={dept.id}
+            dept={dept}
+            index={i}
+            total={departments.length}
+            checkedIds={new Set()}
+            onEdit={() => onEditDept(dept)}
+            onDelete={() => onDeleteDept(dept.id)}
+            onMoveUp={() => {}}
+            onMoveDown={() => {}}
+            onAddDoctor={() => onAddDoctor(dept.id)}
+            onEditDoctor={(doc) => onEditDoctor(dept.id, doc)}
+            onDeleteDoctor={(docId) => onDeleteDoctor(dept.id, docId)}
+            onMoveDoctorUp={() => {}}
+            onMoveDoctorDown={() => {}}
+            onToggleDoctorChecked={() => {}}
+            onToggleAllChecked={() => {}}
+            allowDeptDelete={true}
+            allowDoctorDelete={true}
+          />
+        ))}
+      </section>
+    </div>
+  );
+}
+
 // ===================== MAIN COMPONENT =====================
 export default function DoctorPanelBuilder() {
+  const [activeView, setActiveView] = useState('manage'); // 'manage' (default) বা 'builder'
   const [departments, setDepartments] = useState([]);
   const [panels, setPanels] = useState([]);
   const [activePanelId, setActivePanelId] = useState(null);
-  const [footer, setFooter] = useState(DEFAULT_FOOTER); // ডিফল্ট ফুটার দিয়ে শুরু হচ্ছে
+  const [footer, setFooter] = useState(DEFAULT_FOOTER);
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState('edit');
   const [saveStatus, setSaveStatus] = useState('idle');
@@ -808,7 +857,6 @@ export default function DoctorPanelBuilder() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        // 1. Load master departments
         const deptDocRef = doc(db, 'master', 'departments');
         const deptDoc = await getDoc(deptDocRef);
         let depts = [];
@@ -817,7 +865,6 @@ export default function DoctorPanelBuilder() {
         }
         setDepartments(depts);
 
-        // 2. Load all panels
         const panelsSnapshot = await getDocs(collection(db, 'panels'));
         const panelList = [];
         panelsSnapshot.forEach((doc) => {
@@ -833,13 +880,11 @@ export default function DoctorPanelBuilder() {
           setCheckedIds(new Set());
         }
 
-        // 3. Load footer
         const footerDocRef = doc(db, 'master', 'footer');
         const footerDoc = await getDoc(footerDocRef);
         if (footerDoc.exists()) {
           setFooter(footerDoc.data());
         } else {
-          // ডাটাবেসে ফুটার না থাকলে ডিফল্টটি সেভ করে দিচ্ছি
           await setDoc(footerDocRef, DEFAULT_FOOTER);
           setFooter(DEFAULT_FOOTER);
         }
@@ -856,27 +901,19 @@ export default function DoctorPanelBuilder() {
 
   // ===================== Firebase Save Helpers =====================
   const saveFooter = async (newFooter) => {
-    try {
-      await setDoc(doc(db, 'master', 'footer'), newFooter);
-    } catch (e) { console.error('Footer save error:', e); }
+    try { await setDoc(doc(db, 'master', 'footer'), newFooter); } catch (e) { console.error('Footer save error:', e); }
   };
 
   const savePanelToFirebase = async (panel) => {
-    try {
-      await setDoc(doc(db, 'panels', panel.id), panel);
-    } catch (e) { console.error('Panel save error:', e); }
+    try { await setDoc(doc(db, 'panels', panel.id), panel); } catch (e) { console.error('Panel save error:', e); }
   };
 
   const saveDepartments = async (newDepts) => {
-    try {
-      await setDoc(doc(db, 'master', 'departments'), { departments: newDepts });
-    } catch (e) { console.error('Departments save error:', e); }
+    try { await setDoc(doc(db, 'master', 'departments'), { departments: newDepts }); } catch (e) { console.error('Departments save error:', e); }
   };
 
   const deletePanelFromFirebase = async (panelId) => {
-    try {
-      await deleteDoc(doc(db, 'panels', panelId));
-    } catch (e) { console.error('Delete panel error:', e); }
+    try { await deleteDoc(doc(db, 'panels', panelId)); } catch (e) { console.error('Delete panel error:', e); }
   };
 
   const activePanel = panels.find(p => p.id === activePanelId) || panels[0] || { id: 'empty', name: '', title: '', activeDoctorIds: [] };
@@ -929,6 +966,7 @@ export default function DoctorPanelBuilder() {
   const handleAddPhone = () => handleUpdateFooter({ phones: [...footer.phones, ''] });
   const handleRemovePhone = (idx) => handleUpdateFooter({ phones: footer.phones.filter((_, i) => i !== idx) });
 
+  // Department handlers for Manage View
   const handleAddDept = () => setDeptModal({ mode: 'add' });
   const handleEditDept = (dept) => setDeptModal({ mode: 'edit', dept });
   const handleSaveDept = (fields) => {
@@ -940,6 +978,7 @@ export default function DoctorPanelBuilder() {
     }
     setDeptModal(null);
   };
+  
   const handleDeleteDept = (deptId) => {
     const removedIds = departments.find(d => d.id === deptId)?.doctors.map(doc => doc.id) || [];
     updateDepartments(d => d.filter(dept => dept.id !== deptId), true);
@@ -950,15 +989,8 @@ export default function DoctorPanelBuilder() {
     setPanels(newPanels);
     newPanels.forEach(p => savePanelToFirebase(p));
   };
-  const handleMoveDept = (deptId, dir) => {
-    const idx = departments.findIndex(d => d.id === deptId);
-    const ni = idx + dir;
-    if (ni < 0 || ni >= departments.length) return;
-    const newDepts = [...departments];
-    [newDepts[idx], newDepts[ni]] = [newDepts[ni], newDepts[idx]];
-    updateDepartments(() => newDepts, true);
-  };
 
+  // Doctor handlers for Manage View (or Builder View)
   const handleAddDoctor = (deptId) => setDoctorModal({ deptId, mode: 'add' });
   const handleEditDoctor = (deptId, doctor) => setDoctorModal({ deptId, mode: 'edit', doctor });
   const handleSaveDoctor = (fields) => {
@@ -968,7 +1000,9 @@ export default function DoctorPanelBuilder() {
       updateDepartments(d => d.map(dept => 
         dept.id === deptId ? { ...dept, doctors: [...dept.doctors, newDoctor] } : dept
       ), true);
-      updatePanel(p => ({ ...p, activeDoctorIds: [...p.activeDoctorIds, newDoctor.id] }), true);
+      if (activePanel) {
+        updatePanel(p => ({ ...p, activeDoctorIds: [...p.activeDoctorIds, newDoctor.id] }), true);
+      }
     } else {
       const doctorId = doctorModal.doctor.id;
       updateDepartments(d => d.map(dept => 
@@ -977,6 +1011,7 @@ export default function DoctorPanelBuilder() {
     }
     setDoctorModal(null);
   };
+
   const handleDeleteDoctor = (deptId, doctorId) => {
     updateDepartments(d => d.map(dept => 
       dept.id === deptId ? { ...dept, doctors: dept.doctors.filter(doc => doc.id !== doctorId) } : dept
@@ -988,21 +1023,8 @@ export default function DoctorPanelBuilder() {
     setPanels(newPanels);
     newPanels.forEach(p => savePanelToFirebase(p));
   };
-  const handleMoveDoctor = (deptId, doctorId, dir) => {
-    const dept = departments.find(d => d.id === deptId);
-    if (!dept) return;
-    const idx = dept.doctors.findIndex(doc => doc.id === doctorId);
-    const ni = idx + dir;
-    if (ni < 0 || ni >= dept.doctors.length) return;
-    const newDepts = departments.map(d => {
-      if (d.id !== deptId) return d;
-      const newDoctors = [...d.doctors];
-      [newDoctors[idx], newDoctors[ni]] = [newDoctors[ni], newDoctors[idx]];
-      return { ...d, doctors: newDoctors };
-    });
-    updateDepartments(() => newDepts, true);
-  };
 
+  // Panel Builder handlers
   const handleToggleDoctorChecked = (doctorId) => {
     const newIds = checkedIds.has(doctorId) 
       ? [...checkedIds].filter(id => id !== doctorId)
@@ -1115,50 +1137,64 @@ export default function DoctorPanelBuilder() {
         <div className="topbar-right">
           <SaveIndicator status={saveStatus} />
           <div className="tabs">
-            <button className={mode === 'edit' ? 'tab active' : 'tab'} onClick={() => setMode('edit')}>এডিট করুন</button>
-            <button className={mode === 'preview' ? 'tab active' : 'tab'} onClick={() => setMode('preview')}>প্রিভিউ ও প্রিন্ট</button>
+            <button className={activeView === 'manage' ? 'tab active' : 'tab'} onClick={() => setActiveView('manage')}>ডাক্তার তালিকা</button>
+            <button className={activeView === 'builder' ? 'tab active' : 'tab'} onClick={() => setActiveView('builder')}>প্যানেল বিল্ডার</button>
           </div>
         </div>
       </div>
 
-      <PanelSwitcher
-        panels={panels}
-        activePanelId={activePanelId}
-        onSwitch={handleSwitchPanel}
-        onAdd={() => setPanelModal({ mode: 'add', departments })}
-        onRename={(panel) => setPanelModal({ mode: 'rename', panel })}
-        onDelete={handleDeletePanel}
-      />
-
-      {mode === 'edit' ? (
-        <EditPanel
-          panel={activePanel}
+      {activeView === 'manage' ? (
+        <ManageDoctorsView
           departments={departments}
-          footer={footer}
-          checkedIds={checkedIds}
-          allChecked={allChecked}
-          onUpdateTitle={handleUpdateTitle}
-          onUpdateFooter={handleUpdateFooter}
-          onUpdatePhone={handleUpdatePhone}
-          onAddPhone={handleAddPhone}
-          onRemovePhone={handleRemovePhone}
           onAddDept={handleAddDept}
           onEditDept={handleEditDept}
           onDeleteDept={handleDeleteDept}
-          onMoveDept={handleMoveDept}
           onAddDoctor={handleAddDoctor}
           onEditDoctor={handleEditDoctor}
           onDeleteDoctor={handleDeleteDoctor}
-          onMoveDoctor={handleMoveDoctor}
-          onToggleDoctorChecked={handleToggleDoctorChecked}
-          onToggleDeptAllChecked={handleToggleDeptAllChecked}
-          onToggleAll={handleToggleAll}
-          clearConfirm={clearConfirm}
-          onClearAll={handleClearActivePanelChecks}
-          onGoPreview={() => setMode('preview')}
         />
       ) : (
-        <PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} />
+        <>
+          <PanelSwitcher
+            panels={panels}
+            activePanelId={activePanelId}
+            onSwitch={handleSwitchPanel}
+            onAdd={() => setPanelModal({ mode: 'add', departments })}
+            onRename={(panel) => setPanelModal({ mode: 'rename', panel })}
+            onDelete={handleDeletePanel}
+          />
+
+          {mode === 'edit' ? (
+            <EditPanel
+              panel={activePanel}
+              departments={departments}
+              footer={footer}
+              checkedIds={checkedIds}
+              allChecked={allChecked}
+              onUpdateTitle={handleUpdateTitle}
+              onUpdateFooter={handleUpdateFooter}
+              onUpdatePhone={handleUpdatePhone}
+              onAddPhone={handleAddPhone}
+              onRemovePhone={handleRemovePhone}
+              onAddDept={handleAddDept}
+              onEditDept={handleEditDept}
+              onDeleteDept={handleDeleteDept}
+              onMoveDept={() => {}}
+              onAddDoctor={handleAddDoctor}
+              onEditDoctor={handleEditDoctor}
+              onDeleteDoctor={() => {}}
+              onMoveDoctor={() => {}}
+              onToggleDoctorChecked={handleToggleDoctorChecked}
+              onToggleDeptAllChecked={handleToggleDeptAllChecked}
+              onToggleAll={handleToggleAll}
+              clearConfirm={clearConfirm}
+              onClearAll={handleClearActivePanelChecks}
+              onGoPreview={() => setMode('preview')}
+            />
+          ) : (
+            <PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} />
+          )}
+        </>
       )}
 
       {deptModal && (
