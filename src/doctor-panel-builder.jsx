@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Plus, Ear, Trash2, Pencil, Printer, X, ChevronUp, ChevronDown, MapPin, Globe, Phone, Loader2,
   Stethoscope, Scissors, Heart, Baby, Bone, Syringe, Pill, Activity, Brain, Eye, Utensils, Smile, Sparkles, User, Droplet, Thermometer, LogOut,
-  CheckCircle, XCircle,
+  CheckCircle, XCircle, RefreshCw,
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -105,7 +105,6 @@ const CSS = `
 
 .dpb .doctor-mini-list{padding:4px 14px 12px;}
 .dpb .doctor-row{display:flex;align-items:center;justify-content:space-between;padding:9px 4px;border-top:1px dashed #e2e6ee;gap:10px;}
-.dpb .doctor-checkbox{width:18px;height:18px;flex-shrink:0;cursor:pointer;accent-color:#1c5fa8;margin-right:4px;}
 .dpb .doctor-row-info{min-width:0;flex:1;}
 .dpb .doctor-row-name{font-size:16px;font-weight:700;color:#1f2937;}
 .dpb .doctor-row-specialty{font-size:12px;color:#6b7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:280px;}
@@ -316,7 +315,7 @@ function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
   );
 }
 
-// ===================== DoctorRow (চেকবক্স লুকানোর প্রপ যোগ করা হয়েছে) =====================
+// ===================== DoctorRow =====================
 function DoctorRow({ doc, index, total, checked, onToggleChecked, onEdit, onDelete, onMoveUp, onMoveDown, allowDelete = true, showCheckbox = true }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   useEffect(() => { if (!confirmDelete) return; const t = setTimeout(() => setConfirmDelete(false), 3000); return () => clearTimeout(t); }, [confirmDelete]);
@@ -336,7 +335,7 @@ function DoctorRow({ doc, index, total, checked, onToggleChecked, onEdit, onDele
   );
 }
 
-// ===================== DepartmentCard (সব বাছুন লুকানোর প্রপ যোগ করা হয়েছে) =====================
+// ===================== DepartmentCard =====================
 function DepartmentCard({ dept, index, total, checkedIds, onEdit, onDelete, onMoveUp, onMoveDown, onAddDoctor, onEditDoctor, onDeleteDoctor, onMoveDoctorUp, onMoveDoctorDown, onToggleDoctorChecked, onToggleAllChecked, allowDeptDelete = true, allowDoctorDelete = true, showCheckbox = true, showSelectAll = true }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   useEffect(() => { if (!confirmDelete) return; const t = setTimeout(() => setConfirmDelete(false), 3000); return () => clearTimeout(t); }, [confirmDelete]);
@@ -445,7 +444,7 @@ function PanelSwitcher({ panels, activePanelId, onSwitch, onAdd, onRename, onDel
 }
 
 // ===================== EditPanel =====================
-function EditPanel({ panel, departments, footer, checkedIds, allChecked, onUpdateTitle, onUpdateFooter, onUpdatePhone, onAddPhone, onRemovePhone, onAddDept, onEditDept, onDeleteDept, onMoveDept, onAddDoctor, onEditDoctor, onDeleteDoctor, onMoveDoctor, onToggleDoctorChecked, onToggleDeptAllChecked, onToggleAll, clearConfirm, onClearAll, onGoPreview, showCheckbox = true, showSelectAll = true }) {
+function EditPanel({ panel, departments, footer, checkedIds, allChecked, onUpdateTitle, onUpdateFooter, onUpdatePhone, onAddPhone, onRemovePhone, onAddDept, onEditDept, onDeleteDept, onMoveDept, onAddDoctor, onEditDoctor, onDeleteDoctor, onMoveDoctor, onToggleDoctorChecked, onToggleDeptAllChecked, onToggleAll, clearConfirm, onClearAll, onGoPreview }) {
   return (
     <div className="edit-panel">
       <section className="panel-section">
@@ -454,10 +453,10 @@ function EditPanel({ panel, departments, footer, checkedIds, allChecked, onUpdat
         <input className="input" value={panel.title} onChange={(e) => onUpdateTitle(e.target.value)} placeholder="যেমনঃ শনিবারের ডক্টরস প্যানেল" />
       </section>
       <section className="panel-section">
-        <div className="section-header"><label>বিভাগ ও ডাক্তার তালিকা — {panel.name}</label>{showSelectAll && <button className="btn btn-primary" onClick={onAddDept}><Plus size={15} /> নতুন বিভাগ</button>}</div>
+        <div className="section-header"><label>বিভাগ ও ডাক্তার তালিকা — {panel.name}</label><button className="btn btn-primary" onClick={onAddDept}><Plus size={15} /> নতুন বিভাগ</button></div>
         <p className="section-hint">প্রতিটি ডাক্তারের পাশের বক্সে টিক দিয়ে বেছে নিন কারা "{panel.name}"-এর পোস্টারে দেখাবে।</p>
         {departments.length === 0 ? (<div className="empty-state">এখনো কোনো বিভাগ যোগ করা হয়নি।</div>) : null}
-        {departments.map((dept, i) => (<DepartmentCard key={dept.id} dept={dept} index={i} total={departments.length} checkedIds={checkedIds} onEdit={() => onEditDept(dept)} onDelete={() => onDeleteDept(dept.id)} onMoveUp={() => onMoveDept(dept.id, -1)} onMoveDown={() => onMoveDept(dept.id, 1)} onAddDoctor={() => onAddDoctor(dept.id)} onEditDoctor={(doc) => onEditDoctor(dept.id, doc)} onDeleteDoctor={(docId) => onDeleteDoctor(dept.id, docId)} onMoveDoctorUp={(docId) => onMoveDoctor(dept.id, docId, -1)} onMoveDoctorDown={(docId) => onMoveDoctor(dept.id, docId, 1)} onToggleDoctorChecked={onToggleDoctorChecked} onToggleAllChecked={() => onToggleDeptAllChecked(dept.id)} allowDeptDelete={false} allowDoctorDelete={false} showCheckbox={showCheckbox} showSelectAll={showSelectAll} />))}
+        {departments.map((dept, i) => (<DepartmentCard key={dept.id} dept={dept} index={i} total={departments.length} checkedIds={checkedIds} onEdit={() => onEditDept(dept)} onDelete={() => onDeleteDept(dept.id)} onMoveUp={() => onMoveDept(dept.id, -1)} onMoveDown={() => onMoveDept(dept.id, 1)} onAddDoctor={() => onAddDoctor(dept.id)} onEditDoctor={(doc) => onEditDoctor(dept.id, doc)} onDeleteDoctor={(docId) => onDeleteDoctor(dept.id, docId)} onMoveDoctorUp={(docId) => onMoveDoctor(dept.id, docId, -1)} onMoveDoctorDown={(docId) => onMoveDoctor(dept.id, docId, 1)} onToggleDoctorChecked={onToggleDoctorChecked} onToggleAllChecked={() => onToggleDeptAllChecked(dept.id)} allowDeptDelete={false} allowDoctorDelete={false} />))}
       </section>
       <section className="panel-section">
         <label>ফুটার তথ্য</label>
@@ -496,14 +495,18 @@ function PreviewPanel({ panel, departments, checkedIds, footer }) {
   );
 }
 
-// ===================== Manage Doctors View (চেকবক্স ও সব বাছুন সরানো হয়েছে) =====================
-function ManageDoctorsView({ departments, onAddDept, onEditDept, onDeleteDept, onAddDoctor, onEditDoctor, onDeleteDoctor, isAdmin }) {
+// ===================== Manage Doctors View (চেকবক্স ও সব বাছুন বাদ) =====================
+function ManageDoctorsView({ departments, onAddDept, onEditDept, onDeleteDept, onAddDoctor, onEditDoctor, onDeleteDoctor, isAdmin, onRefreshData }) {
   return (
     <div className="edit-panel">
       <section className="panel-section">
-        <div className="section-header"><label>মাস্টার ডাক্তার তালিকা (শুধুমাত্র অ্যাডমিনের জন্য)</label>{isAdmin && <button className="btn btn-primary" onClick={onAddDept}><Plus size={15} /> নতুন বিভাগ</button>}</div>
-        <p className="section-hint">এখানে শুধুমাত্র অ্যাডমিন ডাক্তার ডিলিট করতে পারবে।</p>
-        {departments.length === 0 ? (<div className="empty-state">এখনো কোনো বিভাগ যোগ করা হয়নি।</div>) : null}
+        <div className="section-header">
+          <label>মাস্টার ডাক্তার তালিকা (শুধুমাত্র অ্যাডমিনের জন্য)</label>
+          <button className="btn btn-secondary" onClick={onRefreshData}><RefreshCw size={14} /> ডেটা রিফ্রেশ করুন</button>
+          {isAdmin && <button className="btn btn-primary" onClick={onAddDept}><Plus size={15} /> নতুন বিভাগ</button>}
+        </div>
+        <p className="section-hint">ডেটা না দেখালে "ডেটা রিফ্রেশ করুন" বাটনে ক্লিক করুন।</p>
+        {departments.length === 0 ? (<div className="empty-state">এখনো কোনো বিভাগ যোগ করা হয়নি বা ডেটা লোড করা যায়নি।</div>) : null}
         {departments.map((dept, i) => (
           <DepartmentCard key={dept.id} dept={dept} index={i} total={departments.length} checkedIds={new Set()}
             onEdit={() => onEditDept(dept)} onDelete={() => onDeleteDept(dept.id)}
@@ -539,48 +542,45 @@ export default function DoctorPanelBuilder() {
   const [panelModal, setPanelModal] = useState(null);
   const [clearConfirm, setClearConfirm] = useState(false);
   const debounceRef = useRef(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const isAdmin = user?.role === 'admin';
   const isEditor = user?.role === 'editor';
   const isGuest = user?.isGuest === true;
 
+  // Load Data (টাইমআউট সমস্যা সরানো হয়েছে)
   useEffect(() => {
     const loadData = async () => {
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000));
+      setLoading(true);
       try {
-        await Promise.race([
-          (async () => {
-            const deptDocRef = doc(db, 'master', 'departments');
-            const deptDoc = await getDoc(deptDocRef);
-            let depts = [];
-            if (deptDoc.exists()) { depts = deptDoc.data().departments; }
-            setDepartments(depts);
+        const deptDocRef = doc(db, 'master', 'departments');
+        const deptDoc = await getDoc(deptDocRef);
+        let depts = [];
+        if (deptDoc.exists()) { depts = deptDoc.data().departments; }
+        setDepartments(depts);
 
-            const panelsSnapshot = await getDocs(collection(db, 'panels'));
-            const panelList = [];
-            panelsSnapshot.forEach((doc) => { panelList.push({ id: doc.id, ...doc.data() }); });
-            setPanels(panelList);
-            if (panelList.length > 0) {
-              setActivePanelId(panelList[0].id);
-              setCheckedIds(new Set(panelList[0].activeDoctorIds || []));
-            } else { setActivePanelId(null); setCheckedIds(new Set()); }
+        const panelsSnapshot = await getDocs(collection(db, 'panels'));
+        const panelList = [];
+        panelsSnapshot.forEach((doc) => { panelList.push({ id: doc.id, ...doc.data() }); });
+        setPanels(panelList);
+        if (panelList.length > 0) {
+          setActivePanelId(panelList[0].id);
+          setCheckedIds(new Set(panelList[0].activeDoctorIds || []));
+        } else { setActivePanelId(null); setCheckedIds(new Set()); }
 
-            const footerDocRef = doc(db, 'master', 'footer');
-            const footerDoc = await getDoc(footerDocRef);
-            if (footerDoc.exists()) { setFooter(footerDoc.data()); }
-            else { await setDoc(footerDocRef, DEFAULT_FOOTER); setFooter(DEFAULT_FOOTER); }
+        const footerDocRef = doc(db, 'master', 'footer');
+        const footerDoc = await getDoc(footerDocRef);
+        if (footerDoc.exists()) { setFooter(footerDoc.data()); }
+        else { await setDoc(footerDocRef, DEFAULT_FOOTER); setFooter(DEFAULT_FOOTER); }
 
-            setLoading(false);
-          })(),
-          timeoutPromise
-        ]);
+        setLoading(false);
       } catch (error) {
-        console.error('Firebase load error or timeout:', error);
+        console.error('Firebase load error:', error);
         setLoading(false);
       }
     };
     loadData();
-  }, []);
+  }, [reloadKey]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -632,6 +632,10 @@ export default function DoctorPanelBuilder() {
   const handleDeletePanel = async (panelId) => { if (panels.length <= 1) return; await deletePanelFromFirebase(panelId); const remaining = panels.filter(p => p.id !== panelId); setPanels(remaining); if (activePanelId === panelId) { setActivePanelId(remaining[0].id); setCheckedIds(new Set(remaining[0].activeDoctorIds || [])); } };
   const handleSavePanel = (fields) => { if (panelModal.mode === 'add') handleAddPanel(fields); else handleRenamePanel(fields); };
 
+  const handleRefreshData = () => {
+    setReloadKey(prev => prev + 1);
+  };
+
   const handleLogout = () => {
     setUser(GUEST_USER);
     setTimeout(() => { window.location.reload(); }, 100);
@@ -661,7 +665,7 @@ export default function DoctorPanelBuilder() {
       </div>
 
       {activeView === 'preview' && (<PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} />)}
-      {activeView === 'doctors' && isAdmin && (<ManageDoctorsView departments={departments} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={handleDeleteDept} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={handleDeleteDoctor} isAdmin={true} />)}
+      {activeView === 'doctors' && isAdmin && (<ManageDoctorsView departments={departments} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={handleDeleteDept} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={handleDeleteDoctor} isAdmin={true} onRefreshData={handleRefreshData} />)}
       {activeView === 'edit' && !isGuest && (isEditor || isAdmin) && (
         <>
           <PanelSwitcher panels={panels} activePanelId={activePanelId} onSwitch={handleSwitchPanel} onAdd={() => setPanelModal({ mode: 'add', departments })} onRename={(panel) => setPanelModal({ mode: 'rename', panel })} onDelete={isAdmin ? handleDeletePanel : () => {}} />
