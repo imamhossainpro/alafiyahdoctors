@@ -471,8 +471,6 @@ function PreviewPanel({ panel, departments, checkedIds, footer }) {
   const printRef = useRef(null);
   const handlePrint = () => window.print();
   const downloadPNG = async () => { const element = printRef.current; if (!element) return; try { const canvas = await html2canvas(element, { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' }); const link = document.createElement('a'); link.download = `${panel.title || 'poster'}.png`; link.href = canvas.toDataURL('image/png'); link.click(); } catch (error) { alert('PNG ডাউনলোড করতে সমস্যা হয়েছে।'); } };
-
-  // 🔥 ফিক্স: PDF মাল্টি-পেজ ডাউনলোড
   const downloadPDF = async () => {
     const element = printRef.current;
     if (!element) return;
@@ -482,30 +480,22 @@ function PreviewPanel({ panel, departments, checkedIds, footer }) {
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfPageHeight = pdf.internal.pageSize.getHeight();
-      
-      // ক্যানভাসের উচ্চতা A4 প্রস্থের অনুপাতে কনভার্ট করা
       const imgHeight = (canvas.height * pdfWidth) / canvas.width;
       let heightLeft = imgHeight;
       let position = 0;
-
-      // প্রথম পৃষ্ঠা
       pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
       heightLeft -= pdfPageHeight;
-
-      // বাকি অংশ নতুন পৃষ্ঠায়
       while (heightLeft > 0) {
-        position = heightLeft - imgHeight; // নেগেটিভ অফসেট
+        position = heightLeft - imgHeight;
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
         heightLeft -= pdfPageHeight;
       }
-
       pdf.save(`${panel.title || 'poster'}.pdf`);
     } catch (error) {
       alert('PDF ডাউনলোড করতে সমস্যা হয়েছে।');
     }
   };
-
   const visibleDepartments = departments.map((dept) => ({ ...dept, doctors: dept.doctors.filter((doc) => checkedIds.has(doc.id)) })).filter((dept) => dept.doctors.length > 0);
   return (
     <div className="preview-wrap">
@@ -667,7 +657,36 @@ export default function DoctorPanelBuilder() {
   };
   const handleAddDoctor = (deptId) => setDoctorModal({ deptId, mode: 'add' });
   const handleEditDoctor = (deptId, doctor) => setDoctorModal({ deptId, mode: 'edit', doctor });
-  const handleSaveDoctor = (fields) => { const deptId = doctorModal.deptId; if (doctorModal.mode === 'add') { const newDoctor = makeDoctor(fields); updateDepartments(d => d.map(dept => dept.id === deptId ? { ...dept, doctors: [...dept.doctors, newDoctor] } : dept), true); if (activePanel) { updatePanel(p => ({ ...p, activeDoctorIds: [...p.activeDoctorIds, newDoctor.id] }), true); } } else { const doctorId = doctorModal.doctor.id; updateDepartments(d => d.map(dept => dept.id === deptId ? { ...dept, doctors: dept.doctors.map(doc => doc.id === doctorId ? { ...doc, ...fields } : doc) } : dept), true); } setDoctorModal(null); };
+  const handleSaveDoctor = (fields) => {
+    const deptId = doctorModal.deptId;
+    if (doctorModal.mode === 'add') {
+      const newDoctor = makeDoctor(fields);
+      updateDepartments(d => d.map(dept => 
+        dept.id === deptId ? { ...dept, doctors: [...dept.doctors, newDoctor] } : dept
+      ), true);
+      
+      // 🔥 সমাধান: সব প্যানেলের activeDoctorIds-এ নতুন ডাক্তার যোগ করুন
+      const newPanels = panels.map(p => ({
+        ...p,
+        activeDoctorIds: [...new Set([...(p.activeDoctorIds || []), newDoctor.id])]
+      }));
+      setPanels(newPanels);
+      newPanels.forEach(p => savePanelToFirebase(p));
+      
+      // সক্রিয় প্যানেলের চেকবক্স আপডেট করুন
+      setCheckedIds(prev => {
+        const newSet = new Set(prev);
+        newSet.add(newDoctor.id);
+        return newSet;
+      });
+    } else {
+      const doctorId = doctorModal.doctor.id;
+      updateDepartments(d => d.map(dept => 
+        dept.id === deptId ? { ...dept, doctors: dept.doctors.map(doc => doc.id === doctorId ? { ...doc, ...fields } : doc) } : dept
+      ), true);
+    }
+    setDoctorModal(null);
+  };
   const handleDeleteDoctor = (deptId, doctorId) => { updateDepartments(d => d.map(dept => dept.id === deptId ? { ...dept, doctors: dept.doctors.filter(doc => doc.id !== doctorId) } : dept), true); const newPanels = panels.map(p => ({ ...p, activeDoctorIds: p.activeDoctorIds.filter(id => id !== doctorId) })); setPanels(newPanels); newPanels.forEach(p => savePanelToFirebase(p)); };
   const handleMoveDoctor = (deptId, doctorId, dir) => {
     const dept = departments.find(d => d.id === deptId);
