@@ -212,7 +212,7 @@ function SaveIndicator({ status }) {
   return <span className="save-indicator">{text}</span>;
 }
 
-// ===================== DoctorRow (with allowDelete prop) =====================
+// ===================== DoctorRow =====================
 function DoctorRow({ doc, index, total, checked, onToggleChecked, onEdit, onDelete, onMoveUp, onMoveDown, allowDelete = true }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   useEffect(() => {
@@ -253,7 +253,7 @@ function DoctorRow({ doc, index, total, checked, onToggleChecked, onEdit, onDele
   );
 }
 
-// ===================== DepartmentCard (with allowDelete props) =====================
+// ===================== DepartmentCard =====================
 function DepartmentCard({ dept, index, total, checkedIds, onEdit, onDelete, onMoveUp, onMoveDown, onAddDoctor, onEditDoctor, onDeleteDoctor, onMoveDoctorUp, onMoveDoctorDown, onToggleDoctorChecked, onToggleAllChecked, allowDeptDelete = true, allowDoctorDelete = true }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   useEffect(() => {
@@ -310,7 +310,7 @@ function DepartmentCard({ dept, index, total, checkedIds, onEdit, onDelete, onMo
             onDelete={() => onDeleteDoctor(doc.id)}
             onMoveUp={() => onMoveDoctorUp(doc.id)}
             onMoveDown={() => onMoveDoctorDown(doc.id)}
-            allowDelete={allowDoctorDelete} // নতুন প্রপ পাস করা হয়েছে
+            allowDelete={allowDoctorDelete}
           />
         ))}
         <button className="add-doctor-btn" onClick={onAddDoctor}>
@@ -355,13 +355,7 @@ function DepartmentModal({ initial, onSave, onClose }) {
               const IconComp = ICONS[key];
               const selected = icon === key;
               return (
-                <button
-                  key={key}
-                  className={selected ? 'icon-choice selected' : 'icon-choice'}
-                  style={selected ? { borderColor: color, background: color } : {}}
-                  onClick={() => setIcon(key)}
-                  title={key}
-                >
+                <button key={key} className={selected ? 'icon-choice selected' : 'icon-choice'} style={selected ? { borderColor: color, background: color } : {}} onClick={() => setIcon(key)} title={key}>
                   <IconComp size={17} color={selected ? '#fff' : '#555'} />
                 </button>
               );
@@ -371,13 +365,7 @@ function DepartmentModal({ initial, onSave, onClose }) {
           <label>রঙ বেছে নিন</label>
           <div className="color-grid">
             {COLOR_THEMES.map((c) => (
-              <button
-                key={c}
-                className={color === c ? 'color-choice selected' : 'color-choice'}
-                style={{ background: c }}
-                onClick={() => setColor(c)}
-                title={c}
-              />
+              <button key={c} className={color === c ? 'color-choice selected' : 'color-choice'} style={{ background: c }} onClick={() => setColor(c)} title={c} />
             ))}
           </div>
         </div>
@@ -454,12 +442,7 @@ function PanelModal({ mode, initial, activeDeptCount, departments, onSave, onClo
   const handleSave = () => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    onSave({ 
-      name: trimmed, 
-      title: titleForName(trimmed), 
-      duplicate,
-      selectedIds: [...selectedIds] 
-    });
+    onSave({ name: trimmed, title: titleForName(trimmed), duplicate, selectedIds: [...selectedIds] });
   };
 
   const toggleDoctor = (id) => {
@@ -617,8 +600,8 @@ function EditPanel({
             onMoveDoctorDown={(docId) => onMoveDoctor(dept.id, docId, 1)}
             onToggleDoctorChecked={onToggleDoctorChecked}
             onToggleAllChecked={() => onToggleDeptAllChecked(dept.id)}
-            allowDeptDelete={false} // বিভাগ ডিলিট বন্ধ
-            allowDoctorDelete={false} // ডাক্তার ডিলিট বন্ধ
+            allowDeptDelete={false}
+            allowDoctorDelete={false}
           />
         ))}
       </section>
@@ -796,7 +779,7 @@ function PreviewPanel({ panel, departments, checkedIds, footer }) {
   );
 }
 
-// ===================== NEW: Manage Doctos View =====================
+// ===================== Manage Doctos View =====================
 function ManageDoctorsView({ departments, onAddDept, onEditDept, onDeleteDept, onAddDoctor, onEditDoctor, onDeleteDoctor }) {
   return (
     <div className="edit-panel">
@@ -838,13 +821,13 @@ function ManageDoctorsView({ departments, onAddDept, onEditDept, onDeleteDept, o
 
 // ===================== MAIN COMPONENT =====================
 export default function DoctorPanelBuilder() {
-  const [activeView, setActiveView] = useState('manage'); // 'manage' (default) বা 'builder'
+  const [activeView, setActiveView] = useState('manage'); // 'manage' বা 'builder'
   const [departments, setDepartments] = useState([]);
   const [panels, setPanels] = useState([]);
   const [activePanelId, setActivePanelId] = useState(null);
   const [footer, setFooter] = useState(DEFAULT_FOOTER);
   const [loading, setLoading] = useState(true);
-  const [mode, setMode] = useState('edit');
+  const [mode, setMode] = useState('edit'); // 'edit' বা 'preview'
   const [saveStatus, setSaveStatus] = useState('idle');
   const [checkedIds, setCheckedIds] = useState(new Set());
   const [deptModal, setDeptModal] = useState(null);
@@ -853,7 +836,7 @@ export default function DoctorPanelBuilder() {
   const [clearConfirm, setClearConfirm] = useState(false);
   const debounceRef = useRef(null);
 
-  // ===================== Load Data from Firebase =====================
+  // Load Data
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -899,19 +882,16 @@ export default function DoctorPanelBuilder() {
     loadData();
   }, []);
 
-  // ===================== Firebase Save Helpers =====================
+  // Save Helpers
   const saveFooter = async (newFooter) => {
     try { await setDoc(doc(db, 'master', 'footer'), newFooter); } catch (e) { console.error('Footer save error:', e); }
   };
-
   const savePanelToFirebase = async (panel) => {
     try { await setDoc(doc(db, 'panels', panel.id), panel); } catch (e) { console.error('Panel save error:', e); }
   };
-
   const saveDepartments = async (newDepts) => {
     try { await setDoc(doc(db, 'master', 'departments'), { departments: newDepts }); } catch (e) { console.error('Departments save error:', e); }
   };
-
   const deletePanelFromFirebase = async (panelId) => {
     try { await deleteDoc(doc(db, 'panels', panelId)); } catch (e) { console.error('Delete panel error:', e); }
   };
@@ -920,7 +900,7 @@ export default function DoctorPanelBuilder() {
   const allDoctorIds = departments.flatMap(d => d.doctors.map(doc => doc.id));
   const allChecked = allDoctorIds.length > 0 && allDoctorIds.every(id => checkedIds.has(id));
 
-  // ===================== Handlers =====================
+  // Handlers
   const updatePanel = (updater, immediate) => {
     const updated = updater(activePanel);
     const newPanels = panels.map(p => p.id === activePanelId ? updated : p);
@@ -957,7 +937,6 @@ export default function DoctorPanelBuilder() {
     setFooter(newFooter);
     saveFooter(newFooter);
   };
-
   const handleUpdatePhone = (idx, value) => {
     const phones = [...footer.phones];
     phones[idx] = value;
@@ -966,7 +945,6 @@ export default function DoctorPanelBuilder() {
   const handleAddPhone = () => handleUpdateFooter({ phones: [...footer.phones, ''] });
   const handleRemovePhone = (idx) => handleUpdateFooter({ phones: footer.phones.filter((_, i) => i !== idx) });
 
-  // Department handlers for Manage View
   const handleAddDept = () => setDeptModal({ mode: 'add' });
   const handleEditDept = (dept) => setDeptModal({ mode: 'edit', dept });
   const handleSaveDept = (fields) => {
@@ -990,7 +968,6 @@ export default function DoctorPanelBuilder() {
     newPanels.forEach(p => savePanelToFirebase(p));
   };
 
-  // Doctor handlers for Manage View (or Builder View)
   const handleAddDoctor = (deptId) => setDoctorModal({ deptId, mode: 'add' });
   const handleEditDoctor = (deptId, doctor) => setDoctorModal({ deptId, mode: 'edit', doctor });
   const handleSaveDoctor = (fields) => {
@@ -1136,9 +1113,19 @@ export default function DoctorPanelBuilder() {
         <div className="topbar-title"><Stethoscope size={20} /><span>ডাক্তার প্যানেল বিল্ডার</span></div>
         <div className="topbar-right">
           <SaveIndicator status={saveStatus} />
+          
+          {/* মূল ট্যাব এবং প্রিভিউ/প্রিন্ট ট্যাব একসাথে */}
           <div className="tabs">
             <button className={activeView === 'manage' ? 'tab active' : 'tab'} onClick={() => setActiveView('manage')}>ডাক্তার তালিকা</button>
             <button className={activeView === 'builder' ? 'tab active' : 'tab'} onClick={() => setActiveView('builder')}>প্যানেল বিল্ডার</button>
+            
+            {/* শুধুমাত্র প্যানেল বিল্ডার ট্যাব সক্রিয় থাকলে এডিট/প্রিভিউ বাটন দেখাবে */}
+            {activeView === 'builder' && (
+              <>
+                <button className={mode === 'edit' ? 'tab active' : 'tab'} onClick={() => setMode('edit')}>এডিট করুন</button>
+                <button className={mode === 'preview' ? 'tab active' : 'tab'} onClick={() => setMode('preview')}>প্রিভিউ ও প্রিন্ট</button>
+              </>
+            )}
           </div>
         </div>
       </div>
