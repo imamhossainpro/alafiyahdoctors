@@ -103,6 +103,7 @@ const CSS = `
 
 .dpb .doctor-mini-list{padding:4px 14px 12px;}
 .dpb .doctor-row{display:flex;align-items:center;justify-content:space-between;padding:9px 4px;border-top:1px dashed #e2e6ee;gap:10px;}
+.dpb .doctor-checkbox{width:18px;height:18px;flex-shrink:0;cursor:pointer;accent-color:#1c5fa8;margin-right:4px;}
 .dpb .doctor-row-info{min-width:0;flex:1;}
 .dpb .doctor-row-name{font-size:16px;font-weight:700;color:#1f2937;}
 .dpb .doctor-row-specialty{font-size:12px;color:#6b7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:280px;}
@@ -467,7 +468,6 @@ function EditPanel({ panel, departments, footer, checkedIds, allChecked, onUpdat
 function DeptHeader({ dept }) { const Icon = ICONS[dept.icon] || ICONS.Stethoscope; return (<div className="dept-header-wrap"><span className="dept-icon-box" style={{ borderColor: dept.color }}><Icon size={19} color={dept.color} /></span><div className="dept-ribbon" style={{ background: dept.color }}><span>{dept.name}</span></div></div>); }
 function DoctorEntry({ doc, accentColor }) { return (<div className="doctor-entry" style={{ borderLeftColor: accentColor }}><div className="doctor-name">{doc.name}</div>{doc.quals ? <div className="doctor-quals">{doc.quals}</div> : null}{doc.specialty ? <div className="doctor-specialty">{doc.specialty}</div> : null}{doc.workplace ? <div className="doctor-workplace">{doc.workplace}</div> : null}{doc.time ? <div className="doctor-time">সাক্ষাতের সময়: <strong>{doc.time}</strong></div> : null}</div>); }
 
-// ⭐ ফিক্স করা PreviewPanel logic
 function PreviewPanel({ panel, departments, checkedIds, footer }) {
   const printRef = useRef(null);
   const handlePrint = () => window.print();
@@ -498,11 +498,10 @@ function PreviewPanel({ panel, departments, checkedIds, footer }) {
     }
   };
   
-  // ⭐ শুধু সিলেক্ট করা ডাক্তার দেখান, কিন্তু কোনো ডাক্তার সিলেক্ট না থাকলে সব দেখান
+  // এই অংশে পরিবর্তন: এখন শুধুমাত্র checkedIds অনুযায়ী ডাক্তার দেখানো হবে
   let visibleDepartments = departments.map((dept) => {
     const selectedDoctors = dept.doctors.filter((doc) => checkedIds.has(doc.id));
-    const doctorsToShow = checkedIds.size === 0 ? dept.doctors : selectedDoctors;
-    return { ...dept, doctors: doctorsToShow };
+    return { ...dept, doctors: selectedDoctors };
   }).filter((dept) => dept.doctors.length > 0);
 
   return (
@@ -564,6 +563,7 @@ export default function DoctorPanelBuilder() {
   const isAdmin = user?.role === 'admin';
   const isEditor = user?.role === 'editor';
   const isGuest = user?.isGuest === true;
+  const isViewer = user?.role === 'viewer';
 
   useEffect(() => {
     const loadData = async () => {
@@ -576,24 +576,38 @@ export default function DoctorPanelBuilder() {
         setDepartments(depts);
 
         const panelsSnapshot = await getDocs(collection(db, 'panels'));
-        const panelList = [];
+        let panelList = [];
         panelsSnapshot.forEach((doc) => { panelList.push({ id: doc.id, ...doc.data() }); });
 
         if (panelList.length === 0) {
-          const defaultPanel = {
-            id: 'শনিবার',
-            name: 'শনিবার',
-            title: 'শনিবারের ডক্টরস প্যানেল',
-            activeDoctorIds: depts.flatMap(d => d.doctors.map(doc => doc.id)),
-          };
+          const allIds = depts.flatMap(d => d.doctors.map(doc => doc.id));
+          const defaultPanel = { id: 'শনিবার', name: 'শনিবার', title: 'শনিবারের ডক্টরস প্যানেল', activeDoctorIds: allIds };
           await setDoc(doc(db, 'panels', 'শনিবার'), defaultPanel);
           panelList.push(defaultPanel);
         }
-
-        setPanels(panelList);
-        if (panelList.length > 0) {
-          setActivePanelId(panelList[0].id);
-          setCheckedIds(new Set(panelList[0].activeDoctorIds || []));
+        
+        // কোনো প্যানেলে ডাক্তার না থাকলে, সেই প্যানেলে সব ডাক্তার যোগ করে দিন (খালি প্যানেল ঠিক করা)
+        const allIds = depts.flatMap(d => d.doctors.map(doc => doc.id));
+        let updatedPanels = panelList.map(p => {
+          if (!p.activeDoctorIds || p.activeDoctorIds.length === 0) {
+            return { ...p, activeDoctorIds: allIds };
+          }
+          return p;
+        });
+        // যদি নতুন ডাক্তার যোগ হয় এবং প্যানেলে না থাকে, তবে সব ডাক্তার সিলেক্ট করা
+        const needsUpdate = updatedPanels.some((p, i) => {
+          const allFound = allIds.every(id => p.activeDoctorIds.includes(id));
+          return !allFound;
+        });
+        if (needsUpdate) {
+          updatedPanels = panelList.map(p => ({ ...p, activeDoctorIds: allIds }));
+          updatedPanels.forEach(p => savePanelToFirebase(p));
+        }
+        
+        setPanels(updatedPanels);
+        if (updatedPanels.length > 0) {
+          setActivePanelId(updatedPanels[0].id);
+          setCheckedIds(new Set(updatedPanels[0].activeDoctorIds || []));
         } else {
           setActivePanelId(null);
           setCheckedIds(new Set());
@@ -661,7 +675,6 @@ export default function DoctorPanelBuilder() {
   const handleAddDoctor = (deptId) => setDoctorModal({ deptId, mode: 'add' });
   const handleEditDoctor = (deptId, doctor) => setDoctorModal({ deptId, mode: 'edit', doctor });
 
-  // ⭐ ফিক্সড Add Doctor Logic
   const handleSaveDoctor = (fields) => {
     const deptId = doctorModal.deptId;
     if (doctorModal.mode === 'add') {
@@ -672,17 +685,11 @@ export default function DoctorPanelBuilder() {
       setDepartments(updatedDepts);
       saveDepartments(updatedDepts);
 
-      const newPanels = panels.map(p => ({
-        ...p,
-        activeDoctorIds: [...new Set([...(p.activeDoctorIds || []), newDoctor.id])]
-      }));
+      const allIds = updatedDepts.flatMap(d => d.doctors.map(doc => doc.id));
+      const newPanels = panels.map(p => ({ ...p, activeDoctorIds: allIds }));
       setPanels(newPanels);
       newPanels.forEach(p => savePanelToFirebase(p));
-
-      const activePanel = newPanels.find(p => p.id === activePanelId) || newPanels[0];
-      if (activePanel) {
-        setCheckedIds(new Set(activePanel.activeDoctorIds || []));
-      }
+      setCheckedIds(new Set(allIds));
     } else {
       const doctorId = doctorModal.doctor.id;
       const updatedDepts = departments.map(dept => 
@@ -694,7 +701,6 @@ export default function DoctorPanelBuilder() {
     setDoctorModal(null);
   };
 
-  // ⭐ ফিক্সড Delete Doctor Logic
   const handleDeleteDoctor = (deptId, doctorId) => {
     const updatedDepts = departments.map(dept =>
       dept.id === deptId ? { ...dept, doctors: dept.doctors.filter(doc => doc.id !== doctorId) } : dept
@@ -702,20 +708,11 @@ export default function DoctorPanelBuilder() {
     setDepartments(updatedDepts);
     saveDepartments(updatedDepts);
 
-    const newPanels = panels.map(p => {
-      let activeIds = p.activeDoctorIds.filter(id => id !== doctorId);
-      if (activeIds.length === 0) {
-        activeIds = updatedDepts.flatMap(d => d.doctors.map(doc => doc.id));
-      }
-      return { ...p, activeDoctorIds: activeIds };
-    });
+    const allIds = updatedDepts.flatMap(d => d.doctors.map(doc => doc.id));
+    const newPanels = panels.map(p => ({ ...p, activeDoctorIds: allIds }));
     setPanels(newPanels);
     newPanels.forEach(p => savePanelToFirebase(p));
-
-    const activePanel = newPanels.find(p => p.id === activePanelId) || newPanels[0];
-    if (activePanel) {
-      setCheckedIds(new Set(activePanel.activeDoctorIds || []));
-    }
+    setCheckedIds(new Set(allIds));
   };
 
   const handleMoveDoctor = (deptId, doctorId, dir) => {
@@ -754,15 +751,26 @@ export default function DoctorPanelBuilder() {
         <div className="topbar-right">
           <div className="tabs">
             {isGuest && (<button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button>)}
-            {!isGuest && user.role === 'viewer' && (<button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button>)}
-            {!isGuest && user.role === 'editor' && (<><button className={activeView === 'edit' ? 'tab active' : 'tab'} onClick={() => setActiveView('edit')}>প্যানেল বিল্ডার</button><button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button></>)}
-            {!isGuest && user.role === 'admin' && (<><button className={activeView === 'doctors' ? 'tab active' : 'tab'} onClick={() => setActiveView('doctors')}>ডাক্তার লিস্ট</button><button className={activeView === 'edit' ? 'tab active' : 'tab'} onClick={() => setActiveView('edit')}>প্যানেল বিল্ডার</button><button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button><button className={activeView === 'admin' ? 'tab active' : 'tab'} onClick={() => setActiveView('admin')}>অ্যাডমিন প্যানেল</button></>)}
+            {!isGuest && isViewer && (<button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button>)}
+            {!isGuest && isEditor && (<><button className={activeView === 'edit' ? 'tab active' : 'tab'} onClick={() => setActiveView('edit')}>প্যানেল বিল্ডার</button><button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button></>)}
+            {!isGuest && isAdmin && (<><button className={activeView === 'doctors' ? 'tab active' : 'tab'} onClick={() => setActiveView('doctors')}>ডাক্তার লিস্ট</button><button className={activeView === 'edit' ? 'tab active' : 'tab'} onClick={() => setActiveView('edit')}>প্যানেল বিল্ডার</button><button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button><button className={activeView === 'admin' ? 'tab active' : 'tab'} onClick={() => setActiveView('admin')}>অ্যাডমিন প্যানেল</button></>)}
           </div>
           {isGuest ? (<button className="login-btn" onClick={() => setShowAuth(true)}>লগইন / রেজিস্ট্রেশন</button>) : (<button className="logout-btn" onClick={handleLogout}><LogOut size={14} /> লগআউট</button>)}
         </div>
       </div>
 
-      {activeView === 'preview' && (<PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} />)}
+      {activeView === 'preview' && (isGuest || isViewer) && (
+        // Viewer/Guest: সব বার দেখার জন্য PanelSwitcher এখানে
+        <>
+          <PanelSwitcher panels={panels} activePanelId={activePanelId} onSwitch={handleSwitchPanel} onAdd={() => {}} onRename={() => {}} onDelete={() => {}} />
+          <PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} />
+        </>
+      )}
+
+      {activeView === 'preview' && (isAdmin || isEditor) && (
+        <PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} />
+      )}
+
       {activeView === 'doctors' && isAdmin && (<ManageDoctorsView departments={departments} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={handleDeleteDept} onMoveDept={handleMoveDept} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={handleDeleteDoctor} onMoveDoctor={handleMoveDoctor} isAdmin={true} onRefreshData={handleRefreshData} />)}
       {activeView === 'edit' && !isGuest && (isEditor || isAdmin) && (
         <>
