@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Plus, Ear, Trash2, Pencil, Printer, X, ChevronUp, ChevronDown, MapPin, Globe, Phone, Loader2,
+  Plus, Ear, Trash2, Pencil, Printer, X, ChevronUp, ChevronDown, ChevronLeft, MapPin, Globe, Phone, Loader2,
   Stethoscope, Scissors, Heart, Baby, Bone, Syringe, Pill, Activity, Brain, Eye, Utensils, Smile, Sparkles, User, Droplet, Thermometer, LogOut,
   CheckCircle, XCircle, RefreshCw,
 } from 'lucide-react';
@@ -469,7 +469,8 @@ function EditPanel({ panel, departments, footer, checkedIds, allChecked, onUpdat
 function DeptHeader({ dept }) { const Icon = ICONS[dept.icon] || ICONS.Stethoscope; return (<div className="dept-header-wrap"><span className="dept-icon-box" style={{ borderColor: dept.color }}><Icon size={19} color={dept.color} /></span><div className="dept-ribbon" style={{ background: dept.color }}><span>{dept.name}</span></div></div>); }
 function DoctorEntry({ doc, accentColor }) { return (<div className="doctor-entry" style={{ borderLeftColor: accentColor }}><div className="doctor-name">{doc.name}</div>{doc.quals ? <div className="doctor-quals">{doc.quals}</div> : null}{doc.specialty ? <div className="doctor-specialty">{doc.specialty}</div> : null}{doc.workplace ? <div className="doctor-workplace">{doc.workplace}</div> : null}{doc.time ? <div className="doctor-time">সাক্ষাতের সময়: <strong>{doc.time}</strong></div> : null}</div>); }
 
-function PreviewPanel({ panel, departments, checkedIds, footer }) {
+// 🔥 আপডেটেড PreviewPanel (ব্যাক বাটন যোগ করা হয়েছে)
+function PreviewPanel({ panel, departments, checkedIds, footer, onBack }) {
   const printRef = useRef(null);
   const handlePrint = () => window.print();
   const downloadPNG = async () => { const element = printRef.current; if (!element) return; try { const canvas = await html2canvas(element, { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' }); const link = document.createElement('a'); link.download = `${panel.title || 'poster'}.png`; link.href = canvas.toDataURL('image/png'); link.click(); } catch (error) { alert('PNG ডাউনলোড করতে সমস্যা হয়েছে।'); } };
@@ -499,7 +500,6 @@ function PreviewPanel({ panel, departments, checkedIds, footer }) {
     }
   };
 
-  // স্ট্রিক্ট ফিল্টার: শুধুমাত্র এই বারে সিলেক্ট করা ডাক্তার দেখাবে
   const visibleDepartments = departments.map((dept) => ({
     ...dept,
     doctors: dept.doctors.filter((doc) => checkedIds.has(doc.id))
@@ -507,7 +507,18 @@ function PreviewPanel({ panel, departments, checkedIds, footer }) {
 
   return (
     <div className="preview-wrap">
-      <div className="preview-toolbar no-print"><button className="btn btn-primary" onClick={handlePrint}><Printer size={16} /> প্রিন্ট</button><button className="btn btn-secondary" onClick={downloadPNG}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> PNG</button><button className="btn btn-secondary" onClick={downloadPDF}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> PDF</button></div>
+      <div className="preview-toolbar no-print">
+        {/* 🔥 ব্যাক বাটন (যদি onBack দেওয়া থাকে) */}
+        {onBack && (
+          <button className="btn btn-outline" onClick={onBack} style={{ marginRight: 'auto' }}>
+            <ChevronLeft size={16} /> ব্যাক টু এডিট
+          </button>
+        )}
+        
+        <button className="btn btn-primary" onClick={handlePrint}><Printer size={16} /> প্রিন্ট</button>
+        <button className="btn btn-secondary" onClick={downloadPNG}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> PNG</button>
+        <button className="btn btn-secondary" onClick={downloadPDF}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> PDF</button>
+      </div>
       <div id="dpb-print-area" className="poster-page" ref={printRef}><div className="poster-header"><h1>{panel.title}</h1></div>{visibleDepartments.length === 0 ? (<div className="poster-empty-note" style={{ padding: '30px', textAlign: 'center', color: '#6b7280' }}>"{panel.name}"-এর জন্য কোনো ডাক্তার নির্বাচন করা হয়নি।</div>) : (<div className="poster-body">{visibleDepartments.map((dept) => (<div className="dept-block" key={dept.id}><DeptHeader dept={dept} />{dept.doctors.map((doc) => <DoctorEntry key={doc.id} doc={doc} accentColor={dept.color} />)}</div>))}</div>)}<div className="poster-footer"><div className="footer-col footer-left"><div className="footer-line"><MapPin size={13} /> <span>{footer.address}</span></div><div className="footer-line"><Globe size={13} /> <span>{footer.website}</span></div></div><div className="footer-col footer-center"><img src={footer.logo} alt="Logo" style={{ height: '160px', width: 'auto', objectFit: 'contain' }} /><div className="hospital-subtitle">{footer.hospitalSubtitle}</div></div><div className="footer-col footer-right"><div className="footer-contact-label">{footer.contactLabel}</div>{footer.phones.map((p, i) => <div className="footer-phone" key={i}><Phone size={13} /> {p}</div>)}</div></div></div>
     </div>
   );
@@ -590,11 +601,10 @@ export default function DoctorPanelBuilder() {
           panelList.push(defaultPanel);
         }
 
-        // 🔥 নতুন ফিচার: ক্যালেন্ডার বা URL অনুযায়ী বার সিলেক্ট করা
         const params = new URLSearchParams(window.location.search);
-        let targetDay = params.get('day'); // ?day=শনিবার
+        let targetDay = params.get('day');
         if (!targetDay) {
-          const dayIndex = new Date().getDay(); // 0 = Sunday
+          const dayIndex = new Date().getDay();
           const weekDays = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
           targetDay = weekDays[dayIndex];
         }
@@ -672,7 +682,6 @@ export default function DoctorPanelBuilder() {
   const handleAddDoctor = (deptId) => setDoctorModal({ deptId, mode: 'add' });
   const handleEditDoctor = (deptId, doctor) => setDoctorModal({ deptId, mode: 'edit', doctor });
 
-  // 🔥 ফিক্স ১: বার অনুযায়ী ডেটাবেজে ঠিকঠাক সেভ হবে
   const handleSaveDoctor = (fields) => {
     const deptId = doctorModal.deptId;
     if (doctorModal.mode === 'add') {
@@ -683,7 +692,6 @@ export default function DoctorPanelBuilder() {
       setDepartments(updatedDepts);
       saveDepartments(updatedDepts);
 
-      // শুধুমাত্র সক্রিয় বারে (Active Panel) নতুন ডাক্তার যোগ হবে
       const newPanels = panels.map(p => 
         p.id === activePanelId ? { ...p, activeDoctorIds: [...(p.activeDoctorIds || []), newDoctor.id] } : p
       );
@@ -701,7 +709,6 @@ export default function DoctorPanelBuilder() {
     setDoctorModal(null);
   };
 
-  // 🔥 ফিক্স ২: ডিলিট করলে শুধুমাত্র সেই বারের সিলেকশন থেকে সরবে (সব বার নয়)
   const handleDeleteDoctor = (deptId, doctorId) => {
     const updatedDepts = departments.map(dept =>
       dept.id === deptId ? { ...dept, doctors: dept.doctors.filter(doc => doc.id !== doctorId) } : dept
@@ -766,7 +773,6 @@ export default function DoctorPanelBuilder() {
         </div>
       </div>
 
-      {/* 🔥 ফিচার ২: Viewer/অতিথিদের সব বার দেখার অপশন (Read-only) */}
       {(isGuest || (user && user.role === 'viewer')) && (
         <PanelSwitcher panels={panels} activePanelId={activePanelId} onSwitch={handleSwitchPanel} onAdd={() => {}} onRename={() => {}} onDelete={() => {}} isReadOnly={true} />
       )}
@@ -779,7 +785,7 @@ export default function DoctorPanelBuilder() {
           {mode === 'edit' ? (
             <EditPanel panel={activePanel} departments={departments} footer={footer} checkedIds={checkedIds} allChecked={allChecked} onUpdateTitle={handleUpdateTitle} onUpdateFooter={handleUpdateFooter} onUpdatePhone={handleUpdatePhone} onAddPhone={handleAddPhone} onRemovePhone={handleRemovePhone} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={isAdmin ? handleDeleteDept : () => {}} onMoveDept={handleMoveDept} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={() => {}} onMoveDoctor={handleMoveDoctor} onToggleDoctorChecked={handleToggleDoctorChecked} onToggleDeptAllChecked={handleToggleDeptAllChecked} onToggleAll={handleToggleAll} clearConfirm={clearConfirm} onClearAll={() => {}} onGoPreview={() => setMode('preview')} />
           ) : (
-            <PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} />
+            <PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} onBack={() => setMode('edit')} />
           )}
         </>
       )}
