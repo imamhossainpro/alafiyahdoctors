@@ -190,6 +190,13 @@ const CSS = `
 .dpb-auth-toggle span{color:#1c5fa8;font-weight:700;cursor:pointer;}
 `;
 
+// ===================== ✅ SAVE INDICATOR (এটি ঠিক জায়গায় আছে) =====================
+function SaveIndicator({ status }) {
+  if (status === 'idle') return null;
+  const text = status === 'saving' ? 'সংরক্ষণ হচ্ছে...' : status === 'saved' ? '✓ সংরক্ষিত হয়েছে' : 'সংরক্ষণ ব্যর্থ হয়েছে';
+  return <span className="save-indicator">{text}</span>;
+}
+
 // ===================== AUTH COMPONENT =====================
 function AuthPage({ onLogin }) {
   const [isRegister, setIsRegister] = useState(false);
@@ -202,8 +209,6 @@ function AuthPage({ onLogin }) {
   const handleLogin = async () => {
     setError('');
     setSuccess('');
-    
-    // Trim করছি যাতে স্পেস না থাকে
     const name = formData.name.trim();
     const pass = formData.password.trim();
 
@@ -238,7 +243,6 @@ function AuthPage({ onLogin }) {
   const handleRegister = async () => {
     setError('');
     setSuccess('');
-    
     const name = formData.name.trim();
     const pass = formData.password.trim();
     const desig = formData.designation.trim();
@@ -254,7 +258,7 @@ function AuthPage({ onLogin }) {
         name: name,
         password: pass,
         designation: desig,
-        role: 'pending', // Default pending
+        role: 'pending',
         approved: false
       };
       await setDoc(doc(db, 'users', newUser.id), newUser);
@@ -299,9 +303,7 @@ function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
   return (
     <div className="edit-panel">
       <section className="panel-section">
-        <div className="section-header">
-          <label>ইউজার ম্যানেজমেন্ট (অ্যাডমিন প্যানেল)</label>
-        </div>
+        <div className="section-header"><label>ইউজার ম্যানেজমেন্ট (অ্যাডমিন প্যানেল)</label></div>
         <div className="section-hint">এখানে নতুন রেজিস্ট্রেশন করা ইউজারদের এপ্রুভ, রোল সেট ও ডিলেট করতে পারবেন।</div>
         {users.length === 0 ? (
           <div className="empty-state">এখনো কোনো ইউজার রেজিস্ট্রেশন করে নি।</div>
@@ -309,11 +311,7 @@ function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
           <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #e2e6ee', textAlign: 'left', color: '#6b7280', fontSize: '14px' }}>
-                <th style={{ padding: '10px' }}>নাম</th>
-                <th style={{ padding: '10px' }}>ডেসিগনেশন</th>
-                <th style={{ padding: '10px' }}>রোল</th>
-                <th style={{ padding: '10px' }}>স্ট্যাটাস</th>
-                <th style={{ padding: '10px' }}>অ্যাকশন</th>
+                <th style={{ padding: '10px' }}>নাম</th><th style={{ padding: '10px' }}>ডেসিগনেশন</th><th style={{ padding: '10px' }}>রোল</th><th style={{ padding: '10px' }}>স্ট্যাটাস</th><th style={{ padding: '10px' }}>অ্যাকশন</th>
               </tr>
             </thead>
             <tbody>
@@ -323,27 +321,13 @@ function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
                   <td style={{ padding: '10px' }}>{u.designation}</td>
                   <td style={{ padding: '10px' }}>
                     <select value={u.role} onChange={(e) => onSetRole(u.id, e.target.value)} style={{ padding: '6px', borderRadius: '6px', border: '1px solid #e2e6ee' }}>
-                      <option value="pending">পেন্ডিং</option>
-                      <option value="admin">অ্যাডমিন</option>
-                      <option value="viewer">ভিউয়ার</option>
+                      <option value="pending">পেন্ডিং</option><option value="admin">অ্যাডমিন</option><option value="viewer">ভিউয়ার</option>
                     </select>
                   </td>
-                  <td style={{ padding: '10px' }}>
-                    {u.approved ? (
-                      <span style={{ color: '#2f9e52', fontWeight: '700' }}>এপ্রুভড</span>
-                    ) : (
-                      <span style={{ color: '#dc2626', fontWeight: '700' }}>পেন্ডিং</span>
-                    )}
-                  </td>
+                  <td style={{ padding: '10px' }}>{u.approved ? <span style={{ color: '#2f9e52', fontWeight: '700' }}>এপ্রুভড</span> : <span style={{ color: '#dc2626', fontWeight: '700' }}>পেন্ডিং</span>}</td>
                   <td style={{ padding: '10px', display: 'flex', gap: '8px' }}>
-                    {!u.approved && (
-                      <button className="btn btn-primary btn-sm" onClick={() => onApprove(u.id)} style={{ padding: '6px 10px', fontSize: '12px' }}>
-                        <CheckCircle size={14} /> এপ্রুভ
-                      </button>
-                    )}
-                    <button className="btn btn-danger btn-sm" onClick={() => onDeleteUser(u.id)} style={{ padding: '6px 10px', fontSize: '12px' }}>
-                      <Trash2 size={14} /> ডিলিট
-                    </button>
+                    {!u.approved && (<button className="btn btn-primary btn-sm" onClick={() => onApprove(u.id)} style={{ padding: '6px 10px', fontSize: '12px' }}><CheckCircle size={14} /> এপ্রুভ</button>)}
+                    <button className="btn btn-danger btn-sm" onClick={() => onDeleteUser(u.id)} style={{ padding: '6px 10px', fontSize: '12px' }}><Trash2 size={14} /> ডিলিট</button>
                   </td>
                 </tr>
               ))}
@@ -362,19 +346,12 @@ function DoctorRow({ doc, index, total, checked, onToggleChecked, onEdit, onDele
   return (
     <div className="doctor-row">
       <input type="checkbox" className="doctor-checkbox" checked={checked} onChange={onToggleChecked} title="প্রিভিউতে দেখাতে টিক দিন" />
-      <div className="doctor-row-info">
-        <div className="doctor-row-name">{doc.name || 'নামহীন ডাক্তার'}</div>
-        {doc.specialty ? <div className="doctor-row-specialty">{doc.specialty}</div> : null}
-      </div>
+      <div className="doctor-row-info"><div className="doctor-row-name">{doc.name || 'নামহীন ডাক্তার'}</div>{doc.specialty ? <div className="doctor-row-specialty">{doc.specialty}</div> : null}</div>
       <div className="doctor-row-actions">
         <button className="icon-btn" onClick={onMoveUp} disabled={index === 0} title="উপরে সরান"><ChevronUp size={14} /></button>
         <button className="icon-btn" onClick={onMoveDown} disabled={index === total - 1} title="নিচে সরান"><ChevronDown size={14} /></button>
         <button className="icon-btn" onClick={onEdit} title="সম্পাদনা"><Pencil size={14} /></button>
-        {allowDelete && (
-          <button className={confirmDelete ? 'icon-btn danger-confirm' : 'icon-btn'} onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))} title="মুছুন">
-            {confirmDelete ? 'নিশ্চিত?' : <Trash2 size={14} />}
-          </button>
-        )}
+        {allowDelete && (<button className={confirmDelete ? 'icon-btn danger-confirm' : 'icon-btn'} onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))} title="মুছুন">{confirmDelete ? 'নিশ্চিত?' : <Trash2 size={14} />}</button>)}
       </div>
     </div>
   );
@@ -390,12 +367,7 @@ function DepartmentCard({ dept, index, total, checkedIds, onEdit, onDelete, onMo
   return (
     <div className="dept-card" style={{ borderLeftColor: dept.color }}>
       <div className="dept-card-header">
-        <div className="dept-card-title">
-          <span className="dept-card-icon" style={{ background: dept.color }}><Icon size={15} color="#fff" /></span>
-          <strong>{dept.name || 'নামহীন বিভাগ'}</strong>
-          <span className="dept-doctor-count">{dept.doctors.length} জন ডাক্তার</span>
-          {dept.doctors.length > 0 && (<button className="dept-toggle-btn" onClick={onToggleAllChecked}>{allChecked ? 'সব বাদ দিন' : 'সব বাছুন'}</button>)}
-        </div>
+        <div className="dept-card-title"><span className="dept-card-icon" style={{ background: dept.color }}><Icon size={15} color="#fff" /></span><strong>{dept.name || 'নামহীন বিভাগ'}</strong><span className="dept-doctor-count">{dept.doctors.length} জন ডাক্তার</span>{dept.doctors.length > 0 && (<button className="dept-toggle-btn" onClick={onToggleAllChecked}>{allChecked ? 'সব বাদ দিন' : 'সব বাছুন'}</button>)}</div>
         <div className="dept-card-actions">
           <button className="icon-btn" onClick={onMoveUp} disabled={index === 0} title="উপরে সরান"><ChevronUp size={16} /></button>
           <button className="icon-btn" onClick={onMoveDown} disabled={index === total - 1} title="নিচে সরান"><ChevronDown size={16} /></button>
@@ -404,9 +376,7 @@ function DepartmentCard({ dept, index, total, checkedIds, onEdit, onDelete, onMo
         </div>
       </div>
       <div className="doctor-mini-list">
-        {dept.doctors.map((doc, di) => (
-          <DoctorRow key={doc.id} doc={doc} index={di} total={dept.doctors.length} checked={checkedIds.has(doc.id)} onToggleChecked={() => onToggleDoctorChecked(doc.id)} onEdit={() => onEditDoctor(doc)} onDelete={() => onDeleteDoctor(doc.id)} onMoveUp={() => onMoveDoctorUp(doc.id)} onMoveDown={() => onMoveDoctorDown(doc.id)} allowDelete={allowDoctorDelete} />
-        ))}
+        {dept.doctors.map((doc, di) => (<DoctorRow key={doc.id} doc={doc} index={di} total={dept.doctors.length} checked={checkedIds.has(doc.id)} onToggleChecked={() => onToggleDoctorChecked(doc.id)} onEdit={() => onEditDoctor(doc)} onDelete={() => onDeleteDoctor(doc.id)} onMoveUp={() => onMoveDoctorUp(doc.id)} onMoveDown={() => onMoveDoctorDown(doc.id)} allowDelete={allowDoctorDelete} />))}
         {allowDoctorDelete && <button className="add-doctor-btn" onClick={onAddDoctor}><Plus size={14} /> ডাক্তার যোগ করুন</button>}
       </div>
     </div>
@@ -652,7 +622,7 @@ export default function DoctorPanelBuilder() {
   const handleSetRole = async (userId, role) => { try { await updateDoc(doc(db, 'users', userId), { role }); setAllUsers(users => users.map(u => u.id === userId ? { ...u, role } : u)); } catch (e) { console.error(e); } };
   const handleDeleteUser = async (userId) => { try { await deleteDoc(doc(db, 'users', userId)); setAllUsers(users => users.filter(u => u.id !== userId)); } catch (e) { console.error(e); } };
 
-  // Other Handlers (Same as before)
+  // Other Handlers
   const updatePanel = (updater, immediate) => { const updated = updater(activePanel); const newPanels = panels.map(p => p.id === activePanelId ? updated : p); setPanels(newPanels); if (immediate) { setSaveStatus('saving'); savePanelToFirebase(updated).then(() => setSaveStatus('saved')).catch(() => setSaveStatus('error')); setTimeout(() => setSaveStatus('idle'), 1500); } else { setSaveStatus('saving'); if (debounceRef.current) clearTimeout(debounceRef.current); debounceRef.current = setTimeout(() => { savePanelToFirebase(updated).then(() => setSaveStatus('saved')).catch(() => setSaveStatus('error')); setTimeout(() => setSaveStatus('idle'), 1500); }, 700); } };
   const updateDepartments = (updater, immediate) => { const newDepts = updater(departments); setDepartments(newDepts); if (immediate) { saveDepartments(newDepts); } else { if (debounceRef.current) clearTimeout(debounceRef.current); debounceRef.current = setTimeout(() => saveDepartments(newDepts), 700); } };
   const handleUpdateTitle = (title) => updatePanel(p => ({ ...p, title }), true);
@@ -712,34 +682,21 @@ export default function DoctorPanelBuilder() {
       </div>
 
       {/* Admin Views */}
-      {isAdmin && activeView === 'manage' && (
-        <ManageDoctorsView departments={departments} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={handleDeleteDept} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={handleDeleteDoctor} isAdmin={true} />
-      )}
+      {isAdmin && activeView === 'manage' && (<ManageDoctorsView departments={departments} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={handleDeleteDept} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={handleDeleteDoctor} isAdmin={true} />)}
       {isAdmin && activeView === 'builder' && (
         <>
           <PanelSwitcher panels={panels} activePanelId={activePanelId} onSwitch={handleSwitchPanel} onAdd={() => setPanelModal({ mode: 'add', departments })} onRename={(panel) => setPanelModal({ mode: 'rename', panel })} onDelete={handleDeletePanel} />
           {mode === 'edit' ? (
-            <EditPanel
-              panel={activePanel} departments={departments} footer={footer} checkedIds={checkedIds} allChecked={allChecked}
-              onUpdateTitle={handleUpdateTitle} onUpdateFooter={handleUpdateFooter} onUpdatePhone={handleUpdatePhone} onAddPhone={handleAddPhone} onRemovePhone={handleRemovePhone}
-              onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={handleDeleteDept} onMoveDept={() => {}}
-              onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={() => {}} onMoveDoctor={() => {}}
-              onToggleDoctorChecked={handleToggleDoctorChecked} onToggleDeptAllChecked={handleToggleDeptAllChecked} onToggleAll={handleToggleAll}
-              clearConfirm={clearConfirm} onClearAll={handleClearActivePanelChecks} onGoPreview={() => setMode('preview')}
-            />
+            <EditPanel panel={activePanel} departments={departments} footer={footer} checkedIds={checkedIds} allChecked={allChecked} onUpdateTitle={handleUpdateTitle} onUpdateFooter={handleUpdateFooter} onUpdatePhone={handleUpdatePhone} onAddPhone={handleAddPhone} onRemovePhone={handleRemovePhone} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={handleDeleteDept} onMoveDept={() => {}} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={() => {}} onMoveDoctor={() => {}} onToggleDoctorChecked={handleToggleDoctorChecked} onToggleDeptAllChecked={handleToggleDeptAllChecked} onToggleAll={handleToggleAll} clearConfirm={clearConfirm} onClearAll={handleClearActivePanelChecks} onGoPreview={() => setMode('preview')} />
           ) : (
             <PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} />
           )}
         </>
       )}
-      {isAdmin && activeView === 'admin' && (
-        <AdminPanel users={allUsers} onApprove={handleApprove} onSetRole={handleSetRole} onDeleteUser={handleDeleteUser} />
-      )}
+      {isAdmin && activeView === 'admin' && (<AdminPanel users={allUsers} onApprove={handleApprove} onSetRole={handleSetRole} onDeleteUser={handleDeleteUser} />)}
 
       {/* Viewer Views */}
-      {!isAdmin && (
-        <PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} />
-      )}
+      {!isAdmin && (<PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} />)}
 
       {deptModal && <DepartmentModal initial={deptModal.mode === 'edit' ? deptModal.dept : null} onSave={handleSaveDept} onClose={() => setDeptModal(null)} />}
       {doctorModal && <DoctorModal initial={doctorModal.mode === 'edit' ? doctorModal.doctor : null} onSave={handleSaveDoctor} onClose={() => setDoctorModal(null)} />}
