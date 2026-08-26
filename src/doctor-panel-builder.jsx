@@ -194,7 +194,7 @@ function SaveIndicator({ status }) {
   return <span className="save-indicator">{text}</span>;
 }
 
-// ===================== Auth Component (Enter চাপলে কাজ করবে) =====================
+// ===================== Auth Component =====================
 function AuthPage({ onLogin, onClose }) {
   const [isRegister, setIsRegister] = useState(false);
   const [formData, setFormData] = useState({ name: '', password: '', designation: '' });
@@ -204,7 +204,7 @@ function AuthPage({ onLogin, onClose }) {
   const defaultAdmin = { username: 'admin', password: 'admin123', role: 'admin', approved: true };
 
   const handleLogin = async (e) => {
-    e.preventDefault(); // ফর্ম রিফ্রেশ আটকাবে
+    e.preventDefault();
     setError(''); setSuccess('');
     const name = formData.name.trim();
     const pass = formData.password.trim();
@@ -229,7 +229,7 @@ function AuthPage({ onLogin, onClose }) {
   };
 
   const handleRegister = async (e) => {
-    e.preventDefault(); // ফর্ম রিফ্রেশ আটকাবে
+    e.preventDefault();
     setError(''); setSuccess('');
     const name = formData.name.trim();
     const pass = formData.password.trim();
@@ -281,18 +281,14 @@ function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
     <div className="edit-panel">
       <section className="panel-section">
         <div className="section-header"><label>ইউজার ম্যানেজমেন্ট</label></div>
-        <div className="section-hint">রেজিস্ট্রেশন করা ইউজারদের এপ্রুভ, রোল (Admin/Editor/Viewer) সেট ও ডিলিট করুন।</div>
+        <div className="section-hint">রেজিস্ট্রেশন করা ইউজারদের এপ্রুভ, রোল সেট ও ডিলিট করুন।</div>
         {users.length === 0 ? (
           <div className="empty-state">এখনো কোনো ইউজার রেজিস্ট্রেশন করে নি।</div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #e2e6ee', textAlign: 'left', color: '#6b7280', fontSize: '14px' }}>
-                <th style={{ padding: '10px' }}>নাম</th>
-                <th style={{ padding: '10px' }}>ডেসিগনেশন</th>
-                <th style={{ padding: '10px' }}>রোল</th>
-                <th style={{ padding: '10px' }}>স্ট্যাটাস</th>
-                <th style={{ padding: '10px' }}>অ্যাকশন</th>
+                <th style={{ padding: '10px' }}>নাম</th><th style={{ padding: '10px' }}>ডেসিগনেশন</th><th style={{ padding: '10px' }}>রোল</th><th style={{ padding: '10px' }}>স্ট্যাটাস</th><th style={{ padding: '10px' }}>অ্যাকশন</th>
               </tr>
             </thead>
             <tbody>
@@ -302,10 +298,7 @@ function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
                   <td style={{ padding: '10px' }}>{u.designation}</td>
                   <td style={{ padding: '10px' }}>
                     <select value={u.role} onChange={(e) => onSetRole(u.id, e.target.value)} style={{ padding: '6px', borderRadius: '6px', border: '1px solid #e2e6ee' }}>
-                      <option value="pending">পেন্ডিং</option>
-                      <option value="admin">অ্যাডমিন</option>
-                      <option value="editor">এডিটর</option>
-                      <option value="viewer">ভিউয়ার</option>
+                      <option value="pending">পেন্ডিং</option><option value="admin">অ্যাডমিন</option><option value="editor">এডিটর</option><option value="viewer">ভিউয়ার</option>
                     </select>
                   </td>
                   <td style={{ padding: '10px' }}>{u.approved ? <span style={{ color: '#2f9e52', fontWeight: '700' }}>এপ্রুভড</span> : <span style={{ color: '#dc2626', fontWeight: '700' }}>পেন্ডিং</span>}</td>
@@ -323,17 +316,19 @@ function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
   );
 }
 
-// ===================== DoctorRow =====================
-function DoctorRow({ doc, index, total, checked, onToggleChecked, onEdit, onDelete, onMoveUp, onMoveDown, allowDelete = true }) {
+// ===================== DoctorRow (চেকবক্স লুকানোর প্রপ যোগ করা হয়েছে) =====================
+function DoctorRow({ doc, index, total, checked, onToggleChecked, onEdit, onDelete, onMoveUp, onMoveDown, allowDelete = true, showCheckbox = true }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   useEffect(() => { if (!confirmDelete) return; const t = setTimeout(() => setConfirmDelete(false), 3000); return () => clearTimeout(t); }, [confirmDelete]);
   return (
     <div className="doctor-row">
-      <input type="checkbox" className="doctor-checkbox" checked={checked} onChange={onToggleChecked} title="প্রিভিউতে দেখাতে টিক দিন" />
+      {showCheckbox && (
+        <input type="checkbox" className="doctor-checkbox" checked={checked} onChange={onToggleChecked} title="প্রিভিউতে দেখাতে টিক দিন" />
+      )}
       <div className="doctor-row-info"><div className="doctor-row-name">{doc.name || 'নামহীন ডাক্তার'}</div>{doc.specialty ? <div className="doctor-row-specialty">{doc.specialty}</div> : null}</div>
       <div className="doctor-row-actions">
-        <button className="icon-btn" onClick={onMoveUp} disabled={index === 0} title="উপরে সরান"><ChevronUp size={14} /></button>
-        <button className="icon-btn" onClick={onMoveDown} disabled={index === total - 1} title="নিচে সরান"><ChevronDown size={14} /></button>
+        {onMoveUp && <button className="icon-btn" onClick={onMoveUp} disabled={index === 0} title="উপরে সরান"><ChevronUp size={14} /></button>}
+        {onMoveDown && <button className="icon-btn" onClick={onMoveDown} disabled={index === total - 1} title="নিচে সরান"><ChevronDown size={14} /></button>}
         <button className="icon-btn" onClick={onEdit} title="সম্পাদনা"><Pencil size={14} /></button>
         {allowDelete && (<button className={confirmDelete ? 'icon-btn danger-confirm' : 'icon-btn'} onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))} title="মুছুন">{confirmDelete ? 'নিশ্চিত?' : <Trash2 size={14} />}</button>)}
       </div>
@@ -341,8 +336,8 @@ function DoctorRow({ doc, index, total, checked, onToggleChecked, onEdit, onDele
   );
 }
 
-// ===================== DepartmentCard =====================
-function DepartmentCard({ dept, index, total, checkedIds, onEdit, onDelete, onMoveUp, onMoveDown, onAddDoctor, onEditDoctor, onDeleteDoctor, onMoveDoctorUp, onMoveDoctorDown, onToggleDoctorChecked, onToggleAllChecked, allowDeptDelete = true, allowDoctorDelete = true }) {
+// ===================== DepartmentCard (সব বাছুন লুকানোর প্রপ যোগ করা হয়েছে) =====================
+function DepartmentCard({ dept, index, total, checkedIds, onEdit, onDelete, onMoveUp, onMoveDown, onAddDoctor, onEditDoctor, onDeleteDoctor, onMoveDoctorUp, onMoveDoctorDown, onToggleDoctorChecked, onToggleAllChecked, allowDeptDelete = true, allowDoctorDelete = true, showCheckbox = true, showSelectAll = true }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   useEffect(() => { if (!confirmDelete) return; const t = setTimeout(() => setConfirmDelete(false), 3000); return () => clearTimeout(t); }, [confirmDelete]);
   const Icon = ICONS[dept.icon] || ICONS.Stethoscope;
@@ -351,16 +346,28 @@ function DepartmentCard({ dept, index, total, checkedIds, onEdit, onDelete, onMo
   return (
     <div className="dept-card" style={{ borderLeftColor: dept.color }}>
       <div className="dept-card-header">
-        <div className="dept-card-title"><span className="dept-card-icon" style={{ background: dept.color }}><Icon size={15} color="#fff" /></span><strong>{dept.name || 'নামহীন বিভাগ'}</strong><span className="dept-doctor-count">{dept.doctors.length} জন ডাক্তার</span>{dept.doctors.length > 0 && (<button className="dept-toggle-btn" onClick={onToggleAllChecked}>{allChecked ? 'সব বাদ দিন' : 'সব বাছুন'}</button>)}</div>
+        <div className="dept-card-title">
+          <span className="dept-card-icon" style={{ background: dept.color }}><Icon size={15} color="#fff" /></span>
+          <strong>{dept.name || 'নামহীন বিভাগ'}</strong>
+          <span className="dept-doctor-count">{dept.doctors.length} জন ডাক্তার</span>
+          {showSelectAll && dept.doctors.length > 0 && (
+            <button className="dept-toggle-btn" onClick={onToggleAllChecked}>{allChecked ? 'সব বাদ দিন' : 'সব বাছুন'}</button>
+          )}
+        </div>
         <div className="dept-card-actions">
-          <button className="icon-btn" onClick={onMoveUp} disabled={index === 0} title="উপরে সরান"><ChevronUp size={16} /></button>
-          <button className="icon-btn" onClick={onMoveDown} disabled={index === total - 1} title="নিচে সরান"><ChevronDown size={16} /></button>
+          {onMoveUp && <button className="icon-btn" onClick={onMoveUp} disabled={index === 0} title="উপরে সরান"><ChevronUp size={16} /></button>}
+          {onMoveDown && <button className="icon-btn" onClick={onMoveDown} disabled={index === total - 1} title="নিচে সরান"><ChevronDown size={16} /></button>}
           <button className="icon-btn" onClick={onEdit} title="সম্পাদনা"><Pencil size={16} /></button>
           {allowDeptDelete && (<button className={confirmDelete ? 'icon-btn danger-confirm' : 'icon-btn'} onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))} title="মুছুন">{confirmDelete ? 'নিশ্চিত?' : <Trash2 size={16} />}</button>)}
         </div>
       </div>
       <div className="doctor-mini-list">
-        {dept.doctors.map((doc, di) => (<DoctorRow key={doc.id} doc={doc} index={di} total={dept.doctors.length} checked={checkedIds.has(doc.id)} onToggleChecked={() => onToggleDoctorChecked(doc.id)} onEdit={() => onEditDoctor(doc)} onDelete={() => onDeleteDoctor(doc.id)} onMoveUp={() => onMoveDoctorUp(doc.id)} onMoveDown={() => onMoveDoctorDown(doc.id)} allowDelete={allowDoctorDelete} />))}
+        {dept.doctors.map((doc, di) => (
+          <DoctorRow key={doc.id} doc={doc} index={di} total={dept.doctors.length} checked={checkedIds.has(doc.id)}
+            onToggleChecked={() => onToggleDoctorChecked(doc.id)} onEdit={() => onEditDoctor(doc)}
+            onDelete={() => onDeleteDoctor(doc.id)} onMoveUp={onMoveDoctorUp} onMoveDown={onMoveDoctorDown}
+            allowDelete={allowDoctorDelete} showCheckbox={showCheckbox} />
+        ))}
         {allowDoctorDelete && <button className="add-doctor-btn" onClick={onAddDoctor}><Plus size={14} /> ডাক্তার যোগ করুন</button>}
       </div>
     </div>
@@ -427,8 +434,8 @@ function PanelSwitcher({ panels, activePanelId, onSwitch, onAdd, onRename, onDel
         {panels.map((p) => { const active = p.id === activePanelId; return (
           <div key={p.id} className={active ? 'panel-pill active' : 'panel-pill'}>
             <button className="panel-pill-label" onClick={() => onSwitch(p.id)}>{p.name || 'নামহীন'}</button>
-            <button className="panel-pill-icon" onClick={() => onRename(p)} title="এডিট করুন (নাম পরিবর্তন)" style={{ color: active ? '#fff' : '#1c5fa8', fontWeight: 'bold' }}><Pencil size={12} /> এডিট</button>
-            {panels.length > 1 ? (<button className={confirmDeleteId === p.id ? 'panel-pill-icon danger-confirm' : 'panel-pill-icon'} onClick={() => (confirmDeleteId === p.id ? onDelete(p.id) : setConfirmDeleteId(p.id))} title="এই দিনের প্যানেল মুছুন">{confirmDeleteId === p.id ? '✓' : <X size={11} />}</button>) : null}
+            <button className="panel-pill-icon" onClick={() => onRename(p)} title="এডিট করুন" style={{ color: active ? '#fff' : '#1c5fa8', fontWeight: 'bold' }}><Pencil size={12} /> এডিট</button>
+            {panels.length > 1 ? (<button className={confirmDeleteId === p.id ? 'panel-pill-icon danger-confirm' : 'panel-pill-icon'} onClick={() => (confirmDeleteId === p.id ? onDelete(p.id) : setConfirmDeleteId(p.id))} title="মুছুন">{confirmDeleteId === p.id ? '✓' : <X size={11} />}</button>) : null}
           </div>
         ); })}
       </div>
@@ -438,7 +445,7 @@ function PanelSwitcher({ panels, activePanelId, onSwitch, onAdd, onRename, onDel
 }
 
 // ===================== EditPanel =====================
-function EditPanel({ panel, departments, footer, checkedIds, allChecked, onUpdateTitle, onUpdateFooter, onUpdatePhone, onAddPhone, onRemovePhone, onAddDept, onEditDept, onDeleteDept, onMoveDept, onAddDoctor, onEditDoctor, onDeleteDoctor, onMoveDoctor, onToggleDoctorChecked, onToggleDeptAllChecked, onToggleAll, clearConfirm, onClearAll, onGoPreview }) {
+function EditPanel({ panel, departments, footer, checkedIds, allChecked, onUpdateTitle, onUpdateFooter, onUpdatePhone, onAddPhone, onRemovePhone, onAddDept, onEditDept, onDeleteDept, onMoveDept, onAddDoctor, onEditDoctor, onDeleteDoctor, onMoveDoctor, onToggleDoctorChecked, onToggleDeptAllChecked, onToggleAll, clearConfirm, onClearAll, onGoPreview, showCheckbox = true, showSelectAll = true }) {
   return (
     <div className="edit-panel">
       <section className="panel-section">
@@ -447,10 +454,10 @@ function EditPanel({ panel, departments, footer, checkedIds, allChecked, onUpdat
         <input className="input" value={panel.title} onChange={(e) => onUpdateTitle(e.target.value)} placeholder="যেমনঃ শনিবারের ডক্টরস প্যানেল" />
       </section>
       <section className="panel-section">
-        <div className="section-header"><label>বিভাগ ও ডাক্তার তালিকা — {panel.name}</label><button className="btn btn-primary" onClick={onAddDept}><Plus size={15} /> নতুন বিভাগ</button></div>
+        <div className="section-header"><label>বিভাগ ও ডাক্তার তালিকা — {panel.name}</label>{showSelectAll && <button className="btn btn-primary" onClick={onAddDept}><Plus size={15} /> নতুন বিভাগ</button>}</div>
         <p className="section-hint">প্রতিটি ডাক্তারের পাশের বক্সে টিক দিয়ে বেছে নিন কারা "{panel.name}"-এর পোস্টারে দেখাবে।</p>
         {departments.length === 0 ? (<div className="empty-state">এখনো কোনো বিভাগ যোগ করা হয়নি।</div>) : null}
-        {departments.map((dept, i) => (<DepartmentCard key={dept.id} dept={dept} index={i} total={departments.length} checkedIds={checkedIds} onEdit={() => onEditDept(dept)} onDelete={() => onDeleteDept(dept.id)} onMoveUp={() => onMoveDept(dept.id, -1)} onMoveDown={() => onMoveDept(dept.id, 1)} onAddDoctor={() => onAddDoctor(dept.id)} onEditDoctor={(doc) => onEditDoctor(dept.id, doc)} onDeleteDoctor={(docId) => onDeleteDoctor(dept.id, docId)} onMoveDoctorUp={(docId) => onMoveDoctor(dept.id, docId, -1)} onMoveDoctorDown={(docId) => onMoveDoctor(dept.id, docId, 1)} onToggleDoctorChecked={onToggleDoctorChecked} onToggleAllChecked={() => onToggleDeptAllChecked(dept.id)} allowDeptDelete={false} allowDoctorDelete={false} />))}
+        {departments.map((dept, i) => (<DepartmentCard key={dept.id} dept={dept} index={i} total={departments.length} checkedIds={checkedIds} onEdit={() => onEditDept(dept)} onDelete={() => onDeleteDept(dept.id)} onMoveUp={() => onMoveDept(dept.id, -1)} onMoveDown={() => onMoveDept(dept.id, 1)} onAddDoctor={() => onAddDoctor(dept.id)} onEditDoctor={(doc) => onEditDoctor(dept.id, doc)} onDeleteDoctor={(docId) => onDeleteDoctor(dept.id, docId)} onMoveDoctorUp={(docId) => onMoveDoctor(dept.id, docId, -1)} onMoveDoctorDown={(docId) => onMoveDoctor(dept.id, docId, 1)} onToggleDoctorChecked={onToggleDoctorChecked} onToggleAllChecked={() => onToggleDeptAllChecked(dept.id)} allowDeptDelete={false} allowDoctorDelete={false} showCheckbox={showCheckbox} showSelectAll={showSelectAll} />))}
       </section>
       <section className="panel-section">
         <label>ফুটার তথ্য</label>
@@ -489,7 +496,7 @@ function PreviewPanel({ panel, departments, checkedIds, footer }) {
   );
 }
 
-// ===================== Manage Doctors View =====================
+// ===================== Manage Doctors View (চেকবক্স ও সব বাছুন সরানো হয়েছে) =====================
 function ManageDoctorsView({ departments, onAddDept, onEditDept, onDeleteDept, onAddDoctor, onEditDoctor, onDeleteDoctor, isAdmin }) {
   return (
     <div className="edit-panel">
@@ -497,7 +504,17 @@ function ManageDoctorsView({ departments, onAddDept, onEditDept, onDeleteDept, o
         <div className="section-header"><label>মাস্টার ডাক্তার তালিকা (শুধুমাত্র অ্যাডমিনের জন্য)</label>{isAdmin && <button className="btn btn-primary" onClick={onAddDept}><Plus size={15} /> নতুন বিভাগ</button>}</div>
         <p className="section-hint">এখানে শুধুমাত্র অ্যাডমিন ডাক্তার ডিলিট করতে পারবে।</p>
         {departments.length === 0 ? (<div className="empty-state">এখনো কোনো বিভাগ যোগ করা হয়নি।</div>) : null}
-        {departments.map((dept, i) => (<DepartmentCard key={dept.id} dept={dept} index={i} total={departments.length} checkedIds={new Set()} onEdit={() => onEditDept(dept)} onDelete={() => onDeleteDept(dept.id)} onMoveUp={() => {}} onMoveDown={() => {}} onAddDoctor={() => onAddDoctor(dept.id)} onEditDoctor={(doc) => onEditDoctor(dept.id, doc)} onDeleteDoctor={(docId) => onDeleteDoctor(dept.id, docId)} onMoveDoctorUp={() => {}} onMoveDoctorDown={() => {}} onToggleDoctorChecked={() => {}} onToggleAllChecked={() => {}} allowDeptDelete={isAdmin} allowDoctorDelete={isAdmin} />))}
+        {departments.map((dept, i) => (
+          <DepartmentCard key={dept.id} dept={dept} index={i} total={departments.length} checkedIds={new Set()}
+            onEdit={() => onEditDept(dept)} onDelete={() => onDeleteDept(dept.id)}
+            onMoveUp={() => {}} onMoveDown={() => {}}
+            onAddDoctor={() => onAddDoctor(dept.id)} onEditDoctor={(doc) => onEditDoctor(dept.id, doc)}
+            onDeleteDoctor={(docId) => onDeleteDoctor(dept.id, docId)}
+            onMoveDoctorUp={() => {}} onMoveDoctorDown={() => {}}
+            onToggleDoctorChecked={() => {}} onToggleAllChecked={() => {}}
+            allowDeptDelete={isAdmin} allowDoctorDelete={isAdmin}
+            showCheckbox={false} showSelectAll={false} />
+        ))}
       </section>
     </div>
   );
