@@ -467,6 +467,7 @@ function EditPanel({ panel, departments, footer, checkedIds, allChecked, onUpdat
 function DeptHeader({ dept }) { const Icon = ICONS[dept.icon] || ICONS.Stethoscope; return (<div className="dept-header-wrap"><span className="dept-icon-box" style={{ borderColor: dept.color }}><Icon size={19} color={dept.color} /></span><div className="dept-ribbon" style={{ background: dept.color }}><span>{dept.name}</span></div></div>); }
 function DoctorEntry({ doc, accentColor }) { return (<div className="doctor-entry" style={{ borderLeftColor: accentColor }}><div className="doctor-name">{doc.name}</div>{doc.quals ? <div className="doctor-quals">{doc.quals}</div> : null}{doc.specialty ? <div className="doctor-specialty">{doc.specialty}</div> : null}{doc.workplace ? <div className="doctor-workplace">{doc.workplace}</div> : null}{doc.time ? <div className="doctor-time">সাক্ষাতের সময়: <strong>{doc.time}</strong></div> : null}</div>); }
 
+// ⭐ ফিক্স করা PreviewPanel logic
 function PreviewPanel({ panel, departments, checkedIds, footer }) {
   const printRef = useRef(null);
   const handlePrint = () => window.print();
@@ -496,11 +497,14 @@ function PreviewPanel({ panel, departments, checkedIds, footer }) {
       alert('PDF ডাউনলোড করতে সমস্যা হয়েছে।');
     }
   };
-  // 🔥 ফিক্স: যদি কোনো ডাক্তার সিলেক্ট করা না থাকে, তবে সব ডাক্তার দেখান
-  let visibleDepartments = departments.map((dept) => ({ ...dept, doctors: dept.doctors.filter((doc) => checkedIds.has(doc.id)) })).filter((dept) => dept.doctors.length > 0);
-  if (visibleDepartments.length === 0 && departments.length > 0) {
-    visibleDepartments = departments; // Fallback to showing all doctors
-  }
+  
+  // ⭐ শুধু সিলেক্ট করা ডাক্তার দেখান, কিন্তু কোনো ডাক্তার সিলেক্ট না থাকলে সব দেখান
+  let visibleDepartments = departments.map((dept) => {
+    const selectedDoctors = dept.doctors.filter((doc) => checkedIds.has(doc.id));
+    const doctorsToShow = checkedIds.size === 0 ? dept.doctors : selectedDoctors;
+    return { ...dept, doctors: doctorsToShow };
+  }).filter((dept) => dept.doctors.length > 0);
+
   return (
     <div className="preview-wrap">
       <div className="preview-toolbar no-print"><button className="btn btn-primary" onClick={handlePrint}><Printer size={16} /> প্রিন্ট</button><button className="btn btn-secondary" onClick={downloadPNG}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> PNG</button><button className="btn btn-secondary" onClick={downloadPDF}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> PDF</button></div>
@@ -584,11 +588,6 @@ export default function DoctorPanelBuilder() {
           };
           await setDoc(doc(db, 'panels', 'শনিবার'), defaultPanel);
           panelList.push(defaultPanel);
-        } else if (panelList[0].activeDoctorIds?.length === 0 && depts.length > 0) {
-          const allIds = depts.flatMap(d => d.doctors.map(doc => doc.id));
-          const updatedPanel = { ...panelList[0], activeDoctorIds: allIds };
-          await setDoc(doc(db, 'panels', updatedPanel.id), updatedPanel);
-          panelList[0] = updatedPanel;
         }
 
         setPanels(panelList);
@@ -661,52 +660,64 @@ export default function DoctorPanelBuilder() {
   };
   const handleAddDoctor = (deptId) => setDoctorModal({ deptId, mode: 'add' });
   const handleEditDoctor = (deptId, doctor) => setDoctorModal({ deptId, mode: 'edit', doctor });
+
+  // ⭐ ফিক্সড Add Doctor Logic
   const handleSaveDoctor = (fields) => {
     const deptId = doctorModal.deptId;
     if (doctorModal.mode === 'add') {
       const newDoctor = makeDoctor(fields);
-      updateDepartments(d => d.map(dept => 
+      const updatedDepts = departments.map(dept => 
         dept.id === deptId ? { ...dept, doctors: [...dept.doctors, newDoctor] } : dept
-      ), true);
-      
-      // সব প্যানেলের activeDoctorIds-এ নতুন ডাক্তার যোগ করুন
+      );
+      setDepartments(updatedDepts);
+      saveDepartments(updatedDepts);
+
       const newPanels = panels.map(p => ({
         ...p,
         activeDoctorIds: [...new Set([...(p.activeDoctorIds || []), newDoctor.id])]
       }));
       setPanels(newPanels);
       newPanels.forEach(p => savePanelToFirebase(p));
-      
-      setCheckedIds(prev => {
-        const newSet = new Set(prev);
-        newSet.add(newDoctor.id);
-        return newSet;
-      });
+
+      const activePanel = newPanels.find(p => p.id === activePanelId) || newPanels[0];
+      if (activePanel) {
+        setCheckedIds(new Set(activePanel.activeDoctorIds || []));
+      }
     } else {
       const doctorId = doctorModal.doctor.id;
-      updateDepartments(d => d.map(dept => 
+      const updatedDepts = departments.map(dept => 
         dept.id === deptId ? { ...dept, doctors: dept.doctors.map(doc => doc.id === doctorId ? { ...doc, ...fields } : doc) } : dept
-      ), true);
+      );
+      setDepartments(updatedDepts);
+      saveDepartments(updatedDepts);
     }
     setDoctorModal(null);
   };
-  const handleDeleteDoctor = (deptId, doctorId) => { 
-    updateDepartments(d => d.map(dept => 
+
+  // ⭐ ফিক্সড Delete Doctor Logic
+  const handleDeleteDoctor = (deptId, doctorId) => {
+    const updatedDepts = departments.map(dept =>
       dept.id === deptId ? { ...dept, doctors: dept.doctors.filter(doc => doc.id !== doctorId) } : dept
-    ), true); 
-    
-    // ডিলিট করার পর প্যানেলের activeDoctorIds খালি হলে, সব ডাক্তার দিয়ে পূরণ করুন
-    const remainingIds = departments.flatMap(d => d.doctors.filter(doc => doc.id !== doctorId).map(doc => doc.id));
+    );
+    setDepartments(updatedDepts);
+    saveDepartments(updatedDepts);
+
     const newPanels = panels.map(p => {
       let activeIds = p.activeDoctorIds.filter(id => id !== doctorId);
-      if (activeIds.length === 0 && remainingIds.length > 0) {
-        activeIds = remainingIds;
+      if (activeIds.length === 0) {
+        activeIds = updatedDepts.flatMap(d => d.doctors.map(doc => doc.id));
       }
       return { ...p, activeDoctorIds: activeIds };
     });
     setPanels(newPanels);
     newPanels.forEach(p => savePanelToFirebase(p));
+
+    const activePanel = newPanels.find(p => p.id === activePanelId) || newPanels[0];
+    if (activePanel) {
+      setCheckedIds(new Set(activePanel.activeDoctorIds || []));
+    }
   };
+
   const handleMoveDoctor = (deptId, doctorId, dir) => {
     const dept = departments.find(d => d.id === deptId);
     if (!dept) return;
