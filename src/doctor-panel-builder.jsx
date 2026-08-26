@@ -496,7 +496,11 @@ function PreviewPanel({ panel, departments, checkedIds, footer }) {
       alert('PDF ডাউনলোড করতে সমস্যা হয়েছে।');
     }
   };
-  const visibleDepartments = departments.map((dept) => ({ ...dept, doctors: dept.doctors.filter((doc) => checkedIds.has(doc.id)) })).filter((dept) => dept.doctors.length > 0);
+  // 🔥 ফিক্স: যদি কোনো ডাক্তার সিলেক্ট করা না থাকে, তবে সব ডাক্তার দেখান
+  let visibleDepartments = departments.map((dept) => ({ ...dept, doctors: dept.doctors.filter((doc) => checkedIds.has(doc.id)) })).filter((dept) => dept.doctors.length > 0);
+  if (visibleDepartments.length === 0 && departments.length > 0) {
+    visibleDepartments = departments; // Fallback to showing all doctors
+  }
   return (
     <div className="preview-wrap">
       <div className="preview-toolbar no-print"><button className="btn btn-primary" onClick={handlePrint}><Printer size={16} /> প্রিন্ট</button><button className="btn btn-secondary" onClick={downloadPNG}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> PNG</button><button className="btn btn-secondary" onClick={downloadPDF}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> PDF</button></div>
@@ -665,7 +669,7 @@ export default function DoctorPanelBuilder() {
         dept.id === deptId ? { ...dept, doctors: [...dept.doctors, newDoctor] } : dept
       ), true);
       
-      // 🔥 সমাধান: সব প্যানেলের activeDoctorIds-এ নতুন ডাক্তার যোগ করুন
+      // সব প্যানেলের activeDoctorIds-এ নতুন ডাক্তার যোগ করুন
       const newPanels = panels.map(p => ({
         ...p,
         activeDoctorIds: [...new Set([...(p.activeDoctorIds || []), newDoctor.id])]
@@ -673,7 +677,6 @@ export default function DoctorPanelBuilder() {
       setPanels(newPanels);
       newPanels.forEach(p => savePanelToFirebase(p));
       
-      // সক্রিয় প্যানেলের চেকবক্স আপডেট করুন
       setCheckedIds(prev => {
         const newSet = new Set(prev);
         newSet.add(newDoctor.id);
@@ -687,7 +690,23 @@ export default function DoctorPanelBuilder() {
     }
     setDoctorModal(null);
   };
-  const handleDeleteDoctor = (deptId, doctorId) => { updateDepartments(d => d.map(dept => dept.id === deptId ? { ...dept, doctors: dept.doctors.filter(doc => doc.id !== doctorId) } : dept), true); const newPanels = panels.map(p => ({ ...p, activeDoctorIds: p.activeDoctorIds.filter(id => id !== doctorId) })); setPanels(newPanels); newPanels.forEach(p => savePanelToFirebase(p)); };
+  const handleDeleteDoctor = (deptId, doctorId) => { 
+    updateDepartments(d => d.map(dept => 
+      dept.id === deptId ? { ...dept, doctors: dept.doctors.filter(doc => doc.id !== doctorId) } : dept
+    ), true); 
+    
+    // ডিলিট করার পর প্যানেলের activeDoctorIds খালি হলে, সব ডাক্তার দিয়ে পূরণ করুন
+    const remainingIds = departments.flatMap(d => d.doctors.filter(doc => doc.id !== doctorId).map(doc => doc.id));
+    const newPanels = panels.map(p => {
+      let activeIds = p.activeDoctorIds.filter(id => id !== doctorId);
+      if (activeIds.length === 0 && remainingIds.length > 0) {
+        activeIds = remainingIds;
+      }
+      return { ...p, activeDoctorIds: activeIds };
+    });
+    setPanels(newPanels);
+    newPanels.forEach(p => savePanelToFirebase(p));
+  };
   const handleMoveDoctor = (deptId, doctorId, dir) => {
     const dept = departments.find(d => d.id === deptId);
     if (!dept) return;
