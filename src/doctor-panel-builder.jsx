@@ -2,23 +2,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Plus, Ear, Trash2, Pencil, Printer, X, ChevronUp, ChevronDown, MapPin, Globe, Phone, Loader2,
   Stethoscope, Scissors, Heart, Baby, Bone, Syringe, Pill, Activity, Brain, Eye, Utensils, Smile, Sparkles, User, Droplet, Thermometer, LogOut,
-  CheckCircle, XCircle, UserCog,
+  CheckCircle, XCircle,
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-import { db, doc, getDoc, setDoc, getDocs, collection, deleteDoc, updateDoc, query, where } from './firebase'; // <--- এখানে query, where আছেg
+import { db, doc, getDoc, setDoc, getDocs, collection, deleteDoc, updateDoc, query, where } from './firebase';
 
 // ===================== CONSTANTS =====================
 const uid = () => Math.random().toString(36).slice(2, 10);
 const DAY_NAMES = ['শনিবার', 'রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার'];
+function titleForName(name) { return DAY_NAMES.indexOf(name) !== -1 ? name + 'ের ডক্টরস প্যানেল' : name; }
 
-function titleForName(name) {
-  return DAY_NAMES.indexOf(name) !== -1 ? name + 'ের ডক্টরস প্যানেল' : name;
-}
-
-const ICONS = {
-  Stethoscope, Scissors, Heart, Baby, Bone, Syringe, Pill, Activity, Brain, Eye, Utensils, Smile, Sparkles, User, Droplet, Thermometer, Ear,
-};
+const ICONS = { Stethoscope, Scissors, Heart, Baby, Bone, Syringe, Pill, Activity, Brain, Eye, Utensils, Smile, Sparkles, User, Droplet, Thermometer, Ear };
 const ICON_KEYS = Object.keys(ICONS);
 const COLOR_THEMES = ['#1c5fa8', '#2f9e52', '#9c3a9c', '#d1392f', '#0e8ca3', '#e0653a', '#2b3f8f', '#159a72', '#8a6a2e', '#7a2d5c', '#4438ab', '#475569'];
 
@@ -26,6 +21,9 @@ function makeDoctor(overrides) { return { id: uid(), name: '', quals: '', specia
 function makeDepartment(overrides) { return { id: uid(), name: '', icon: 'Stethoscope', color: COLOR_THEMES[0], doctors: [], ...(overrides || {}) }; }
 
 const DEFAULT_FOOTER = { address: 'বাকলিয়া এক্সেস রোড,\nবাকলিয়া, চট্টগ্রাম।', website: 'alafiyahhospital.com', logo: '/logo.png', contactLabel: 'সিরিয়ালের এবং তথ্যের জন্যে যোগাযোগ', phones: ['01886 776 512', '01886 776 513'] };
+
+// অতিথি (Guest) ইউজার ডিফল্ট সেটিং
+const GUEST_USER = { role: 'viewer', isGuest: true, name: 'অতিথি', approved: true };
 
 // ===================== CSS =====================
 const CSS = `
@@ -41,6 +39,7 @@ const CSS = `
 .dpb .topbar-right{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
 .dpb .save-indicator{font-size:12.5px;color:#6b7280;white-space:nowrap;}
 .dpb .logout-btn{background:#dc2626;color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:4px;cursor:pointer;}
+.dpb .login-btn{background:#1c5fa8;color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:4px;cursor:pointer;}
 .dpb .tabs{display:flex;background:#eef1f7;border-radius:10px;padding:3px;gap:2px;}
 .dpb .tab{border:none;background:transparent;padding:8px 16px;border-radius:8px;font-size:13.5px;font-weight:600;color:#6b7280;}
 .dpb .tab.active{background:#1c5fa8;color:#fff;}
@@ -119,7 +118,6 @@ const CSS = `
 
 .dpb .footer-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;}
 @media (max-width:600px){.dpb .footer-form-grid{grid-template-columns:1fr;}}
-
 .dpb .danger-zone{border:1px dashed #f0b4b4;background:#fff8f8;border-radius:12px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
 .dpb .danger-zone-title{font-weight:700;font-size:13.5px;margin-bottom:2px;}
 .dpb .danger-zone-text{font-size:12.5px;color:#8a3a3a;}
@@ -178,7 +176,7 @@ const CSS = `
 @page{margin:10mm;}
 
 /* ---------- Auth CSS ---------- */
-.dpb-auth{display:flex;justify-content:center;align-items:center;height:100vh;background:#f4f6fa;padding:20px;}
+.dpb-auth{position:fixed;inset:0;background:rgba(15,23,42,0.8);display:flex;justify-content:center;align-items:center;z-index:200;padding:20px;}
 .dpb-auth-box{background:#fff;padding:30px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:100%;max-width:400px;}
 .dpb-auth-box h2{color:#1c5fa8;text-align:center;margin-bottom:20px;}
 .dpb-auth-box input{width:100%;padding:10px;margin-bottom:12px;border:1px solid #e2e6ee;border-radius:8px;font-size:14px;}
@@ -190,15 +188,15 @@ const CSS = `
 .dpb-auth-toggle span{color:#1c5fa8;font-weight:700;cursor:pointer;}
 `;
 
-// ===================== ✅ SAVE INDICATOR (এটি ঠিক জায়গায় আছে) =====================
+// ===================== SaveIndicator =====================
 function SaveIndicator({ status }) {
   if (status === 'idle') return null;
   const text = status === 'saving' ? 'সংরক্ষণ হচ্ছে...' : status === 'saved' ? '✓ সংরক্ষিত হয়েছে' : 'সংরক্ষণ ব্যর্থ হয়েছে';
   return <span className="save-indicator">{text}</span>;
 }
 
-// ===================== AUTH COMPONENT =====================
-function AuthPage({ onLogin }) {
+// ===================== Auth Component =====================
+function AuthPage({ onLogin, onClose }) {
   const [isRegister, setIsRegister] = useState(false);
   const [formData, setFormData] = useState({ name: '', password: '', designation: '' });
   const [error, setError] = useState('');
@@ -207,67 +205,40 @@ function AuthPage({ onLogin }) {
   const defaultAdmin = { username: 'admin', password: 'admin123', role: 'admin', approved: true };
 
   const handleLogin = async () => {
-    setError('');
-    setSuccess('');
+    setError(''); setSuccess('');
     const name = formData.name.trim();
     const pass = formData.password.trim();
 
     if (name === defaultAdmin.username && pass === defaultAdmin.password) {
-      onLogin({ ...defaultAdmin, username: name });
+      onLogin({ ...defaultAdmin, username: name, isGuest: false });
       return;
     }
 
     try {
       const q = query(collection(db, 'users'), where('name', '==', name));
       const querySnapshot = await getDocs(q);
-      if (querySnapshot.empty) {
-        setError('ইউজার খুঁজে পাওয়া যায়নি!');
-        return;
-      }
+      if (querySnapshot.empty) { setError('ইউজার খুঁজে পাওয়া যায়নি!'); return; }
       const userData = querySnapshot.docs[0].data();
-      if (userData.password !== pass) {
-        setError('ভুল পাসওয়ার্ড!');
-        return;
-      }
-      if (!userData.approved) {
-        setError('আপনার অ্যাকাউন্টটি এখনো এপ্রুভ হয়নি। অ্যাডমিনের অনুমোদনের অপেক্ষায় থাকুন।');
-        return;
-      }
-      onLogin({ username: name, ...userData });
-    } catch (e) {
-      console.error(e);
-      setError('লগইন করতে সমস্যা হয়েছে।');
-    }
+      if (userData.password !== pass) { setError('ভুল পাসওয়ার্ড!'); return; }
+      if (!userData.approved) { setError('অ্যাকাউন্টটি এখনো এপ্রুভ হয়নি।'); return; }
+      onLogin({ ...userData, username: name, isGuest: false });
+    } catch (e) { console.error(e); setError('লগইন করতে সমস্যা হয়েছে।'); }
   };
 
   const handleRegister = async () => {
-    setError('');
-    setSuccess('');
+    setError(''); setSuccess('');
     const name = formData.name.trim();
     const pass = formData.password.trim();
     const desig = formData.designation.trim();
 
-    if (!name || !pass || !desig) {
-      setError('সব ঘর পূরণ করুন!');
-      return;
-    }
+    if (!name || !pass || !desig) { setError('সব ঘর পূরণ করুন!'); return; }
 
     try {
-      const newUser = {
-        id: uid(),
-        name: name,
-        password: pass,
-        designation: desig,
-        role: 'pending',
-        approved: false
-      };
+      const newUser = { id: uid(), name, password: pass, designation: desig, role: 'pending', approved: false };
       await setDoc(doc(db, 'users', newUser.id), newUser);
       setSuccess('রেজিস্ট্রেশন সফল হয়েছে! এপ্রুভ হওয়ার পর লগইন করতে পারবেন।');
       setFormData({ name: '', password: '', designation: '' });
-    } catch (e) {
-      console.error(e);
-      setError('রেজিস্ট্রেশন করতে সমস্যা হয়েছে।');
-    }
+    } catch (e) { console.error(e); setError('রেজিস্ট্রেশন করতে সমস্যা হয়েছে।'); }
   };
 
   return (
@@ -281,7 +252,7 @@ function AuthPage({ onLogin }) {
           <>
             <input type="text" placeholder="আপনার নাম" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
             <input type="password" placeholder="পাসওয়ার্ড" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} />
-            <input type="text" placeholder="ডেসিগনেশন (যেমন: অফিস সহকারী)" value={formData.designation} onChange={(e) => setFormData({...formData, designation: e.target.value})} />
+            <input type="text" placeholder="ডেসিগনেশন" value={formData.designation} onChange={(e) => setFormData({...formData, designation: e.target.value})} />
             <button onClick={handleRegister}>নিবন্ধন করুন</button>
             <div className="dpb-auth-toggle">আগে থেকে অ্যাকাউন্ট আছে? <span onClick={() => { setIsRegister(false); setError(''); setSuccess(''); }}>লগইন করুন</span></div>
           </>
@@ -293,25 +264,30 @@ function AuthPage({ onLogin }) {
             <div className="dpb-auth-toggle">নতুন ইউজার? <span onClick={() => { setIsRegister(true); setError(''); setSuccess(''); }}>রেজিস্ট্রেশন করুন</span></div>
           </>
         )}
+        <div style={{textAlign:'center', marginTop:'15px', cursor:'pointer', color:'#6b7280'}} onClick={onClose}>বাতিল করুন</div>
       </div>
     </div>
   );
 }
 
-// ===================== ADMIN PANEL =====================
+// ===================== Admin Panel (এডিটর রোল যোগ করা হয়েছে) =====================
 function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
   return (
     <div className="edit-panel">
       <section className="panel-section">
-        <div className="section-header"><label>ইউজার ম্যানেজমেন্ট (অ্যাডমিন প্যানেল)</label></div>
-        <div className="section-hint">এখানে নতুন রেজিস্ট্রেশন করা ইউজারদের এপ্রুভ, রোল সেট ও ডিলেট করতে পারবেন।</div>
+        <div className="section-header"><label>ইউজার ম্যানেজমেন্ট</label></div>
+        <div className="section-hint">রেজিস্ট্রেশন করা ইউজারদের এপ্রুভ, রোল (Admin/Editor/Viewer) সেট ও ডিলেট করুন।</div>
         {users.length === 0 ? (
           <div className="empty-state">এখনো কোনো ইউজার রেজিস্ট্রেশন করে নি।</div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #e2e6ee', textAlign: 'left', color: '#6b7280', fontSize: '14px' }}>
-                <th style={{ padding: '10px' }}>নাম</th><th style={{ padding: '10px' }}>ডেসিগনেশন</th><th style={{ padding: '10px' }}>রোল</th><th style={{ padding: '10px' }}>স্ট্যাটাস</th><th style={{ padding: '10px' }}>অ্যাকশন</th>
+                <th style={{ padding: '10px' }}>নাম</th>
+                <th style={{ padding: '10px' }}>ডেসিগনেশন</th>
+                <th style={{ padding: '10px' }}>রোল</th>
+                <th style={{ padding: '10px' }}>স্ট্যাটাস</th>
+                <th style={{ padding: '10px' }}>অ্যাকশন</th>
               </tr>
             </thead>
             <tbody>
@@ -321,7 +297,10 @@ function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
                   <td style={{ padding: '10px' }}>{u.designation}</td>
                   <td style={{ padding: '10px' }}>
                     <select value={u.role} onChange={(e) => onSetRole(u.id, e.target.value)} style={{ padding: '6px', borderRadius: '6px', border: '1px solid #e2e6ee' }}>
-                      <option value="pending">পেন্ডিং</option><option value="admin">অ্যাডমিন</option><option value="viewer">ভিউয়ার</option>
+                      <option value="pending">পেন্ডিং</option>
+                      <option value="admin">অ্যাডমিন</option>
+                      <option value="editor">এডিটর</option>
+                      <option value="viewer">ভিউয়ার</option>
                     </select>
                   </td>
                   <td style={{ padding: '10px' }}>{u.approved ? <span style={{ color: '#2f9e52', fontWeight: '700' }}>এপ্রুভড</span> : <span style={{ color: '#dc2626', fontWeight: '700' }}>পেন্ডিং</span>}</td>
@@ -458,21 +437,20 @@ function EditPanel({ panel, departments, footer, checkedIds, allChecked, onUpdat
   return (
     <div className="edit-panel">
       <section className="panel-section">
-        <div className="section-header"><label>এই দিনের শিরোনাম (পোস্টারে যা দেখাবে)</label><button className="toggle-all-btn" onClick={onToggleAll}>{allChecked ? 'সব বাদ দিন' : 'সব বাছুন'}</button></div>
+        <div className="section-header"><label>এই দিনের শিরোনাম</label><button className="toggle-all-btn" onClick={onToggleAll}>{allChecked ? 'সব বাদ দিন' : 'সব বাছুন'}</button></div>
         <p className="section-hint">উপরে দিনের ট্যাব থেকে অন্য দিনে যেতে পারবেন, অথবা এখানে "{panel.name}"-এর শিরোনাম বদলান</p>
         <input className="input" value={panel.title} onChange={(e) => onUpdateTitle(e.target.value)} placeholder="যেমনঃ শনিবারের ডক্টরস প্যানেল" />
       </section>
       <section className="panel-section">
         <div className="section-header"><label>বিভাগ ও ডাক্তার তালিকা — {panel.name}</label><button className="btn btn-primary" onClick={onAddDept}><Plus size={15} /> নতুন বিভাগ</button></div>
-        <p className="section-hint">প্রতিটি ডাক্তারের পাশের বক্সে টিক দিয়ে বেছে নিন কারা "{panel.name}"-এর পোস্টারে দেখাবে — বাকিরা মুছে যাবে না, শুধু আজকের প্রিভিউ/প্রিন্ট থেকে বাদ পড়বে।</p>
-        {departments.length === 0 ? (<div className="empty-state">এখনো কোনো বিভাগ যোগ করা হয়নি। "নতুন বিভাগ" বাটনে চাপ দিয়ে শুরু করুন।</div>) : null}
+        <p className="section-hint">প্রতিটি ডাক্তারের পাশের বক্সে টিক দিয়ে বেছে নিন কারা "{panel.name}"-এর পোস্টারে দেখাবে।</p>
+        {departments.length === 0 ? (<div className="empty-state">এখনো কোনো বিভাগ যোগ করা হয়নি।</div>) : null}
         {departments.map((dept, i) => (<DepartmentCard key={dept.id} dept={dept} index={i} total={departments.length} checkedIds={checkedIds} onEdit={() => onEditDept(dept)} onDelete={() => onDeleteDept(dept.id)} onMoveUp={() => onMoveDept(dept.id, -1)} onMoveDown={() => onMoveDept(dept.id, 1)} onAddDoctor={() => onAddDoctor(dept.id)} onEditDoctor={(doc) => onEditDoctor(dept.id, doc)} onDeleteDoctor={(docId) => onDeleteDoctor(dept.id, docId)} onMoveDoctorUp={(docId) => onMoveDoctor(dept.id, docId, -1)} onMoveDoctorDown={(docId) => onMoveDoctor(dept.id, docId, 1)} onToggleDoctorChecked={onToggleDoctorChecked} onToggleAllChecked={() => onToggleDeptAllChecked(dept.id)} allowDeptDelete={false} allowDoctorDelete={false} />))}
       </section>
       <section className="panel-section">
-        <label>ফুটার তথ্য (হাসপাতালের নাম, ঠিকানা ও যোগাযোগ)</label>
-        <p className="section-hint">এই তথ্য সব দিনের জন্য একই থাকে — একবার দিলেই সব প্যানেলে দেখাবে</p>
+        <label>ফুটার তথ্য</label>
         <div className="footer-form-grid">
-          <div className="field"><label>হাসপাতাল/প্রতিষ্ঠানের নাম</label><input className="input" value={footer.hospitalName} onChange={(e) => onUpdateFooter({ hospitalName: e.target.value })} /></div>
+          <div className="field"><label>হাসপাতালের নাম</label><input className="input" value={footer.hospitalName} onChange={(e) => onUpdateFooter({ hospitalName: e.target.value })} /></div>
           <div className="field"><label>সাবটাইটেল</label><input className="input" value={footer.hospitalSubtitle} onChange={(e) => onUpdateFooter({ hospitalSubtitle: e.target.value })} /></div>
           <div className="field"><label>ঠিকানা</label><textarea className="textarea" rows={2} value={footer.address} onChange={(e) => onUpdateFooter({ address: e.target.value })} /></div>
           <div className="field"><label>ওয়েবসাইট</label><input className="input" value={footer.website} onChange={(e) => onUpdateFooter({ website: e.target.value })} /></div>
@@ -482,12 +460,6 @@ function EditPanel({ panel, departments, footer, checkedIds, allChecked, onUpdat
             {footer.phones.map((p, i) => (<div key={i} style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}><input className="input" value={p} onChange={(e) => onUpdatePhone(i, e.target.value)} placeholder="০১৮৮৬ ৭৭৬ ৫১২" /><button className="icon-btn" onClick={() => onRemovePhone(i)} title="মুছুন"><Trash2 size={15} /></button></div>))}
             <button className="btn btn-secondary" onClick={onAddPhone}><Plus size={14} /> নম্বর যোগ করুন</button>
           </div>
-        </div>
-      </section>
-      <section className="panel-section">
-        <div className="danger-zone">
-          <div><div className="danger-zone-title">আজকের ("{panel.name}") সব ডাক্তার আনচেক করুন</div><div className="danger-zone-text">কারো তথ্য মুছে যাবে না — শুধু আজকের পোস্টার খালি হয়ে যাবে। পরে আবার টিক দিয়ে ফিরিয়ে আনতে পারবেন।</div></div>
-          <button className={clearConfirm ? 'btn btn-danger' : 'btn btn-outline'} onClick={onClearAll}>{clearConfirm ? 'আবার ক্লিক করে নিশ্চিত করুন' : 'সব আনচেক করুন'}</button>
         </div>
       </section>
       <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: '30px' }}><button className="btn btn-primary" onClick={onGoPreview} style={{ padding: '11px 26px', fontSize: '14px' }}>প্রিভিউ দেখুন →</button></div>
@@ -506,27 +478,19 @@ function PreviewPanel({ panel, departments, checkedIds, footer }) {
   const visibleDepartments = departments.map((dept) => ({ ...dept, doctors: dept.doctors.filter((doc) => checkedIds.has(doc.id)) })).filter((dept) => dept.doctors.length > 0);
   return (
     <div className="preview-wrap">
-      <div className="preview-toolbar no-print"><button className="btn btn-primary" onClick={handlePrint}><Printer size={16} /> প্রিন্ট</button><button className="btn btn-secondary" onClick={downloadPNG}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> PNG ডাউনলোড</button><button className="btn btn-secondary" onClick={downloadPDF}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> PDF ডাউনলোড</button></div>
-      <div id="dpb-print-area" className="poster-page" ref={printRef}>
-        <div className="poster-header"><h1>{panel.title}</h1></div>
-        {visibleDepartments.length === 0 ? (<div className="poster-empty-note" style={{ padding: '30px', textAlign: 'center', color: '#6b7280' }}>"{panel.name}"-এর জন্য কোনো ডাক্তার নির্বাচন করা হয়নি।</div>) : (<div className="poster-body">{visibleDepartments.map((dept) => (<div className="dept-block" key={dept.id}><DeptHeader dept={dept} />{dept.doctors.map((doc) => <DoctorEntry key={doc.id} doc={doc} accentColor={dept.color} />)}</div>))}</div>)}
-        <div className="poster-footer">
-          <div className="footer-col footer-left"><div className="footer-line"><MapPin size={13} /> <span>{footer.address}</span></div><div className="footer-line"><Globe size={13} /> <span>{footer.website}</span></div></div>
-          <div className="footer-col footer-center"><img src={footer.logo} alt="Logo" style={{ height: '160px', width: 'auto', objectFit: 'contain' }} /><div className="hospital-subtitle">{footer.hospitalSubtitle}</div></div>
-          <div className="footer-col footer-right"><div className="footer-contact-label">{footer.contactLabel}</div>{footer.phones.map((p, i) => <div className="footer-phone" key={i}><Phone size={13} /> {p}</div>)}</div>
-        </div>
-      </div>
+      <div className="preview-toolbar no-print"><button className="btn btn-primary" onClick={handlePrint}><Printer size={16} /> প্রিন্ট</button><button className="btn btn-secondary" onClick={downloadPNG}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> PNG</button><button className="btn btn-secondary" onClick={downloadPDF}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> PDF</button></div>
+      <div id="dpb-print-area" className="poster-page" ref={printRef}><div className="poster-header"><h1>{panel.title}</h1></div>{visibleDepartments.length === 0 ? (<div className="poster-empty-note" style={{ padding: '30px', textAlign: 'center', color: '#6b7280' }}>"{panel.name}"-এর জন্য কোনো ডাক্তার নির্বাচন করা হয়নি।</div>) : (<div className="poster-body">{visibleDepartments.map((dept) => (<div className="dept-block" key={dept.id}><DeptHeader dept={dept} />{dept.doctors.map((doc) => <DoctorEntry key={doc.id} doc={doc} accentColor={dept.color} />)}</div>))}</div>)}<div className="poster-footer"><div className="footer-col footer-left"><div className="footer-line"><MapPin size={13} /> <span>{footer.address}</span></div><div className="footer-line"><Globe size={13} /> <span>{footer.website}</span></div></div><div className="footer-col footer-center"><img src={footer.logo} alt="Logo" style={{ height: '160px', width: 'auto', objectFit: 'contain' }} /><div className="hospital-subtitle">{footer.hospitalSubtitle}</div></div><div className="footer-col footer-right"><div className="footer-contact-label">{footer.contactLabel}</div>{footer.phones.map((p, i) => <div className="footer-phone" key={i}><Phone size={13} /> {p}</div>)}</div></div></div>
     </div>
   );
 }
 
-// ===================== Manage Doctors View =====================
+// ===================== Manage Doctors View (এডমিনদের জন্য) =====================
 function ManageDoctorsView({ departments, onAddDept, onEditDept, onDeleteDept, onAddDoctor, onEditDoctor, onDeleteDoctor, isAdmin }) {
   return (
     <div className="edit-panel">
       <section className="panel-section">
-        <div className="section-header"><label>মাস্টার ডাক্তার তালিকা (বিভাগ ও ডাক্তার)</label>{isAdmin && <button className="btn btn-primary" onClick={onAddDept}><Plus size={15} /> নতুন বিভাগ</button>}</div>
-        <p className="section-hint">এখানে বিভাগ তৈরি করুন এবং সেই বিভাগের ভেতরে ডাক্তার যোগ, সম্পাদনা বা মুছে ফেলুন।</p>
+        <div className="section-header"><label>মাস্টার ডাক্তার তালিকা (শুধুমাত্র অ্যাডমিনের জন্য)</label>{isAdmin && <button className="btn btn-primary" onClick={onAddDept}><Plus size={15} /> নতুন বিভাগ</button>}</div>
+        <p className="section-hint">এখানে শুধুমাত্র অ্যাডমিন ডাক্তার ডিলিট করতে পারবে।</p>
         {departments.length === 0 ? (<div className="empty-state">এখনো কোনো বিভাগ যোগ করা হয়নি।</div>) : null}
         {departments.map((dept, i) => (<DepartmentCard key={dept.id} dept={dept} index={i} total={departments.length} checkedIds={new Set()} onEdit={() => onEditDept(dept)} onDelete={() => onDeleteDept(dept.id)} onMoveUp={() => {}} onMoveDown={() => {}} onAddDoctor={() => onAddDoctor(dept.id)} onEditDoctor={(doc) => onEditDoctor(dept.id, doc)} onDeleteDoctor={(docId) => onDeleteDoctor(dept.id, docId)} onMoveDoctorUp={() => {}} onMoveDoctorDown={() => {}} onToggleDoctorChecked={() => {}} onToggleAllChecked={() => {}} allowDeptDelete={isAdmin} allowDoctorDelete={isAdmin} />))}
       </section>
@@ -536,9 +500,10 @@ function ManageDoctorsView({ departments, onAddDept, onEditDept, onDeleteDept, o
 
 // ===================== MAIN COMPONENT =====================
 export default function DoctorPanelBuilder() {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(GUEST_USER);
+  const [showAuth, setShowAuth] = useState(false);
   const [allUsers, setAllUsers] = useState([]);
-  const [activeView, setActiveView] = useState('manage'); // manage, builder, admin
+  const [activeView, setActiveView] = useState('preview'); // প্রিভিউ, বিল্ডার, এডমিন, ডক্টর লিস্ট
   const [departments, setDepartments] = useState([]);
   const [panels, setPanels] = useState([]);
   const [activePanelId, setActivePanelId] = useState(null);
@@ -554,8 +519,10 @@ export default function DoctorPanelBuilder() {
   const debounceRef = useRef(null);
 
   const isAdmin = user?.role === 'admin';
+  const isEditor = user?.role === 'editor';
+  const isGuest = user?.isGuest === true;
 
-  // Load Data with Timeout
+  // Load Data
   useEffect(() => {
     const loadData = async () => {
       const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000));
@@ -594,7 +561,7 @@ export default function DoctorPanelBuilder() {
     loadData();
   }, []);
 
-  // Load Users if Admin
+  // Admin এর জন্য ইউজার লোড
   useEffect(() => {
     if (!isAdmin) return;
     const loadUsers = async () => {
@@ -617,12 +584,12 @@ export default function DoctorPanelBuilder() {
   const allDoctorIds = departments.flatMap(d => d.doctors.map(doc => doc.id));
   const allChecked = allDoctorIds.length > 0 && allDoctorIds.every(id => checkedIds.has(id));
 
-  // User Management Functions
+  // ইউজার ম্যানেজমেন্ট
   const handleApprove = async (userId) => { try { await updateDoc(doc(db, 'users', userId), { approved: true }); setAllUsers(users => users.map(u => u.id === userId ? { ...u, approved: true } : u)); } catch (e) { console.error(e); } };
   const handleSetRole = async (userId, role) => { try { await updateDoc(doc(db, 'users', userId), { role }); setAllUsers(users => users.map(u => u.id === userId ? { ...u, role } : u)); } catch (e) { console.error(e); } };
   const handleDeleteUser = async (userId) => { try { await deleteDoc(doc(db, 'users', userId)); setAllUsers(users => users.filter(u => u.id !== userId)); } catch (e) { console.error(e); } };
 
-  // Other Handlers
+  // অন্যান্য হ্যান্ডলার
   const updatePanel = (updater, immediate) => { const updated = updater(activePanel); const newPanels = panels.map(p => p.id === activePanelId ? updated : p); setPanels(newPanels); if (immediate) { setSaveStatus('saving'); savePanelToFirebase(updated).then(() => setSaveStatus('saved')).catch(() => setSaveStatus('error')); setTimeout(() => setSaveStatus('idle'), 1500); } else { setSaveStatus('saving'); if (debounceRef.current) clearTimeout(debounceRef.current); debounceRef.current = setTimeout(() => { savePanelToFirebase(updated).then(() => setSaveStatus('saved')).catch(() => setSaveStatus('error')); setTimeout(() => setSaveStatus('idle'), 1500); }, 700); } };
   const updateDepartments = (updater, immediate) => { const newDepts = updater(departments); setDepartments(newDepts); if (immediate) { saveDepartments(newDepts); } else { if (debounceRef.current) clearTimeout(debounceRef.current); debounceRef.current = setTimeout(() => saveDepartments(newDepts), 700); } };
   const handleUpdateTitle = (title) => updatePanel(p => ({ ...p, title }), true);
@@ -641,7 +608,6 @@ export default function DoctorPanelBuilder() {
   const handleToggleDoctorChecked = (doctorId) => { const newIds = checkedIds.has(doctorId) ? [...checkedIds].filter(id => id !== doctorId) : [...checkedIds, doctorId]; setCheckedIds(new Set(newIds)); updatePanel(p => ({ ...p, activeDoctorIds: newIds }), true); };
   const handleToggleDeptAllChecked = (deptId) => { const dept = departments.find(d => d.id === deptId); if (!dept) return; const deptIds = dept.doctors.map(doc => doc.id); const allChecked = deptIds.every(id => checkedIds.has(id)); let newIds; if (allChecked) newIds = [...checkedIds].filter(id => !deptIds.includes(id)); else newIds = [...checkedIds].filter(id => !deptIds.includes(id)).concat(deptIds); setCheckedIds(new Set(newIds)); updatePanel(p => ({ ...p, activeDoctorIds: newIds }), true); };
   const handleToggleAll = () => { let newIds; if (allChecked) newIds = []; else newIds = allDoctorIds; setCheckedIds(new Set(newIds)); updatePanel(p => ({ ...p, activeDoctorIds: newIds }), true); };
-  const handleClearActivePanelChecks = () => { if (!clearConfirm) { setClearConfirm(true); setTimeout(() => setClearConfirm(false), 3500); return; } setClearConfirm(false); setCheckedIds(new Set()); updatePanel(p => ({ ...p, activeDoctorIds: [] }), true); };
   const handleSwitchPanel = (panelId) => { const panel = panels.find(p => p.id === panelId); if (panel) { setActivePanelId(panelId); setCheckedIds(new Set(panel.activeDoctorIds || [])); } };
   const handleAddPanel = async (fields) => { const newPanel = { id: fields.name, name: fields.name, title: fields.title, activeDoctorIds: fields.duplicate ? [...activePanel.activeDoctorIds] : (fields.selectedIds || []) }; await savePanelToFirebase(newPanel); setPanels([...panels, newPanel]); setActivePanelId(newPanel.id); setCheckedIds(new Set(newPanel.activeDoctorIds)); setPanelModal(null); };
   const handleRenamePanel = (fields) => { const panelId = panelModal.panel.id; const updated = panels.map(p => p.id === panelId ? { ...p, name: fields.name } : p); setPanels(updated); savePanelToFirebase(updated.find(p => p.id === panelId)); setPanelModal(null); };
@@ -650,54 +616,75 @@ export default function DoctorPanelBuilder() {
 
   if (loading) { return (<div className="dpb"><style>{CSS}</style><div className="loading-screen"><Loader2 className="spin" size={26} /><span>লোড হচ্ছে...</span></div></div>); }
 
-  if (!user) { return (<div className="dpb"><style>{CSS}</style><AuthPage onLogin={setUser} /></div>); }
-
   return (
     <div className="dpb">
       <style>{CSS}</style>
       <div className="topbar no-print">
-        <div className="topbar-title"><Stethoscope size={20} /><span>ডাক্তার প্যানেল বিল্ডার</span></div>
+        <div className="topbar-title"><Stethoscope size={20} /><span>ডাক্তার প্যানেল</span></div>
         <div className="topbar-right">
-          <SaveIndicator status={saveStatus} />
+          
+          {/* টপবার ট্যাব (রোল অনুযায়ী) */}
           <div className="tabs">
-            {isAdmin && (
+            {isGuest && (
+              <button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button>
+            )}
+            {!isGuest && user.role === 'viewer' && (
+              <button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button>
+            )}
+            {!isGuest && user.role === 'editor' && (
               <>
-                <button className={activeView === 'manage' ? 'tab active' : 'tab'} onClick={() => setActiveView('manage')}>ডাক্তার তালিকা</button>
-                <button className={activeView === 'builder' ? 'tab active' : 'tab'} onClick={() => setActiveView('builder')}>প্যানেল বিল্ডার</button>
-                <button className={activeView === 'admin' ? 'tab active' : 'tab'} onClick={() => setActiveView('admin')}>অ্যাডমিন প্যানেল</button>
-                {activeView === 'builder' && (
-                  <>
-                    <button className={mode === 'edit' ? 'tab active' : 'tab'} onClick={() => setMode('edit')}>এডিট করুন</button>
-                    <button className={mode === 'preview' ? 'tab active' : 'tab'} onClick={() => setMode('preview')}>প্রিভিউ ও প্রিন্ট</button>
-                  </>
-                )}
+                <button className={activeView === 'edit' ? 'tab active' : 'tab'} onClick={() => setActiveView('edit')}>প্যানেল বিল্ডার</button>
+                <button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button>
               </>
             )}
-            {!isAdmin && (
-              <button className={activeView === 'manage' ? 'tab active' : 'tab'} onClick={() => setActiveView('manage')}>প্রিভিউ ও প্রিন্ট</button>
+            {!isGuest && user.role === 'admin' && (
+              <>
+                <button className={activeView === 'doctors' ? 'tab active' : 'tab'} onClick={() => setActiveView('doctors')}>ডাক্তার লিস্ট</button>
+                <button className={activeView === 'edit' ? 'tab active' : 'tab'} onClick={() => setActiveView('edit')}>প্যানেল বিল্ডার</button>
+                <button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button>
+                <button className={activeView === 'admin' ? 'tab active' : 'tab'} onClick={() => setActiveView('admin')}>অ্যাডমিন প্যানেল</button>
+              </>
             )}
           </div>
-          <button className="logout-btn" onClick={() => setUser(null)}><LogOut size={14} /> লগআউট</button>
+
+          {/* লগইন / লগআউট বাটন */}
+          {isGuest ? (
+            <button className="login-btn" onClick={() => setShowAuth(true)}>লগইন / রেজিস্ট্রেশন</button>
+          ) : (
+            <button className="logout-btn" onClick={() => setUser(GUEST_USER)}><LogOut size={14} /> লগআউট</button>
+          )}
+
         </div>
       </div>
 
-      {/* Admin Views */}
-      {isAdmin && activeView === 'manage' && (<ManageDoctorsView departments={departments} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={handleDeleteDept} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={handleDeleteDoctor} isAdmin={true} />)}
-      {isAdmin && activeView === 'builder' && (
+      {/* ভিউ এরিয়া */}
+      {activeView === 'preview' && (
+        <PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} />
+      )}
+
+      {activeView === 'doctors' && isAdmin && (
+        <ManageDoctorsView departments={departments} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={handleDeleteDept} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={handleDeleteDoctor} isAdmin={true} />
+      )}
+
+      {activeView === 'edit' && !isGuest && (isEditor || isAdmin) && (
         <>
-          <PanelSwitcher panels={panels} activePanelId={activePanelId} onSwitch={handleSwitchPanel} onAdd={() => setPanelModal({ mode: 'add', departments })} onRename={(panel) => setPanelModal({ mode: 'rename', panel })} onDelete={handleDeletePanel} />
+          <PanelSwitcher panels={panels} activePanelId={activePanelId} onSwitch={handleSwitchPanel} onAdd={() => setPanelModal({ mode: 'add', departments })} onRename={(panel) => setPanelModal({ mode: 'rename', panel })} onDelete={isAdmin ? handleDeletePanel : () => {}} />
           {mode === 'edit' ? (
-            <EditPanel panel={activePanel} departments={departments} footer={footer} checkedIds={checkedIds} allChecked={allChecked} onUpdateTitle={handleUpdateTitle} onUpdateFooter={handleUpdateFooter} onUpdatePhone={handleUpdatePhone} onAddPhone={handleAddPhone} onRemovePhone={handleRemovePhone} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={handleDeleteDept} onMoveDept={() => {}} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={() => {}} onMoveDoctor={() => {}} onToggleDoctorChecked={handleToggleDoctorChecked} onToggleDeptAllChecked={handleToggleDeptAllChecked} onToggleAll={handleToggleAll} clearConfirm={clearConfirm} onClearAll={handleClearActivePanelChecks} onGoPreview={() => setMode('preview')} />
+            <EditPanel panel={activePanel} departments={departments} footer={footer} checkedIds={checkedIds} allChecked={allChecked} onUpdateTitle={handleUpdateTitle} onUpdateFooter={handleUpdateFooter} onUpdatePhone={handleUpdatePhone} onAddPhone={handleAddPhone} onRemovePhone={handleRemovePhone} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={isAdmin ? handleDeleteDept : () => {}} onMoveDept={() => {}} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={() => {}} onMoveDoctor={() => {}} onToggleDoctorChecked={handleToggleDoctorChecked} onToggleDeptAllChecked={handleToggleDeptAllChecked} onToggleAll={handleToggleAll} clearConfirm={clearConfirm} onClearAll={() => {}} onGoPreview={() => setMode('preview')} />
           ) : (
             <PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} />
           )}
         </>
       )}
-      {isAdmin && activeView === 'admin' && (<AdminPanel users={allUsers} onApprove={handleApprove} onSetRole={handleSetRole} onDeleteUser={handleDeleteUser} />)}
 
-      {/* Viewer Views */}
-      {!isAdmin && (<PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} />)}
+      {activeView === 'admin' && isAdmin && (
+        <AdminPanel users={allUsers} onApprove={handleApprove} onSetRole={handleSetRole} onDeleteUser={handleDeleteUser} />
+      )}
 
+      {/* Auth Modal */}
+      {showAuth && <AuthPage onLogin={setUser} onClose={() => setShowAuth(false)} />}
+
+      {/* অন্যান্য মডাল */}
       {deptModal && <DepartmentModal initial={deptModal.mode === 'edit' ? deptModal.dept : null} onSave={handleSaveDept} onClose={() => setDeptModal(null)} />}
       {doctorModal && <DoctorModal initial={doctorModal.mode === 'edit' ? doctorModal.doctor : null} onSave={handleSaveDoctor} onClose={() => setDoctorModal(null)} />}
       {panelModal && <PanelModal mode={panelModal.mode} initial={panelModal.mode === 'rename' ? panelModal.panel : null} activeDeptCount={activePanel.activeDoctorIds?.length || 0} departments={departments} onSave={handleSavePanel} onClose={() => setPanelModal(null)} />}
