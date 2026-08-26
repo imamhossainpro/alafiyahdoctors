@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-import { db, doc, getDoc, setDoc, getDocs, collection, deleteDoc, updateDoc, query, where } from './firebase';
+import { db, doc, getDoc, setDoc, getDocs, collection, deleteDoc, updateDoc, query, where } from './firebase'; // <--- এখানে query, where আছেg
 
 // ===================== CONSTANTS =====================
 const uid = () => Math.random().toString(36).slice(2, 10);
