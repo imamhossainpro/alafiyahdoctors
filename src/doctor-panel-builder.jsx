@@ -61,9 +61,14 @@ const CSS = `
 
 .dpb .panel-switcher{display:flex;align-items:center;gap:10px;padding:10px 20px;background:#fff;border-bottom:1px solid #e2e6ee;flex-wrap:wrap;position:sticky;top:57px;z-index:19;}
 .dpb .panel-switcher-scroll{display:flex;gap:6px;flex-wrap:wrap;flex:1;min-width:0;}
-.dpb .day-btn-panel{border:1px solid #e2e6ee;background:#fff;padding:6px 16px;border-radius:20px;font-size:13px;font-weight:600;color:#1f2937;cursor:pointer;transition:all 0.2s;}
-.dpb .day-btn-panel:hover{border-color:#1c5fa8;color:#1c5fa8;}
-.dpb .day-btn-panel.active{background:#1c5fa8;color:#fff;border-color:#1c5fa8;}
+.dpb .panel-pill{display:flex;align-items:center;border:1px solid #e2e6ee;background:#fff;padding:4px 8px;border-radius:20px;font-size:13px;font-weight:600;color:#1f2937;cursor:pointer;transition:all 0.2s;gap:4px;}
+.dpb .panel-pill:hover{border-color:#1c5fa8;color:#1c5fa8;}
+.dpb .panel-pill.active{background:#1c5fa8;color:#fff;border-color:#1c5fa8;}
+.dpb .panel-pill-label{background:transparent;border:none;font-weight:600;font-size:13px;color:inherit;cursor:pointer;}
+.dpb .panel-pill-icon{background:transparent;border:none;display:flex;align-items:center;gap:2px;color:inherit;cursor:pointer;font-size:11px;font-weight:600;padding:2px 4px;border-radius:8px;}
+.dpb .panel-pill-icon:hover{background:rgba(28,95,168,0.15);}
+.dpb .panel-pill-icon.danger-confirm{color:#dc2626;font-weight:700;}
+.dpb .panel-add-btn{padding:6px 12px;font-size:12.5px;}
 
 .dpb .loading-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:10px;color:#6b7280;}
 .dpb .spin{animation:dpb-spin 1s linear infinite;}
@@ -468,7 +473,7 @@ function PanelModal({ mode, initial, activeDeptCount, departments, onSave, onClo
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
         <div className="modal-header">
-          <h3>{mode === 'add' ? 'নতুন দিন/প্যানেল যোগ করুন' : 'নাম পরিবর্তন করুন'}</h3>
+          <h3>{mode === 'add' ? 'নতুন দিন/প্যানেল যোগ করুন' : 'প্যানেল সম্পাদনা করুন'}</h3>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
         </div>
         <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
@@ -515,7 +520,7 @@ function PanelModal({ mode, initial, activeDeptCount, departments, onSave, onClo
   );
 }
 
-// ===================== PanelSwitcher =====================
+// ===================== PanelSwitcher (স্পষ্ট "এডিট" বাটনসহ) =====================
 function PanelSwitcher({ panels, activePanelId, onSwitch, onAdd, onRename, onDelete }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   useEffect(() => {
@@ -532,7 +537,17 @@ function PanelSwitcher({ panels, activePanelId, onSwitch, onAdd, onRename, onDel
           return (
             <div key={p.id} className={active ? 'panel-pill active' : 'panel-pill'}>
               <button className="panel-pill-label" onClick={() => onSwitch(p.id)}>{p.name || 'নামহীন'}</button>
-              <button className="panel-pill-icon" onClick={() => onRename(p)} title="নাম পরিবর্তন"><Pencil size={11} /></button>
+              
+              {/* এডিট বাটন (পপআপ ওপেন করার জন্য) */}
+              <button 
+                className="panel-pill-icon" 
+                onClick={() => onRename(p)} 
+                title="এডিট করুন (নাম পরিবর্তন)"
+                style={{ color: active ? '#fff' : '#1c5fa8', fontWeight: 'bold' }} 
+              >
+                <Pencil size={12} /> এডিট
+              </button>
+
               {panels.length > 1 ? (
                 <button
                   className={confirmDeleteId === p.id ? 'panel-pill-icon danger-confirm' : 'panel-pill-icon'}
