@@ -22,7 +22,6 @@ function makeDepartment(overrides) { return { id: uid(), name: '', icon: 'Stetho
 
 const DEFAULT_FOOTER = { address: 'বাকলিয়া এক্সেস রোড,\nবাকলিয়া, চট্টগ্রাম।', website: 'alafiyahhospital.com', logo: '/logo.png', contactLabel: 'সিরিয়ালের এবং তথ্যের জন্যে যোগাযোগ', phones: ['01886 776 512', '01886 776 513'] };
 
-// অতিথি (Guest) ইউজার ডিফল্ট সেটিং
 const GUEST_USER = { role: 'viewer', isGuest: true, name: 'অতিথি', approved: true };
 
 // ===================== CSS =====================
@@ -195,7 +194,7 @@ function SaveIndicator({ status }) {
   return <span className="save-indicator">{text}</span>;
 }
 
-// ===================== Auth Component =====================
+// ===================== Auth Component (ফিক্স করা হয়েছে) =====================
 function AuthPage({ onLogin, onClose }) {
   const [isRegister, setIsRegister] = useState(false);
   const [formData, setFormData] = useState({ name: '', password: '', designation: '' });
@@ -211,6 +210,7 @@ function AuthPage({ onLogin, onClose }) {
 
     if (name === defaultAdmin.username && pass === defaultAdmin.password) {
       onLogin({ ...defaultAdmin, username: name, isGuest: false });
+      onClose(); // 🔥 পপআপ বন্ধ হবে
       return;
     }
 
@@ -221,7 +221,9 @@ function AuthPage({ onLogin, onClose }) {
       const userData = querySnapshot.docs[0].data();
       if (userData.password !== pass) { setError('ভুল পাসওয়ার্ড!'); return; }
       if (!userData.approved) { setError('অ্যাকাউন্টটি এখনো এপ্রুভ হয়নি।'); return; }
+      
       onLogin({ ...userData, username: name, isGuest: false });
+      onClose(); // 🔥 পপআপ বন্ধ হবে
     } catch (e) { console.error(e); setError('লগইন করতে সমস্যা হয়েছে।'); }
   };
 
@@ -270,13 +272,13 @@ function AuthPage({ onLogin, onClose }) {
   );
 }
 
-// ===================== Admin Panel (এডিটর রোল যোগ করা হয়েছে) =====================
+// ===================== Admin Panel =====================
 function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
   return (
     <div className="edit-panel">
       <section className="panel-section">
         <div className="section-header"><label>ইউজার ম্যানেজমেন্ট</label></div>
-        <div className="section-hint">রেজিস্ট্রেশন করা ইউজারদের এপ্রুভ, রোল (Admin/Editor/Viewer) সেট ও ডিলেট করুন।</div>
+        <div className="section-hint">রেজিস্ট্রেশন করা ইউজারদের এপ্রুভ, রোল (Admin/Editor/Viewer) সেট ও ডিলিট করুন।</div>
         {users.length === 0 ? (
           <div className="empty-state">এখনো কোনো ইউজার রেজিস্ট্রেশন করে নি।</div>
         ) : (
@@ -484,7 +486,7 @@ function PreviewPanel({ panel, departments, checkedIds, footer }) {
   );
 }
 
-// ===================== Manage Doctors View (এডমিনদের জন্য) =====================
+// ===================== Manage Doctors View =====================
 function ManageDoctorsView({ departments, onAddDept, onEditDept, onDeleteDept, onAddDoctor, onEditDoctor, onDeleteDoctor, isAdmin }) {
   return (
     <div className="edit-panel">
@@ -614,6 +616,14 @@ export default function DoctorPanelBuilder() {
   const handleDeletePanel = async (panelId) => { if (panels.length <= 1) return; await deletePanelFromFirebase(panelId); const remaining = panels.filter(p => p.id !== panelId); setPanels(remaining); if (activePanelId === panelId) { setActivePanelId(remaining[0].id); setCheckedIds(new Set(remaining[0].activeDoctorIds || [])); } };
   const handleSavePanel = (fields) => { if (panelModal.mode === 'add') handleAddPanel(fields); else handleRenamePanel(fields); };
 
+  // 🔥 লগআউট ফাংশন (UI রিলোড করার জন্য)
+  const handleLogout = () => {
+    setUser(GUEST_USER);
+    setTimeout(() => {
+      window.location.reload();
+    }, 100);
+  };
+
   if (loading) { return (<div className="dpb"><style>{CSS}</style><div className="loading-screen"><Loader2 className="spin" size={26} /><span>লোড হচ্ছে...</span></div></div>); }
 
   return (
@@ -651,7 +661,7 @@ export default function DoctorPanelBuilder() {
           {isGuest ? (
             <button className="login-btn" onClick={() => setShowAuth(true)}>লগইন / রেজিস্ট্রেশন</button>
           ) : (
-            <button className="logout-btn" onClick={() => setUser(GUEST_USER)}><LogOut size={14} /> লগআউট</button>
+            <button className="logout-btn" onClick={handleLogout}><LogOut size={14} /> লগআউট</button>
           )}
 
         </div>
