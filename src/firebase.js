@@ -8,8 +8,10 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  addDoc,
   query,
   where,
+  onSnapshot, // 👈 যুক্ত করা হয়েছে
 } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -33,6 +35,8 @@ export {
   setDoc,
   updateDoc,
   deleteDoc,
+  addDoc,
   query,
   where,
+  onSnapshot, // 👈 যুক্ত করা হয়েছে
 };

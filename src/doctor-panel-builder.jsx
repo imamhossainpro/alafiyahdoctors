@@ -7,6 +7,8 @@ import {
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { db, doc, getDoc, setDoc, getDocs, collection, deleteDoc, updateDoc, query, where } from './firebase';
+import BookingSystem from './BookingSystem';
+import AdminDashboard from './components/AdminDashboard'; // 👈 সঠিক ইমপোর্ট
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const DAY_NAMES = ['শনিবার', 'রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার'];
@@ -26,12 +28,12 @@ const GUEST_USER = { role: 'viewer', isGuest: true, name: 'অতিথি', app
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700;800&display=swap');
 
-.dpb{font-family:'Hind Siliguri','Noto Sans Bengali',Arial,sans-serif;background:#f4f6fa;color:#1f2937;min-height:100vh;}
+.dpb{font-family:'Hind Siliguri','Noto Sans Bengali',Arial,sans-serif;background:#f4f6fa;color:#1f2937;min-height:100vh;width:100%;}
 .dpb *{box-sizing:border-box;}
 .dpb h1,.dpb h2,.dpb h3,.dpb p{margin:0;padding:0;}
 .dpb button{font-family:inherit;cursor:pointer;}
 
-.dpb .topbar{display:flex;align-items:center;justify-content:space-between;background:#ffffff;border-bottom:1px solid #e2e6ee;padding:14px 20px;position:sticky;top:0;z-index:20;flex-wrap:wrap;gap:10px;}
+.dpb .topbar{display:flex;align-items:center;justify-content:space-between;background:#ffffff;border-bottom:1px solid #e2e6ee;padding:14px 20px;position:sticky;top:0;z-index:20;flex-wrap:wrap;gap:10px;width:100%;}
 .dpb .topbar-title{display:flex;align-items:center;gap:8px;font-weight:700;font-size:17px;color:#154a82;}
 .dpb .topbar-right{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
 .dpb .save-indicator{font-size:12.5px;color:#6b7280;white-space:nowrap;}
@@ -40,6 +42,41 @@ const CSS = `
 .dpb .tabs{display:flex;background:#eef1f7;border-radius:10px;padding:3px;gap:2px;}
 .dpb .tab{border:none;background:transparent;padding:8px 16px;border-radius:8px;font-size:13.5px;font-weight:600;color:#6b7280;}
 .dpb .tab.active{background:#1c5fa8;color:#fff;}
+
+/* রোগী বুকিং বাটনের জন্য আকর্ষণীয় ডিজাইন */
+.dpb .tab.booking-tab {
+  background: linear-gradient(45deg, #0d9488, #14b8a6);
+  color: #fff;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(13, 148, 136, 0.3);
+  transition: all 0.3s ease;
+}
+
+.dpb .tab.booking-tab:hover {
+  background: linear-gradient(45deg, #0f766e, #0d9488);
+  box-shadow: 0 6px 15px rgba(13, 148, 136, 0.4);
+  transform: translateY(-1px);
+}
+
+.dpb .tab.booking-tab.active {
+  background: linear-gradient(45deg, #0f766e, #14b8a6);
+  box-shadow: 0 6px 15px rgba(13, 148, 136, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* বাটনের ভেতরের আইকন অ্যানিমেশন */
+.dpb .tab.booking-tab svg {
+  animation: pulse-booking 2s infinite;
+}
+
+@keyframes pulse-booking {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
 
 .dpb .panel-switcher{display:flex;align-items:center;gap:10px;padding:10px 20px;background:#fff;border-bottom:1px solid #e2e6ee;flex-wrap:wrap;position:sticky;top:57px;z-index:19;}
 .dpb .panel-switcher-scroll{display:flex;gap:6px;flex-wrap:wrap;flex:1;min-width:0;}
@@ -403,7 +440,6 @@ function PanelModal({ mode, initial, activeDeptCount, departments, onSave, onClo
   );
 }
 
-// PanelSwitcher now supports read-only mode for Viewers
 function PanelSwitcher({ panels, activePanelId, onSwitch, onAdd, onRename, onDelete, isReadOnly = false }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   useEffect(() => { if (!confirmDeleteId) return; const t = setTimeout(() => setConfirmDeleteId(null), 3000); return () => clearTimeout(t); }, [confirmDeleteId]);
@@ -469,7 +505,6 @@ function EditPanel({ panel, departments, footer, checkedIds, allChecked, onUpdat
 function DeptHeader({ dept }) { const Icon = ICONS[dept.icon] || ICONS.Stethoscope; return (<div className="dept-header-wrap"><span className="dept-icon-box" style={{ borderColor: dept.color }}><Icon size={19} color={dept.color} /></span><div className="dept-ribbon" style={{ background: dept.color }}><span>{dept.name}</span></div></div>); }
 function DoctorEntry({ doc, accentColor }) { return (<div className="doctor-entry" style={{ borderLeftColor: accentColor }}><div className="doctor-name">{doc.name}</div>{doc.quals ? <div className="doctor-quals">{doc.quals}</div> : null}{doc.specialty ? <div className="doctor-specialty">{doc.specialty}</div> : null}{doc.workplace ? <div className="doctor-workplace">{doc.workplace}</div> : null}{doc.time ? <div className="doctor-time">সাক্ষাতের সময়: <strong>{doc.time}</strong></div> : null}</div>); }
 
-// 🔥 আপডেটেড PreviewPanel (ব্যাক বাটন যোগ করা হয়েছে)
 function PreviewPanel({ panel, departments, checkedIds, footer, onBack }) {
   const printRef = useRef(null);
   const handlePrint = () => window.print();
@@ -508,7 +543,6 @@ function PreviewPanel({ panel, departments, checkedIds, footer, onBack }) {
   return (
     <div className="preview-wrap">
       <div className="preview-toolbar no-print">
-        {/* 🔥 ব্যাক বাটন (যদি onBack দেওয়া থাকে) */}
         {onBack && (
           <button className="btn btn-outline" onClick={onBack} style={{ marginRight: 'auto' }}>
             <ChevronLeft size={16} /> ব্যাক টু এডিট
@@ -764,10 +798,32 @@ export default function DoctorPanelBuilder() {
         <div className="topbar-title"><Stethoscope size={20} /><span>ডাক্তার প্যানেল</span></div>
         <div className="topbar-right">
           <div className="tabs">
+                        <button 
+              className={activeView === 'booking' ? 'tab booking-tab active' : 'tab booking-tab'} 
+              onClick={() => setActiveView('booking')}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                <line x1="16" y1="2" x2="16" y2="6"/>
+                <line x1="8" y1="2" x2="8" y2="6"/>
+                <line x1="3" y1="10" x2="21" y2="10"/>
+                <path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/>
+                <path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/>
+              </svg>
+              সিরিয়াল নিশ্চিত করুন
+            </button>
+            
             {isGuest && (<button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button>)}
             {!isGuest && user.role === 'viewer' && (<button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button>)}
             {!isGuest && user.role === 'editor' && (<><button className={activeView === 'edit' ? 'tab active' : 'tab'} onClick={() => setActiveView('edit')}>প্যানেল বিল্ডার</button><button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button></>)}
-            {!isGuest && user.role === 'admin' && (<><button className={activeView === 'doctors' ? 'tab active' : 'tab'} onClick={() => setActiveView('doctors')}>ডাক্তার লিস্ট</button><button className={activeView === 'edit' ? 'tab active' : 'tab'} onClick={() => setActiveView('edit')}>প্যানেল বিল্ডার</button><button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button><button className={activeView === 'admin' ? 'tab active' : 'tab'} onClick={() => setActiveView('admin')}>অ্যাডমিন প্যানেল</button></>)}
+            {!isGuest && user.role === 'admin' && (<>
+              <button className={activeView === 'doctors' ? 'tab active' : 'tab'} onClick={() => setActiveView('doctors')}>ডাক্তার লিস্ট</button>
+              <button className={activeView === 'edit' ? 'tab active' : 'tab'} onClick={() => setActiveView('edit')}>প্যানেল বিল্ডার</button>
+              <button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button>
+              <button className={activeView === 'admin' ? 'tab active' : 'tab'} onClick={() => setActiveView('admin')}>অ্যাডমিন প্যানেল</button>
+              {/* 👇 ড্যাশবোর্ড ট্যাব */}
+              <button className={activeView === 'dashboard' ? 'tab active' : 'tab'} onClick={() => setActiveView('dashboard')}>ড্যাশবোর্ড</button>
+            </>)}
           </div>
           {isGuest ? (<button className="login-btn" onClick={() => setShowAuth(true)}>লগইন / রেজিস্ট্রেশন</button>) : (<button className="logout-btn" onClick={handleLogout}><LogOut size={14} /> লগআউট</button>)}
         </div>
@@ -776,6 +832,8 @@ export default function DoctorPanelBuilder() {
       {(isGuest || (user && user.role === 'viewer')) && (
         <PanelSwitcher panels={panels} activePanelId={activePanelId} onSwitch={handleSwitchPanel} onAdd={() => {}} onRename={() => {}} onDelete={() => {}} isReadOnly={true} />
       )}
+
+      {activeView === 'booking' && (<BookingSystem departments={departments} />)}
 
       {activeView === 'preview' && (<PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} />)}
       {activeView === 'doctors' && isAdmin && (<ManageDoctorsView departments={departments} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={handleDeleteDept} onMoveDept={handleMoveDept} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={handleDeleteDoctor} onMoveDoctor={handleMoveDoctor} isAdmin={true} onRefreshData={handleRefreshData} />)}
@@ -790,6 +848,11 @@ export default function DoctorPanelBuilder() {
         </>
       )}
       {activeView === 'admin' && isAdmin && (<AdminPanel users={allUsers} onApprove={handleApprove} onSetRole={handleSetRole} onDeleteUser={handleDeleteUser} />)}
+      
+      {/* 👇 ড্যাশবোর্ড রেন্ডার */}
+      {activeView === 'dashboard' && isAdmin && (
+        <AdminDashboard />
+      )}
 
       {showAuth && <AuthPage onLogin={setUser} onClose={() => setShowAuth(false)} />}
       {deptModal && <DepartmentModal initial={deptModal.mode === 'edit' ? deptModal.dept : null} onSave={handleSaveDept} onClose={() => setDeptModal(null)} />}
