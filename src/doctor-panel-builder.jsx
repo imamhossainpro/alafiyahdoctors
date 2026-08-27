@@ -833,7 +833,7 @@ export default function DoctorPanelBuilder() {
         <PanelSwitcher panels={panels} activePanelId={activePanelId} onSwitch={handleSwitchPanel} onAdd={() => {}} onRename={() => {}} onDelete={() => {}} isReadOnly={true} />
       )}
 
-      {activeView === 'booking' && (<BookingSystem departments={departments} />)}
+      {activeView === 'booking' && (<BookingSystem departments={departments} panels={panels}/>)}
 
       {activeView === 'preview' && (<PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} />)}
       {activeView === 'doctors' && isAdmin && (<ManageDoctorsView departments={departments} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={handleDeleteDept} onMoveDept={handleMoveDept} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={handleDeleteDoctor} onMoveDoctor={handleMoveDoctor} isAdmin={true} onRefreshData={handleRefreshData} />)}
