@@ -67,6 +67,7 @@ const BookingCSS = `
   .section-title { font-size: 15px; font-weight: 700; color: #334155; display: flex; align-items: center; gap: 8px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #f1f5f9; }
   .form-group { margin-bottom: 15px; }
   .form-group label { display: block; font-size: 13.5px; font-weight: 600; color: #475569; margin-bottom: 6px; }
+  .required-asterisk { color: #dc2626; margin-left: 4px; }
   .input, .select, .textarea { width: 100%; padding: 12px 14px; border: 1.5px solid #cbd5e1; border-radius: 10px; font-size: 14px; font-family: inherit; color: #1e293b; background: #fff; transition: all 0.2s ease; box-sizing: border-box; }
   .input:focus, .select:focus, .textarea:focus { outline: none; border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15); }
   .textarea { resize: vertical; min-height: 80px; }
@@ -128,12 +129,16 @@ const BookingCSS = `
 
 export default function BookingSystem({ departments, panels, onBack }) {
   const [formData, setFormData] = useState({
-    name: '', age: '', mobile: '', gender: 'পুরুষ', 
-    address: '', // ✅ ঠিকানা ফেরত যোগ করা হয়েছে
-    referralSource: 'Walk-in / নিজে এসেছেন', // ✅ রেফারেল ফেরত যোগ করা হয়েছে
-    referredDoctorName: '', 
-    otherReferralNote: '', 
-    departmentId: '', doctorId: ''
+    name: '',
+    age: '',
+    mobile: '',
+    gender: 'পুরুষ',
+    address: '', // ✅ ঐচ্ছিক
+    referralSource: 'Walk-in / নিজে এসেছেন', // ✅ ঐচ্ছিক
+    referredDoctorName: '',
+    otherReferralNote: '',
+    departmentId: '',
+    doctorId: ''
   });
 
   const [selectedDate, setSelectedDate] = useState(getTodayString());
@@ -194,8 +199,13 @@ export default function BookingSystem({ departments, panels, onBack }) {
     e.preventDefault();
     setLoading(true); setSuccessMsg('');
     try {
+      // ✅ শুধু রিকোয়ার্ড ফিল্ডগুলো চেক করা হচ্ছে
+      if (!formData.name.trim()) throw new Error('রোগীর নাম লিখুন');
+      if (!formData.age.trim()) throw new Error('বয়স লিখুন');
+      if (!formData.mobile.trim()) throw new Error('মোবাইল নম্বর লিখুন');
       if (!selectedDoctor) throw new Error('ডাক্তার নির্বাচন করুন');
       if (!selectedDate) throw new Error('তারিখ নির্বাচন করুন');
+
       const counterRef = doc(db, 'counters', selectedDoctor.id);
       let serialNo = 1;
       const counterDoc = await getDoc(counterRef);
@@ -219,7 +229,7 @@ export default function BookingSystem({ departments, panels, onBack }) {
       setIsBooked(true);
     } catch (error) {
       console.error("Booking error:", error);
-      alert("বুকিং সম্পন্ন হয়নি। আবার চেষ্টা করুন।");
+      alert(error.message || "বুকিং সম্পন্ন হয়নি। আবার চেষ্টা করুন।");
     } finally { setLoading(false); }
   };
 
@@ -270,35 +280,35 @@ export default function BookingSystem({ departments, panels, onBack }) {
             </div>
 
             <div className="form-section">
-              <div className="section-title"><User size={18} /> রোগীর তথ্য</div>
+              <div className="section-title"><User size={18} /> রোগীর তথ্য <span className="required-asterisk">*</span></div>
               <div className="form-group">
-                <label>রোগীর নাম</label>
+                <label>রোগীর নাম <span className="required-asterisk">*</span></label>
                 <input type="text" className="input" name="name" value={formData.name} onChange={handleChange} required placeholder="আপনার পুরো নাম" />
               </div>
               <div className="form-group">
-                <label>বয়স (বাংলা বা ইংরেজি সংখ্যায়)</label>
+                <label>বয়স (বাংলা বা ইংরেজি সংখ্যায়) <span className="required-asterisk">*</span></label>
                 <input type="text" className="input" name="age" value={formData.age} onChange={handleChange} required placeholder="যেমনঃ ২৫ বা 25" />
               </div>
               <div className="form-group">
-                <label>মোবাইল নম্বর (বাংলা বা ইংরেজি সংখ্যায়)</label>
+                <label>মোবাইল নম্বর (বাংলা বা ইংরেজি সংখ্যায়) <span className="required-asterisk">*</span></label>
                 <input type="tel" className="input" name="mobile" value={formData.mobile} onChange={handleChange} required placeholder="যেমনঃ ০১৭১২৩৪৫৬৭৮ বা 01712345678" />
               </div>
               <div className="form-group">
-                <label>লিঙ্গ</label>
-                <select className="select" name="gender" value={formData.gender} onChange={handleChange}>
+                <label>লিঙ্গ <span className="required-asterisk">*</span></label>
+                <select className="select" name="gender" value={formData.gender} onChange={handleChange} required>
                   <option value="পুরুষ">পুরুষ</option>
                   <option value="মহিলা">মহিলা</option>
                   <option value="অন্যান্য">অন্যান্য</option>
                 </select>
               </div>
               <div className="form-group">
-                <label>বর্তমান ঠিকানা</label> {/* ✅ ঠিকানা ফেরত */}
-                <textarea className="textarea" name="address" value={formData.address} onChange={handleChange} required placeholder="আপনার বর্তমান ঠিকানা লিখুন (রোড, বাড়ি, এলাকা, জেলা)" />
+                <label>বর্তমান ঠিকানা (ঐচ্ছিক)</label>
+                <textarea className="textarea" name="address" value={formData.address} onChange={handleChange} placeholder="আপনার বর্তমান ঠিকানা লিখুন (যদি ইচ্ছা)" />
               </div>
             </div>
 
             <div className="form-section">
-              <div className="section-title"><MapPin size={18} /> রেফারেল তথ্য</div> {/* ✅ রেফারেল ফেরত */}
+              <div className="section-title"><MapPin size={18} /> রেফারেল তথ্য (ঐচ্ছিক)</div>
               <div className="form-group">
                 <label>রোগী কীভাবে/কার মাধ্যমে এসেছেন?</label>
                 <select className="select" name="referralSource" value={formData.referralSource} onChange={handleChange}>
@@ -332,7 +342,7 @@ export default function BookingSystem({ departments, panels, onBack }) {
             </div>
 
             <div className="form-section">
-              <div className="section-title"><Stethoscope size={18} /> অ্যাপয়েন্টমেন্ট ডাক্তার নির্বাচন</div>
+              <div className="section-title"><Stethoscope size={18} /> অ্যাপয়েন্টমেন্ট ডাক্তার নির্বাচন <span className="required-asterisk">*</span></div>
               
               <div className="form-group">
                 <label>বিভাগ নির্বাচন করুন</label>
@@ -345,7 +355,7 @@ export default function BookingSystem({ departments, panels, onBack }) {
               </div>
 
               <div className="form-group">
-                <label>ডাক্তার নির্বাচন করুন ({selectedDayName})</label>
+                <label>ডাক্তার নির্বাচন করুন ({selectedDayName}) <span className="required-asterisk">*</span></label>
                 <div className="doctor-options">
                   {filteredDoctors.length === 0 ? (
                     <div style={{ padding: '15px', textAlign: 'center', color: '#64748b', fontSize: '14px' }}>
@@ -372,23 +382,21 @@ export default function BookingSystem({ departments, panels, onBack }) {
               </div>
             </div>
 
-            {(formData.name || selectedDoctor || formData.referralSource) && (
-              <div className="summary-box">
-                <div className="section-title" style={{ borderBottom: 'none', marginBottom: '10px', paddingBottom: '0' }}>বুকিং সামারি</div>
-                <div className="summary-row"><span className="summary-label">তারিখ:</span><span className="summary-value">{selectedDate} ({selectedDayName})</span></div>
-                <div className="summary-row"><span className="summary-label">রোগীর নাম:</span><span className="summary-value">{formData.name || '-'}</span></div>
-                <div className="summary-row"><span className="summary-label">মোবাইল:</span><span className="summary-value">{formData.mobile || '-'}</span></div>
-                <div className="summary-row"><span className="summary-label">ঠিকানা:</span><span className="summary-value">{formData.address || '-'}</span></div>
-                <div className="summary-row"><span className="summary-label">নির্বাচিত ডাক্তার:</span><span className="summary-value">{selectedDoctor?.name || '-'}</span></div>
-                <div className="summary-row"><span className="summary-label">রেফারেল সোর্স:</span><span className="summary-value">{formData.referralSource || '-'}</span></div>
-                {formData.referredDoctorName && (
-                  <div className="summary-row"><span className="summary-label">রেফারিং ডাক্তার:</span><span className="summary-value">{formData.referredDoctorName}</span></div>
-                )}
-                {formData.otherReferralNote && (
-                  <div className="summary-row"><span className="summary-label">অন্যান্য নোট:</span><span className="summary-value">{formData.otherReferralNote}</span></div>
-                )}
-              </div>
-            )}
+            <div className="summary-box">
+              <div className="section-title" style={{ borderBottom: 'none', marginBottom: '10px', paddingBottom: '0' }}>বুকিং সামারি</div>
+              <div className="summary-row"><span className="summary-label">তারিখ:</span><span className="summary-value">{selectedDate} ({selectedDayName})</span></div>
+              <div className="summary-row"><span className="summary-label">রোগীর নাম:</span><span className="summary-value">{formData.name || '-'}</span></div>
+              <div className="summary-row"><span className="summary-label">মোবাইল:</span><span className="summary-value">{formData.mobile || '-'}</span></div>
+              <div className="summary-row"><span className="summary-label">ঠিকানা:</span><span className="summary-value">{formData.address || '-'}</span></div>
+              <div className="summary-row"><span className="summary-label">নির্বাচিত ডাক্তার:</span><span className="summary-value">{selectedDoctor?.name || '-'}</span></div>
+              <div className="summary-row"><span className="summary-label">রেফারেল সোর্স:</span><span className="summary-value">{formData.referralSource || '-'}</span></div>
+              {formData.referredDoctorName && (
+                <div className="summary-row"><span className="summary-label">রেফারিং ডাক্তার:</span><span className="summary-value">{formData.referredDoctorName}</span></div>
+              )}
+              {formData.otherReferralNote && (
+                <div className="summary-row"><span className="summary-label">অন্যান্য নোট:</span><span className="summary-value">{formData.otherReferralNote}</span></div>
+              )}
+            </div>
 
             <button type="submit" className="submit-btn" disabled={loading}>
               {loading ? <Loader2 className="spin" size={18} /> : <Send size={18} />} 

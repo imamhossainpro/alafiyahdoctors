@@ -4,6 +4,125 @@ import {
   BarChart, Bar, PieChart, Pie, Cell, Legend, LabelList
 } from 'recharts';
 
+// ---------- অটোমেটিক লোকেশন গ্রুপিং ইউটিলিটি (আগের মতো) ----------
+const banglaToEnglishMap = {
+  'অ': 'o', 'আ': 'a', 'ই': 'i', 'ঈ': 'i', 'উ': 'u', 'ঊ': 'u',
+  'ঋ': 'ri', 'এ': 'e', 'ঐ': 'oi', 'ও': 'o', 'ঔ': 'ou',
+  'ক': 'k', 'খ': 'kh', 'গ': 'g', 'ঘ': 'gh', 'ঙ': 'ng',
+  'চ': 'ch', 'ছ': 'chh', 'জ': 'j', 'ঝ': 'jh', 'ঞ': 'n',
+  'ট': 't', 'ঠ': 'th', 'ড': 'd', 'ঢ': 'dh', 'ণ': 'n',
+  'ত': 't', 'থ': 'th', 'দ': 'd', 'ধ': 'dh', 'ন': 'n',
+  'প': 'p', 'ফ': 'ph', 'ব': 'b', 'ভ': 'bh', 'ম': 'm',
+  'য': 'y', 'র': 'r', 'ল': 'l', 'শ': 'sh', 'ষ': 'sh',
+  'স': 's', 'হ': 'h', 'ড়': 'r', 'ঢ়': 'rh', 'য়': 'y',
+  'া': 'a', 'ি': 'i', 'ী': 'i', 'ু': 'u', 'ূ': 'u',
+  'ৃ': 'ri', 'ে': 'e', 'ৈ': 'oi', 'ো': 'o', 'ৌ': 'ou',
+  'ং': 'ng', 'ঃ': 'h', 'ঁ': 'n'
+};
+
+const transliterateBangla = (str) => {
+  let result = '';
+  for (const char of str) {
+    result += banglaToEnglishMap[char] || char;
+  }
+  return result;
+};
+
+const cleanText = (str) => {
+  return str
+    .toLowerCase()
+    .replace(/[\s\-_]+/g, '')
+    .normalize('NFKC');
+};
+
+const removeSuffixes = (str) => {
+  const suffixes = [
+    'রোড', 'এক্সেস রোড', 'access road', 'road', 'bazar', 'hat', 'more', 'mor',
+    'শাহ', 'shah', 'সিটি', 'city', 'জেলা', 'district', 'থানা', 'upazila',
+    'পৌরসভা', 'municipality', 'corporation', 'কলোনি', 'colony', 'আবাসিক', 'residential',
+    'লেন', 'সড়ক', 'আলি', 'হাউস', 'বাড়ি', 'রোড', 'এক্সেস'
+  ];
+  let cleaned = str;
+  for (const suf of suffixes) {
+    const regex = new RegExp(`\\s*${suf}\\s*$`, 'i');
+    cleaned = cleaned.replace(regex, '');
+  }
+  return cleaned.trim();
+};
+
+const normalizeLocation = (raw) => {
+  if (!raw) return '';
+  let cleaned = raw.trim();
+  const hasBangla = /[\u0980-\u09FF]/.test(cleaned);
+  if (hasBangla) {
+    cleaned = transliterateBangla(cleaned);
+  }
+  cleaned = cleanText(cleaned);
+  cleaned = removeSuffixes(cleaned);
+  return cleaned;
+};
+
+const getBigrams = (str) => {
+  const bigrams = [];
+  for (let i = 0; i < str.length - 1; i++) {
+    bigrams.push(str.substring(i, i + 2));
+  }
+  return bigrams;
+};
+
+const jaccardSimilarity = (str1, str2) => {
+  if (!str1 || !str2) return 0;
+  const bigrams1 = new Set(getBigrams(str1));
+  const bigrams2 = new Set(getBigrams(str2));
+  const intersection = new Set([...bigrams1].filter(x => bigrams2.has(x)));
+  const union = new Set([...bigrams1, ...bigrams2]);
+  return intersection.size / (union.size || 1);
+};
+
+const groupLocationsAutomatically = (rawLocations) => {
+  const valid = rawLocations.filter(loc => loc && loc.trim().length > 0);
+  if (valid.length === 0) return [];
+
+  const normalized = valid.map(loc => ({
+    raw: loc,
+    normalized: normalizeLocation(loc)
+  }));
+
+  const groups = [];
+  const used = new Set();
+
+  for (let i = 0; i < normalized.length; i++) {
+    if (used.has(i)) continue;
+    const group = {
+      items: [normalized[i].raw],
+      normalizedKeys: [normalized[i].normalized]
+    };
+    used.add(i);
+
+    for (let j = i + 1; j < normalized.length; j++) {
+      if (used.has(j)) continue;
+      const sim = jaccardSimilarity(normalized[i].normalized, normalized[j].normalized);
+      if (sim > 0.6) {
+        group.items.push(normalized[j].raw);
+        group.normalizedKeys.push(normalized[j].normalized);
+        used.add(j);
+      }
+    }
+    groups.push(group);
+  }
+
+  const result = groups.map(group => {
+    const freq = {};
+    group.items.forEach(item => { freq[item] = (freq[item] || 0) + 1; });
+    const canonical = Object.keys(freq).reduce((a, b) => freq[a] > freq[b] ? a : b);
+    return { canonical, count: group.items.length };
+  });
+
+  result.sort((a, b) => b.count - a.count);
+  return result;
+};
+
+// ---------- রঙ ও স্টাইল ----------
 const COLORS = ['#1c5fa8', '#2f9e52', '#9c3a9c', '#d1392f', '#0e8ca3', '#e0653a', '#4438ab'];
 
 const styles = {
@@ -25,7 +144,9 @@ const CSSString = `
   @media (max-width: 900px) { .overview-main-grid { grid-template-columns: 1fr; } }
 `;
 
+// ---------- মূল কম্পোনেন্ট ----------
 export default function Overview({ appointments }) {
+  // ---------- ডেটা প্রসেসিং ----------
   const total = appointments.length;
   const pending = appointments.filter(a => a.status === 'pending').length;
   const confirmed = appointments.filter(a => a.status === 'confirmed').length;
@@ -53,34 +174,28 @@ export default function Overview({ appointments }) {
   const ageGroups = { '০-১২': 0, '১৩-২০': 0, '২১-৩০': 0, '৩১-৪০': 0, '৪১-৫০': 0, '৫০+': 0 };
   appointments.forEach(a => {
     if (a.age) {
-      if (a.age <= 12) ageGroups['০-১২']++;
-      else if (a.age <= 20) ageGroups['১৩-২০']++;
-      else if (a.age <= 30) ageGroups['২১-৩০']++;
-      else if (a.age <= 40) ageGroups['৩১-৪০']++;
-      else if (a.age <= 50) ageGroups['৪১-৫০']++;
+      const age = Number(a.age);
+      if (age <= 12) ageGroups['০-১২']++;
+      else if (age <= 20) ageGroups['১৩-২০']++;
+      else if (age <= 30) ageGroups['২১-৩০']++;
+      else if (age <= 40) ageGroups['৩১-৪০']++;
+      else if (age <= 50) ageGroups['৪১-৫০']++;
       else ageGroups['৫০+']++;
     }
   });
   const ageData = Object.entries(ageGroups).map(([name, count]) => ({ name, count }));
 
-  // রেফারেল ডেটা (✅ ফেরত)
+  // রেফারেল ডেটা
   const referralCounts = {};
   appointments.forEach(a => { const src = a.referralSource || 'Unknown'; referralCounts[src] = (referralCounts[src] || 0) + 1; });
   const referralData = Object.entries(referralCounts).map(([name, value]) => ({ name, value }));
 
-  // লোকেশন ডেটা (✅ ফেরত)
-  const locationCounts = {};
-  appointments.forEach(a => {
-    if (a.address) {
-      const parts = a.address.split(',').map(s => s.trim()).filter(Boolean);
-      const location = parts.length > 0 ? parts[parts.length - 1] : 'Unknown';
-      locationCounts[location] = (locationCounts[location] || 0) + 1;
-    } else {
-      locationCounts['Unknown'] = (locationCounts['Unknown'] || 0) + 1;
-    }
-  });
-  const locationData = Object.entries(locationCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+  // ---------- লোকেশন ডেটা - অটোমেটিক গ্রুপিং ----------
+  const rawLocations = appointments.map(a => a.address).filter(Boolean);
+  const groupedLocations = groupLocationsAutomatically(rawLocations);
+  const locationData = groupedLocations.map(({ canonical, count }) => ({ name: canonical, count }));
 
+  // ---------- স্ট্যাটাস ডেটা ----------
   const statusData = [
     { name: 'Pending', value: pending },
     { name: 'Confirmed', value: confirmed },
@@ -90,14 +205,36 @@ export default function Overview({ appointments }) {
     { name: 'No-show', value: noShow }
   ];
 
-  const last7Days = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const dayStr = d.toISOString().split('T')[0];
-    const dayName = d.toLocaleDateString('bn-BD', { weekday: 'short' });
-    last7Days.push({ name: dayName, count: appointments.filter(a => a.bookingDate === dayStr).length });
-  }
+  // 🔥 সিরিয়াল ট্রেন্ড (গত ৭ দিন) - ফিক্সড
+  const getLast7Days = () => {
+    const days = [];
+    const today = new Date();
+    const banglaDays = ['রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহঃ', 'শুক্র', 'শনি'];
+    
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+      
+      const dayIndex = d.getDay();
+      const dayName = banglaDays[dayIndex === 0 ? 6 : dayIndex - 1];
+      
+      const count = appointments.filter(a => a.bookingDate === dateStr).length;
+      
+      days.push({ 
+        name: dayName, 
+        date: dateStr,
+        count: count 
+      });
+    }
+    return days;
+  };
+
+  const last7Days = getLast7Days();
 
   const renderLegend = (value, entry) => {
     const totalValue = entry.payload.value;
@@ -192,7 +329,7 @@ export default function Overview({ appointments }) {
         </div>
       </div>
 
-      {/* Referral & Location Charts (✅ ফেরত) */}
+      {/* Referral & Location */}
       <div className="overview-main-grid">
         <div style={styles.chartCard}>
           <h4 style={styles.chartTitle}>রেফারেল সোর্স</h4>
@@ -208,7 +345,7 @@ export default function Overview({ appointments }) {
         </div>
 
         <div style={styles.chartCard}>
-          <h4 style={styles.chartTitle}>লোকেশনভিত্তিক রোগী (জেলা/শহর)</h4>
+          <h4 style={styles.chartTitle}>লোকেশনভিত্তিক রোগী (অটোমেটিক গ্রুপকৃত)</h4>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={locationData} layout="vertical" margin={{ left: 20 }}>
               <CartesianGrid strokeDasharray="3 3" horizontal={false} />
