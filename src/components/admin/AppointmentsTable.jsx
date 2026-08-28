@@ -135,12 +135,13 @@ export default function AppointmentsTable({ appointments, onStatusChange, onArch
               <th style={{ padding: '12px' }}>মোবাইল</th>
               <th style={{ padding: '12px' }}>বুকিং তারিখ</th>
               <th style={{ padding: '12px' }}>ডাক্তার</th>
+              <th style={{ padding: '12px' }}>রেফারেল</th> {/* ✅ ফেরত */}
               <th style={{ padding: '12px' }}>স্ট্যাটাস</th>
               <th style={{ padding: '12px' }}>অ্যাকশন</th>
             </tr>
           </thead>
           <tbody>
-            {filteredAppointments.length === 0 && <tr><td colSpan="8" style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>কোনো বুকিং পাওয়া যায়নি</td></tr>}
+            {filteredAppointments.length === 0 && <tr><td colSpan="9" style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>কোনো বুকিং পাওয়া যায়নি</td></tr>}
             {filteredAppointments.map((appt) => (
               <tr key={appt.id} style={{ borderBottom: '1px solid #eee', color: '#334155' }}>
                 <td style={{ padding: '12px', fontWeight: 'bold' }}>{appt.serialNo}</td>
@@ -149,6 +150,7 @@ export default function AppointmentsTable({ appointments, onStatusChange, onArch
                 <td style={{ padding: '12px' }}>{appt.mobile}</td>
                 <td style={{ padding: '12px' }}>{appt.bookingDate} ({appt.bookingDay})</td>
                 <td style={{ padding: '12px' }}>{appt.doctorName}<br/><small style={{ color: '#64748b' }}>{appt.doctorDept}</small></td>
+                <td style={{ padding: '12px' }}>{appt.referralSource || '-'}<br/>{appt.referredDoctorName && <small style={{ color: '#64748b' }}>{appt.referredDoctorName}</small>}</td>
                 <td style={{ padding: '12px' }}><StatusBadge status={appt.status || 'pending'} /></td>
                 <td style={{ padding: '12px', display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>{renderActions(appt)}</td>
               </tr>
@@ -186,7 +188,7 @@ export default function AppointmentsTable({ appointments, onStatusChange, onArch
         </div>
       )}
 
-      {/* রোগীর বিস্তারিত তথ্য দেখার মোডাল (ঠিকানা ও রেফারেল বাদ) */}
+      {/* রোগীর বিস্তারিত তথ্য (ঠিকানা ও রেফারেল ফেরত) */}
       {viewDetails && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0, 0, 0, 0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} onClick={() => setViewDetails(null)}>
           <div style={{ background: '#fff', borderRadius: '12px', maxWidth: '500px', width: '100%', padding: '24px', position: 'relative', maxHeight: '80vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
@@ -197,10 +199,13 @@ export default function AppointmentsTable({ appointments, onStatusChange, onArch
               <div><strong style={{ color: '#64748b', fontSize: '13px' }}>বয়স:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.age || '-'}</span></div>
               <div><strong style={{ color: '#64748b', fontSize: '13px' }}>মোবাইল:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.mobile}</span></div>
               <div><strong style={{ color: '#64748b', fontSize: '13px' }}>লিঙ্গ:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.gender || '-'}</span></div>
+              <div style={{ gridColumn: '1 / -1' }}><strong style={{ color: '#64748b', fontSize: '13px' }}>ঠিকানা:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.address || '-'}</span></div>
               <div><strong style={{ color: '#64748b', fontSize: '13px' }}>বুকিং তারিখ:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.bookingDate} ({viewDetails.bookingDay})</span></div>
               <div><strong style={{ color: '#64748b', fontSize: '13px' }}>সিরিয়াল:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.serialNo}</span></div>
               <div><strong style={{ color: '#64748b', fontSize: '13px' }}>ডাক্তার:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.doctorName}</span></div>
               <div><strong style={{ color: '#64748b', fontSize: '13px' }}>বিভাগ:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.doctorDept}</span></div>
+              <div><strong style={{ color: '#64748b', fontSize: '13px' }}>রেফারেল সোর্স:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.referralSource || '-'}</span></div>
+              {viewDetails.referredDoctorName && <div style={{ gridColumn: '1 / -1' }}><strong style={{ color: '#64748b', fontSize: '13px' }}>রেফারিং ডাক্তার:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.referredDoctorName}</span></div>}
               <div style={{ gridColumn: '1 / -1' }}><strong style={{ color: '#64748b', fontSize: '13px' }}>স্ট্যাটাস:</strong><br/><StatusBadge status={viewDetails.status || 'pending'} /></div>
             </div>
           </div>

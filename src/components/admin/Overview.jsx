@@ -39,7 +39,7 @@ export default function Overview({ appointments }) {
   const noShowRate = total > 0 ? (noShow / total) * 100 : 0;
   const cancellationRate = total > 0 ? (cancelled / total) * 100 : 0;
 
-  // ডাক্তারভিত্তিক ডেটা (লিডারবোর্ড)
+  // ডাক্তারভিত্তিক ডেটা
   const doctorCounts = {};
   appointments.forEach(a => { doctorCounts[a.doctorName] = (doctorCounts[a.doctorName] || 0) + 1; });
   const doctorData = Object.entries(doctorCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
@@ -63,7 +63,24 @@ export default function Overview({ appointments }) {
   });
   const ageData = Object.entries(ageGroups).map(([name, count]) => ({ name, count }));
 
-  // স্ট্যাটাস ডেটা
+  // রেফারেল ডেটা (✅ ফেরত)
+  const referralCounts = {};
+  appointments.forEach(a => { const src = a.referralSource || 'Unknown'; referralCounts[src] = (referralCounts[src] || 0) + 1; });
+  const referralData = Object.entries(referralCounts).map(([name, value]) => ({ name, value }));
+
+  // লোকেশন ডেটা (✅ ফেরত)
+  const locationCounts = {};
+  appointments.forEach(a => {
+    if (a.address) {
+      const parts = a.address.split(',').map(s => s.trim()).filter(Boolean);
+      const location = parts.length > 0 ? parts[parts.length - 1] : 'Unknown';
+      locationCounts[location] = (locationCounts[location] || 0) + 1;
+    } else {
+      locationCounts['Unknown'] = (locationCounts['Unknown'] || 0) + 1;
+    }
+  });
+  const locationData = Object.entries(locationCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+
   const statusData = [
     { name: 'Pending', value: pending },
     { name: 'Confirmed', value: confirmed },
@@ -175,7 +192,38 @@ export default function Overview({ appointments }) {
         </div>
       </div>
 
-      {/* Department & Age & Doctor */}
+      {/* Referral & Location Charts (✅ ফেরত) */}
+      <div className="overview-main-grid">
+        <div style={styles.chartCard}>
+          <h4 style={styles.chartTitle}>রেফারেল সোর্স</h4>
+          <ResponsiveContainer width="100%" height={250}>
+            <PieChart>
+              <Pie data={referralData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={5}>
+                {referralData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+              </Pie>
+              <Tooltip />
+              <Legend verticalAlign="bottom" height={36} formatter={renderLegend} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div style={styles.chartCard}>
+          <h4 style={styles.chartTitle}>লোকেশনভিত্তিক রোগী (জেলা/শহর)</h4>
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart data={locationData} layout="vertical" margin={{ left: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+              <XAxis type="number" tick={{ fontSize: 12 }} />
+              <YAxis type="category" dataKey="name" width={150} interval={0} tick={{ fontSize: 12, fill: '#334155' }} />
+              <Tooltip />
+              <Bar dataKey="count" fill="#d97706" radius={[0, 5, 5, 0]} barSize={20}>
+                <LabelList dataKey="count" position="right" style={{ fontSize: 12, fill: '#475569' }} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Department, Age, Doctor Leaderboard */}
       <div className="overview-main-grid">
         <div style={styles.chartCard}>
           <h4 style={styles.chartTitle}>বিভাগভিত্তিক রোগী (Department-wise)</h4>
