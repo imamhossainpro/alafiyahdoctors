@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Plus, Ear, Trash2, Pencil, Printer, X, ChevronUp, ChevronDown, ChevronLeft, MapPin, Globe, Phone, Loader2,
   Stethoscope, Scissors, Heart, Baby, Bone, Syringe, Pill, Activity, Brain, Eye, Utensils, Smile, Sparkles, User, Droplet, Thermometer, LogOut,
@@ -9,6 +10,8 @@ import jsPDF from 'jspdf';
 import { db, doc, getDoc, setDoc, getDocs, collection, deleteDoc, updateDoc, query, where } from './firebase';
 import BookingSystem from './BookingSystem';
 import AdminDashboard from './components/AdminDashboard';
+import NotificationBell from './components/NotificationBell';
+import NotFoundPage from './components/NotFoundPage'; // 👈 নতুন ইমপোর্ট
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const DAY_NAMES = ['শনিবার', 'রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার'];
@@ -580,10 +583,23 @@ function ManageDoctorsView({ departments, onAddDept, onEditDept, onDeleteDept, o
 
 // ===================== MAIN COMPONENT =====================
 export default function DoctorPanelBuilder() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  const path = location.pathname;
+  const activeView = path === '/' ? 'preview' : path.substring(1);
+  
+  const setActiveView = (view) => {
+    if (view === 'preview' || view === '') {
+      navigate('/');
+    } else {
+      navigate(`/${view}`);
+    }
+  };
+
   const [user, setUser] = useState(GUEST_USER);
   const [showAuth, setShowAuth] = useState(false);
   const [allUsers, setAllUsers] = useState([]);
-  const [activeView, setActiveView] = useState('preview');
   const [departments, setDepartments] = useState([]);
   const [panels, setPanels] = useState([]);
   const [activePanelId, setActivePanelId] = useState(null);
@@ -604,6 +620,17 @@ export default function DoctorPanelBuilder() {
   const isEditor = user?.role === 'editor';
   const isViewer = user?.role === 'viewer';
   const isGuest = user?.isGuest === true;
+
+  // 🔥 অ্যাক্সেস নিয়ন্ত্রণ (404 চেক)
+  const getIsAuthorized = () => {
+    if (path === '/' || path === '/booking' || path === '/display' || path === '/preview') {
+      return true;
+    }
+    if (path === '/edit' && (isEditor || isSubAdmin || isAdmin)) return true;
+    if ((path === '/dashboard' || path === '/doctors') && (isSubAdmin || isAdmin)) return true;
+    if (path === '/admin' && isAdmin) return true;
+    return false;
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -786,6 +813,11 @@ export default function DoctorPanelBuilder() {
 
   if (loading) { return (<div className="dpb"><style>{CSS}</style><div className="loading-screen"><Loader2 className="spin" size={26} /><span>লোড হচ্ছে...</span></div></div>); }
 
+  // 🔥 যদি অ্যাক্সেস না থাকে, 404 পেইজ দেখানো হবে
+  if (!getIsAuthorized()) {
+    return <NotFoundPage />;
+  }
+
   return (
     <div className="dpb">
       <style>{CSS}</style>
@@ -821,6 +853,9 @@ export default function DoctorPanelBuilder() {
             )}
             {isAdmin && (<button className={activeView === 'admin' ? 'tab active' : 'tab'} onClick={() => setActiveView('admin')}>অ্যাডমিন প্যানেল</button>)}
           </div>
+          
+          <NotificationBell user={user} />
+          
           {isGuest ? (<button className="login-btn" onClick={() => setShowAuth(true)}>লগইন / রেজিস্ট্রেশন</button>) : (<button className="logout-btn" onClick={handleLogout}><LogOut size={14} /> লগআউট</button>)}
         </div>
       </div>
@@ -829,7 +864,7 @@ export default function DoctorPanelBuilder() {
         <PanelSwitcher panels={panels} activePanelId={activePanelId} onSwitch={handleSwitchPanel} onAdd={() => {}} onRename={() => {}} onDelete={() => {}} isReadOnly={true} />
       )}
 
-      {activeView === 'booking' && (<BookingSystem departments={departments} panels={panels}/>)}
+      {activeView === 'booking' && (<BookingSystem departments={departments} panels={panels} onBack={() => setActiveView('preview')} />)}
 
       {activeView === 'preview' && (<PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} />)}
       {activeView === 'doctors' && (isAdmin || isSubAdmin) && (
