@@ -6,6 +6,8 @@ import {
 } from '../services/appointmentService';
 import Overview from './admin/Overview';
 import AppointmentsTable from './admin/AppointmentsTable';
+import MarketingTeamManager from './admin/MarketingTeamManager';
+import MarketingReport from './admin/MarketingReport';
 
 export default function AdminDashboard({ user }) {
   const today = new Date().toISOString().split('T')[0];
@@ -17,10 +19,13 @@ export default function AdminDashboard({ user }) {
   const [showArchived, setShowArchived] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // মার্কেটিং টিম স্টেট (অবজেক্ট অ্যারে)
+  const [marketingTeam, setMarketingTeam] = useState([]);
+
   // ডেট ফিল্টার স্টেট
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
-  const [filterPreset, setFilterPreset] = useState('today'); // 'today', 'week', 'month', 'year', 'custom'
+  const [filterPreset, setFilterPreset] = useState('today');
 
   const isAdmin = user?.role === 'admin';
   const isSubAdmin = user?.role === 'sub-admin';
@@ -64,7 +69,6 @@ export default function AdminDashboard({ user }) {
         start.setFullYear(now.getFullYear() - 1);
         break;
       case 'custom':
-        // কাস্টম রেঞ্জ ইউজার সেট করবে, এখানে কিছু করব না
         return;
       default:
         start = new Date(now);
@@ -74,7 +78,6 @@ export default function AdminDashboard({ user }) {
     setEndDate(now.toISOString().split('T')[0]);
   };
 
-  // ডেট পিকার পরিবর্তন হলে প্রিসেট সেট করা
   const handleStartDateChange = (e) => {
     setStartDate(e.target.value);
     setFilterPreset('custom');
@@ -157,132 +160,139 @@ export default function AdminDashboard({ user }) {
           <button onClick={() => { setShowArchived(false); setTab('overview'); }} style={{ padding: '8px 16px', background: tab === 'overview' && !showArchived ? '#1c5fa8' : '#ffffff', color: tab === 'overview' && !showArchived ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>পরিসংখ্যান</button>
           <button onClick={() => { setShowArchived(false); setTab('appointments'); }} style={{ padding: '8px 16px', background: tab === 'appointments' && !showArchived ? '#1c5fa8' : '#ffffff', color: tab === 'appointments' && !showArchived ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>বুকিং লিস্ট</button>
           
+          {/* মার্কেটিং রিপোর্ট ট্যাব */}
+          {(isAdmin || isSubAdmin) && (
+            <button onClick={() => { setShowArchived(false); setTab('marketing'); }} style={{ padding: '8px 16px', background: tab === 'marketing' ? '#1c5fa8' : '#ffffff', color: tab === 'marketing' ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>মার্কেটিং রিপোর্ট</button>
+          )}
+          
           {isAdmin && <button onClick={() => setTab('logs')} style={{ padding: '8px 16px', background: tab === 'logs' ? '#1c5fa8' : '#ffffff', color: tab === 'logs' ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>Activity Log</button>}
           
           <button onClick={() => { setShowArchived(!showArchived); setTab('appointments'); }} style={{ padding: '8px 16px', background: showArchived ? '#374151' : '#ffffff', color: showArchived ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>{showArchived ? 'Active List' : 'Archived'}</button>
         </div>
       </div>
 
-      {/* ---------- 📅 ফিল্টার সেকশন (প্রিসেট + ডেট পিকার) ---------- */}
-      <div style={{ 
-        background: '#ffffff', 
-        padding: '15px 20px', 
-        borderRadius: '10px', 
-        border: '1px solid #e2e8f0', 
-        marginBottom: '20px',
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        gap: '12px'
-      }}>
-        {/* প্রিসেট বাটন */}
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button 
-            onClick={() => applyPreset('today')} 
-            style={{ 
-              padding: '6px 14px', 
-              background: filterPreset === 'today' ? '#1c5fa8' : '#f1f5f9', 
-              color: filterPreset === 'today' ? '#fff' : '#334155', 
-              border: 'none', 
-              borderRadius: '6px', 
-              cursor: 'pointer', 
-              fontWeight: '600', 
-              fontSize: '13px' 
-            }}
-          >
-            আজ
-          </button>
-          <button 
-            onClick={() => applyPreset('week')} 
-            style={{ 
-              padding: '6px 14px', 
-              background: filterPreset === 'week' ? '#1c5fa8' : '#f1f5f9', 
-              color: filterPreset === 'week' ? '#fff' : '#334155', 
-              border: 'none', 
-              borderRadius: '6px', 
-              cursor: 'pointer', 
-              fontWeight: '600', 
-              fontSize: '13px' 
-            }}
-          >
-            গত ৭ দিন
-          </button>
-          <button 
-            onClick={() => applyPreset('month')} 
-            style={{ 
-              padding: '6px 14px', 
-              background: filterPreset === 'month' ? '#1c5fa8' : '#f1f5f9', 
-              color: filterPreset === 'month' ? '#fff' : '#334155', 
-              border: 'none', 
-              borderRadius: '6px', 
-              cursor: 'pointer', 
-              fontWeight: '600', 
-              fontSize: '13px' 
-            }}
-          >
-            গত ১ মাস
-          </button>
-          <button 
-            onClick={() => applyPreset('year')} 
-            style={{ 
-              padding: '6px 14px', 
-              background: filterPreset === 'year' ? '#1c5fa8' : '#f1f5f9', 
-              color: filterPreset === 'year' ? '#fff' : '#334155', 
-              border: 'none', 
-              borderRadius: '6px', 
-              cursor: 'pointer', 
-              fontWeight: '600', 
-              fontSize: '13px' 
-            }}
-          >
-            গত ১ বছর
-          </button>
-          <button 
-            onClick={() => setFilterPreset('custom')} 
-            style={{ 
-              padding: '6px 14px', 
-              background: filterPreset === 'custom' ? '#1c5fa8' : '#f1f5f9', 
-              color: filterPreset === 'custom' ? '#fff' : '#334155', 
-              border: 'none', 
-              borderRadius: '6px', 
-              cursor: 'pointer', 
-              fontWeight: '600', 
-              fontSize: '13px' 
-            }}
-          >
-            কাস্টম
-          </button>
-        </div>
-
-        {/* ডেট পিকার (শুধু কাস্টম মোডে) */}
-        {filterPreset === 'custom' && (
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <div>
-              <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '2px' }}>শুরু</label>
-              <input 
-                type="date" 
-                value={startDate} 
-                onChange={handleStartDateChange} 
-                style={{ padding: '6px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px' }}
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '2px' }}>শেষ</label>
-              <input 
-                type="date" 
-                value={endDate} 
-                onChange={handleEndDateChange} 
-                style={{ padding: '6px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px' }}
-              />
-            </div>
+      {/* ---------- 📅 ফিল্টার সেকশন (শুধু Overview ও Appointments-এর জন্য) ---------- */}
+      {(tab === 'overview' || tab === 'appointments') && (
+        <div style={{ 
+          background: '#ffffff', 
+          padding: '15px 20px', 
+          borderRadius: '10px', 
+          border: '1px solid #e2e8f0', 
+          marginBottom: '20px',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          {/* প্রিসেট বাটন */}
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button 
+              onClick={() => applyPreset('today')} 
+              style={{ 
+                padding: '6px 14px', 
+                background: filterPreset === 'today' ? '#1c5fa8' : '#f1f5f9', 
+                color: filterPreset === 'today' ? '#fff' : '#334155', 
+                border: 'none', 
+                borderRadius: '6px', 
+                cursor: 'pointer', 
+                fontWeight: '600', 
+                fontSize: '13px' 
+              }}
+            >
+              আজ
+            </button>
+            <button 
+              onClick={() => applyPreset('week')} 
+              style={{ 
+                padding: '6px 14px', 
+                background: filterPreset === 'week' ? '#1c5fa8' : '#f1f5f9', 
+                color: filterPreset === 'week' ? '#fff' : '#334155', 
+                border: 'none', 
+                borderRadius: '6px', 
+                cursor: 'pointer', 
+                fontWeight: '600', 
+                fontSize: '13px' 
+              }}
+            >
+              গত ৭ দিন
+            </button>
+            <button 
+              onClick={() => applyPreset('month')} 
+              style={{ 
+                padding: '6px 14px', 
+                background: filterPreset === 'month' ? '#1c5fa8' : '#f1f5f9', 
+                color: filterPreset === 'month' ? '#fff' : '#334155', 
+                border: 'none', 
+                borderRadius: '6px', 
+                cursor: 'pointer', 
+                fontWeight: '600', 
+                fontSize: '13px' 
+              }}
+            >
+              গত ১ মাস
+            </button>
+            <button 
+              onClick={() => applyPreset('year')} 
+              style={{ 
+                padding: '6px 14px', 
+                background: filterPreset === 'year' ? '#1c5fa8' : '#f1f5f9', 
+                color: filterPreset === 'year' ? '#fff' : '#334155', 
+                border: 'none', 
+                borderRadius: '6px', 
+                cursor: 'pointer', 
+                fontWeight: '600', 
+                fontSize: '13px' 
+              }}
+            >
+              গত ১ বছর
+            </button>
+            <button 
+              onClick={() => setFilterPreset('custom')} 
+              style={{ 
+                padding: '6px 14px', 
+                background: filterPreset === 'custom' ? '#1c5fa8' : '#f1f5f9', 
+                color: filterPreset === 'custom' ? '#fff' : '#334155', 
+                border: 'none', 
+                borderRadius: '6px', 
+                cursor: 'pointer', 
+                fontWeight: '600', 
+                fontSize: '13px' 
+              }}
+            >
+              কাস্টম
+            </button>
           </div>
-        )}
 
-        {/* ফিল্টার ইনফো */}
-        <div style={{ fontSize: '13px', color: '#64748b', marginLeft: 'auto' }}>
-          📅 {startDate} – {endDate}
+          {/* ডেট পিকার (শুধু কাস্টম মোডে) */}
+          {filterPreset === 'custom' && (
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '2px' }}>শুরু</label>
+                <input 
+                  type="date" 
+                  value={startDate} 
+                  onChange={handleStartDateChange} 
+                  style={{ padding: '6px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '2px' }}>শেষ</label>
+                <input 
+                  type="date" 
+                  value={endDate} 
+                  onChange={handleEndDateChange} 
+                  style={{ padding: '6px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px' }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ফিল্টার ইনফো */}
+          <div style={{ fontSize: '13px', color: '#64748b', marginLeft: 'auto' }}>
+            📅 {startDate} – {endDate}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ---------- কন্টেন্ট এরিয়া ---------- */}
       {tab === 'overview' && !showArchived && (
@@ -296,8 +306,22 @@ export default function AdminDashboard({ user }) {
           onArchive={handleArchive}
           onRestore={handleRestore}
           isArchivedView={showArchived}
-          user={user} 
+          user={user}
+          marketingTeam={marketingTeam}
         />
+      )}
+
+      {tab === 'marketing' && (isAdmin || isSubAdmin) && (
+        <>
+          {/* শুধু অ্যাডমিন টিম ম্যানেজ দেখতে পাবে */}
+          {isAdmin && <MarketingTeamManager user={user} onTeamUpdate={setMarketingTeam} />}
+          <MarketingReport 
+            appointments={filteredAppointments} 
+            marketingTeam={marketingTeam}
+            onTeamUpdate={setMarketingTeam}
+            user={user}
+          />
+        </>
       )}
 
       {tab === 'logs' && isAdmin && (
