@@ -1,17 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { CheckCircle, XCircle, UserCheck, Archive, Trash2, Clock, Stethoscope, LayoutList, Undo2, Eye, Search, CalendarDays, X, Printer, Image } from 'lucide-react';
-import html2canvas from 'html2canvas';
-
-// প্রফেশনাল প্রিন্ট CSS (স্ক্রিনের বাটন/ফিল্টার লুকানোর জন্য)
-const PrintCSS = `
-  @media print {
-    body * { visibility: hidden; }
-    #print-area, #print-area * { visibility: visible; }
-    #print-area { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none !important; }
-    .no-print { display: none !important; }
-    #print-area .no-print { display: none !important; }
-  }
-`;
+import React, { useState } from 'react';
+import { CheckCircle, XCircle, UserCheck, Archive, Trash2, Clock, Stethoscope, LayoutList, Undo2, Eye, Search } from 'lucide-react';
 
 const StatusBadge = ({ status }) => {
   const styles = {
@@ -45,27 +33,8 @@ export default function AppointmentsTable({ appointments, onStatusChange, onArch
   const [viewMode, setViewMode] = useState('list');
   const [searchTerm, setSearchTerm] = useState('');
   const [viewDetails, setViewDetails] = useState(null);
-  const [selectedDateFilter, setSelectedDateFilter] = useState('');
-  
-  const printRef = useRef(null);
 
   const canEdit = user?.role === 'admin' || user?.role === 'sub-admin' || user?.role === 'editor';
-
-  const handlePrint = () => { window.print(); };
-
-  const handleDownloadPNG = async () => {
-    const element = printRef.current;
-    if (!element) return;
-    try {
-      const canvas = await html2canvas(element, { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' });
-      const link = document.createElement('a');
-      link.download = `booking-report-${new Date().toISOString().split('T')[0]}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-    } catch (error) {
-      alert('PNG ডাউনলোড করতে সমস্যা হয়েছে।');
-    }
-  };
 
   const filteredAppointments = appointments.filter((appt) => {
     const term = searchTerm.toLowerCase();
@@ -74,9 +43,7 @@ export default function AppointmentsTable({ appointments, onStatusChange, onArch
       (appt.mobile?.toLowerCase().includes(term) || '') ||
       (String(appt.serialNo || '').includes(term)) ||
       (appt.doctorName?.toLowerCase().includes(term) || '');
-
-    const matchesDate = !selectedDateFilter || appt.bookingDate === selectedDateFilter;
-    return matchesSearch && matchesDate;
+    return matchesSearch;
   });
 
   const handleDropdownChange = (id, newStatus) => {
@@ -139,46 +106,13 @@ export default function AppointmentsTable({ appointments, onStatusChange, onArch
 
   return (
     <div style={{ background: '#ffffff', borderRadius: '10px', padding: '20px', width: '100%', overflowX: 'auto', color: '#1f2937' }}>
-      
-      <style>{PrintCSS}</style>
-
-      {/* প্রিন্ট/PNG বাটন ও ফিল্টার হেডার (শুধুমাত্র স্ক্রিনে দেখাবে) */}
-      <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
         <h3 style={{ margin: 0, color: '#1f2937' }}>{isArchivedView ? 'আর্কাইভ বুকিং লিস্ট' : 'রোগীর বুকিং লিস্ট'}</h3>
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-          
-          <button onClick={handlePrint} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '8px 12px', background: '#1c5fa8', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' }}>
-            <Printer size={16} /> প্রিন্ট
-          </button>
-          <button onClick={handleDownloadPNG} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '8px 12px', background: '#2f9e52', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' }}>
-            <Image size={16} /> PNG
-          </button>
-
-          <div style={{ display: 'flex', alignItems: 'center', background: '#f1f5f9', borderRadius: '8px', padding: '4px 10px', gap: '6px' }}>
-            <CalendarDays size={16} color="#64748b" />
-            <input 
-              type="date" 
-              value={selectedDateFilter} 
-              onChange={(e) => setSelectedDateFilter(e.target.value)}
-              style={{ border: 'none', background: 'transparent', outline: 'none', padding: '6px', fontSize: '13px', color: '#334155', width: '150px' }}
-            />
-            {selectedDateFilter && (
-              <button onClick={() => setSelectedDateFilter('')} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#dc2626' }}>
-                <X size={14} />
-              </button>
-            )}
-          </div>
-
           <div style={{ display: 'flex', alignItems: 'center', background: '#f1f5f9', borderRadius: '8px', padding: '4px 10px' }}>
             <Search size={16} color="#64748b" />
-            <input 
-              type="text" 
-              placeholder="নাম, মোবাইল, সিরিয়াল..." 
-              value={searchTerm} 
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{ border: 'none', background: 'transparent', outline: 'none', padding: '6px', fontSize: '13px', width: '200px' }}
-            />
+            <input type="text" placeholder="নাম, মোবাইল, সিরিয়াল..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ border: 'none', background: 'transparent', outline: 'none', padding: '6px', fontSize: '13px', width: '200px' }} />
           </div>
 
           {!isArchivedView && (
@@ -190,89 +124,71 @@ export default function AppointmentsTable({ appointments, onStatusChange, onArch
         </div>
       </div>
 
-      {/* ==================== একটিমাত্র টেবিল (প্রিন্ট ও স্ক্রিন উভয় ক্ষেত্রেই ব্যবহৃত) ==================== */}
-      <div ref={printRef} id="print-area">
-        {/* প্রফেশনাল রিপোর্ট হেডার (শুধু প্রিন্টে দেখাবে) */}
-        <div style={{ textAlign: 'center', marginBottom: '20px', paddingBottom: '10px', borderBottom: '2px solid #1c5fa8' }}>
-          <h2 style={{ margin: 0, fontSize: '35px', color: '#1c5fa8', fontWeight: '800' }}>আল আফিয়াহ হাসপাতাল এন্ড ডায়াগনস্টিক সেন্টার</h2>
-          <h3 style={{ margin: '5px 0', fontSize: '16px', fontWeight: '600', color: '#334155' }}>{isArchivedView ? 'আর্কাইভ বুকিং রিপোর্ট' : 'রোগীর বুকিং রিপোর্ট'}</h3>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', fontSize: '12px', color: '#475569' }}>
-            <span>তারিখ: {new Date().toLocaleDateString('bn-BD')} ({new Date().toLocaleDateString('en-US', { weekday: 'long' })})</span>
-            <span>Prepared by: {user?.name || 'Unknown'} ({user?.role || 'N/A'})</span>
-          </div>
-        </div>
-
-        {/* সাধারণ লিস্ট ভিউ */}
-        {viewMode === 'list' && (
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1100px', border: '1px solid #e2e8f0' }}>
-            <thead>
-              <tr style={{ background: '#f1f5f9', textAlign: 'left', color: '#1f2937' }}>
-                <th style={{ padding: '10px', border: '1px solid #e2e8f0' }}>সিরিয়াল</th>
-                <th style={{ padding: '10px', border: '1px solid #e2e8f0' }}>রোগীর নাম</th>
-                <th style={{ padding: '10px', border: '1px solid #e2e8f0' }}>মোবাইল</th>
-                <th style={{ padding: '10px', border: '1px solid #e2e8f0' }}>ডাক্তার</th>
-                <th style={{ padding: '10px', border: '1px solid #e2e8f0' }}>বিভাগ</th>
-                <th style={{ padding: '10px', border: '1px solid #e2e8f0' }}>বুকিং তারিখ</th>
-                <th style={{ padding: '10px', border: '1px solid #e2e8f0' }}>রেফারেল</th>
-                <th style={{ padding: '10px', border: '1px solid #e2e8f0' }}>স্ট্যাটাস</th>
-                {/* Action কলামটি প্রিন্টের সময় হাইড হয়ে যাবে */}
-                <th className="no-print" style={{ padding: '10px', border: '1px solid #e2e8f0' }}>অ্যাকশন</th>
+      {/* সাধারণ লিস্ট ভিউ */}
+      {viewMode === 'list' && (
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1000px' }}>
+          <thead>
+            <tr style={{ background: '#eef1f7', textAlign: 'left', color: '#1f2937' }}>
+              <th style={{ padding: '12px' }}>সিরিয়াল</th>
+              <th style={{ padding: '12px' }}>রোগীর নাম</th>
+              <th style={{ padding: '12px' }}>বয়স</th>
+              <th style={{ padding: '12px' }}>মোবাইল</th>
+              <th style={{ padding: '12px' }}>বুকিং তারিখ</th>
+              <th style={{ padding: '12px' }}>ডাক্তার</th>
+              <th style={{ padding: '12px' }}>স্ট্যাটাস</th>
+              <th style={{ padding: '12px' }}>অ্যাকশন</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredAppointments.length === 0 && <tr><td colSpan="8" style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>কোনো বুকিং পাওয়া যায়নি</td></tr>}
+            {filteredAppointments.map((appt) => (
+              <tr key={appt.id} style={{ borderBottom: '1px solid #eee', color: '#334155' }}>
+                <td style={{ padding: '12px', fontWeight: 'bold' }}>{appt.serialNo}</td>
+                <td style={{ padding: '12px' }}>{appt.name}</td>
+                <td style={{ padding: '12px' }}>{appt.age || '-'}</td>
+                <td style={{ padding: '12px' }}>{appt.mobile}</td>
+                <td style={{ padding: '12px' }}>{appt.bookingDate} ({appt.bookingDay})</td>
+                <td style={{ padding: '12px' }}>{appt.doctorName}<br/><small style={{ color: '#64748b' }}>{appt.doctorDept}</small></td>
+                <td style={{ padding: '12px' }}><StatusBadge status={appt.status || 'pending'} /></td>
+                <td style={{ padding: '12px', display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>{renderActions(appt)}</td>
               </tr>
-            </thead>
-            <tbody>
-              {filteredAppointments.length === 0 && <tr><td colSpan="9" style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>কোনো বুকিং পাওয়া যায়নি</td></tr>}
-              {filteredAppointments.map((appt) => (
-                <tr key={appt.id} style={{ borderBottom: '1px solid #eee', color: '#334155' }}>
-                  <td style={{ padding: '10px', border: '1px solid #e2e8f0', fontWeight: 'bold' }}>{appt.serialNo}</td>
-                  <td style={{ padding: '10px', border: '1px solid #e2e8f0' }}>{appt.name}</td>
-                  <td style={{ padding: '10px', border: '1px solid #e2e8f0' }}>{appt.mobile}</td>
-                  <td style={{ padding: '10px', border: '1px solid #e2e8f0' }}>{appt.doctorName}<br/><small>{appt.doctorDept}</small></td>
-                  <td style={{ padding: '10px', border: '1px solid #e2e8f0' }}>{appt.doctorDept || '-'}</td>
-                  <td style={{ padding: '10px', border: '1px solid #e2e8f0' }}>{appt.bookingDate} ({appt.bookingDay})</td>
-                  <td style={{ padding: '10px', border: '1px solid #e2e8f0' }}>{appt.referralSource || '-'}</td>
-                  <td style={{ padding: '10px', border: '1px solid #e2e8f0' }}><StatusBadge status={appt.status || 'pending'} /></td>
-                  {/* Action সেলটি প্রিন্টের সময় হাইড হয়ে যাবে */}
-                  <td className="no-print" style={{ padding: '10px', border: '1px solid #e2e8f0', display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>{renderActions(appt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+            ))}
+          </tbody>
+        </table>
+      )}
 
-        {/* ডাক্তার ওয়াইজ ভিউ */}
-        {viewMode === 'doctor' && (
-          <div>
-            {Object.keys(doctorWiseData).length === 0 ? <div style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>কোনো বুকিং পাওয়া যায়নি</div> : (
-              Object.entries(doctorWiseData).map(([doctorName, info]) => (
-                <div key={doctorName} style={{ marginBottom: '20px', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
-                  <div style={{ background: '#f8fafc', padding: '10px 15px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <strong style={{ color: '#1c5fa8', fontSize: '15px' }}>{doctorName}</strong>
-                    <span style={{ background: '#0d9488', color: '#fff', padding: '4px 10px', borderRadius: '20px', fontSize: '13px', fontWeight: '700' }}>মোট: {info.patients.length} জন</span>
-                  </div>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead><tr style={{ background: '#f1f5f9', textAlign: 'left', fontSize: '13px' }}><th style={{ padding: '8px 12px', border: '1px solid #e2e8f0' }}>সিরিয়াল</th><th style={{ padding: '8px 12px', border: '1px solid #e2e8f0' }}>রোগীর নাম</th><th style={{ padding: '8px 12px', border: '1px solid #e2e8f0' }}>মোবাইল</th><th style={{ padding: '8px 12px', border: '1px solid #e2e8f0' }}>স্ট্যাটাস</th><th className="no-print" style={{ padding: '8px 12px', border: '1px solid #e2e8f0' }}>অ্যাকশন</th></tr></thead>
-                    <tbody>
-                      {info.patients.map(appt => (
-                        <tr key={appt.id} style={{ borderBottom: '1px solid #eee', fontSize: '14px' }}>
-                          <td style={{ padding: '8px 12px', border: '1px solid #e2e8f0', fontWeight: 'bold' }}>{appt.serialNo}</td>
-                          <td style={{ padding: '8px 12px', border: '1px solid #e2e8f0' }}>{appt.name}</td>
-                          <td style={{ padding: '8px 12px', border: '1px solid #e2e8f0' }}>{appt.mobile}</td>
-                          <td style={{ padding: '8px 12px', border: '1px solid #e2e8f0' }}><StatusBadge status={appt.status || 'pending'} /></td>
-                          <td className="no-print" style={{ padding: '8px 12px', border: '1px solid #e2e8f0', display: 'flex', gap: '5px', flexWrap: 'wrap' }}>{renderActions(appt)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+      {/* ডাক্তার ওয়াইজ ভিউ */}
+      {viewMode === 'doctor' && (
+        <div>
+          {Object.keys(doctorWiseData).length === 0 ? <div style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>কোনো বুকিং পাওয়া যায়নি</div> : (
+            Object.entries(doctorWiseData).map(([doctorName, info]) => (
+              <div key={doctorName} style={{ marginBottom: '20px', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                <div style={{ background: '#f8fafc', padding: '12px 15px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <strong style={{ color: '#1c5fa8', fontSize: '16px' }}>{doctorName}</strong>
+                  <span style={{ background: '#0d9488', color: '#fff', padding: '4px 10px', borderRadius: '20px', fontSize: '13px', fontWeight: '700' }}>মোট: {info.patients.length} জন</span>
                 </div>
-              ))
-            )}
-          </div>
-        )}
-      </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead><tr style={{ background: '#f1f5f9', textAlign: 'left', fontSize: '13px' }}><th style={{ padding: '8px 12px' }}>সিরিয়াল</th><th style={{ padding: '8px 12px' }}>রোগীর নাম</th><th style={{ padding: '8px 12px' }}>স্ট্যাটাস</th><th style={{ padding: '8px 12px' }}>অ্যাকশন</th></tr></thead>
+                  <tbody>
+                    {info.patients.map(appt => (
+                      <tr key={appt.id} style={{ borderBottom: '1px solid #eee', fontSize: '14px' }}>
+                        <td style={{ padding: '10px 12px', fontWeight: 'bold' }}>{appt.serialNo}</td>
+                        <td style={{ padding: '10px 12px' }}>{appt.name}</td>
+                        <td style={{ padding: '10px 12px' }}><StatusBadge status={appt.status || 'pending'} /></td>
+                        <td style={{ padding: '10px 12px', display: 'flex', gap: '5px', flexWrap: 'wrap' }}>{renderActions(appt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
-      {/* রোগীর বিস্তারিত তথ্য দেখার মোডাল (স্ক্রিনে দেখাবে) */}
+      {/* রোগীর বিস্তারিত তথ্য দেখার মোডাল (ঠিকানা ও রেফারেল বাদ) */}
       {viewDetails && (
-        <div className="no-print" style={{ position: 'fixed', inset: 0, background: 'rgba(0, 0, 0, 0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} onClick={() => setViewDetails(null)}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0, 0, 0, 0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} onClick={() => setViewDetails(null)}>
           <div style={{ background: '#fff', borderRadius: '12px', maxWidth: '500px', width: '100%', padding: '24px', position: 'relative', maxHeight: '80vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
             <button onClick={() => setViewDetails(null)} style={{ position: 'absolute', top: '15px', right: '15px', background: '#f1f5f9', border: 'none', borderRadius: '50%', width: '30px', height: '30px', cursor: 'pointer', fontWeight: 'bold' }}>✕</button>
             <h3 style={{ marginTop: 0, color: '#1c5fa8', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px' }}>রোগীর বিস্তারিত তথ্য</h3>
@@ -281,13 +197,10 @@ export default function AppointmentsTable({ appointments, onStatusChange, onArch
               <div><strong style={{ color: '#64748b', fontSize: '13px' }}>বয়স:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.age || '-'}</span></div>
               <div><strong style={{ color: '#64748b', fontSize: '13px' }}>মোবাইল:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.mobile}</span></div>
               <div><strong style={{ color: '#64748b', fontSize: '13px' }}>লিঙ্গ:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.gender || '-'}</span></div>
-              <div style={{ gridColumn: '1 / -1' }}><strong style={{ color: '#64748b', fontSize: '13px' }}>ঠিকানা:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.address || '-'}</span></div>
               <div><strong style={{ color: '#64748b', fontSize: '13px' }}>বুকিং তারিখ:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.bookingDate} ({viewDetails.bookingDay})</span></div>
               <div><strong style={{ color: '#64748b', fontSize: '13px' }}>সিরিয়াল:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.serialNo}</span></div>
               <div><strong style={{ color: '#64748b', fontSize: '13px' }}>ডাক্তার:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.doctorName}</span></div>
               <div><strong style={{ color: '#64748b', fontSize: '13px' }}>বিভাগ:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.doctorDept}</span></div>
-              <div><strong style={{ color: '#64748b', fontSize: '13px' }}>রেফারেল সোর্স:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.referralSource || '-'}</span></div>
-              {viewDetails.referredDoctorName && <div style={{ gridColumn: '1 / -1' }}><strong style={{ color: '#64748b', fontSize: '13px' }}>রেফারিং ডাক্তার:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.referredDoctorName}</span></div>}
               <div style={{ gridColumn: '1 / -1' }}><strong style={{ color: '#64748b', fontSize: '13px' }}>স্ট্যাটাস:</strong><br/><StatusBadge status={viewDetails.status || 'pending'} /></div>
             </div>
           </div>

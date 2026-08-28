@@ -39,19 +39,15 @@ export default function Overview({ appointments }) {
   const noShowRate = total > 0 ? (noShow / total) * 100 : 0;
   const cancellationRate = total > 0 ? (cancelled / total) * 100 : 0;
 
-  // ডাক্তারভিত্তিক ডেটা (লিডারবোর্ড লজিক)
+  // ডাক্তারভিত্তিক ডেটা (লিডারবোর্ড)
   const doctorCounts = {};
   appointments.forEach(a => { doctorCounts[a.doctorName] = (doctorCounts[a.doctorName] || 0) + 1; });
-  const doctorData = Object.entries(doctorCounts)
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count);
+  const doctorData = Object.entries(doctorCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
 
   // বিভাগভিত্তিক ডেটা
   const departmentCounts = {};
   appointments.forEach(a => { departmentCounts[a.doctorDept || 'Unknown'] = (departmentCounts[a.doctorDept || 'Unknown'] || 0) + 1; });
-  const departmentData = Object.entries(departmentCounts)
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count);
+  const departmentData = Object.entries(departmentCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
 
   // বয়স ডেটা
   const ageGroups = { '০-১২': 0, '১৩-২০': 0, '২১-৩০': 0, '৩১-৪০': 0, '৪১-৫০': 0, '৫০+': 0 };
@@ -67,11 +63,7 @@ export default function Overview({ appointments }) {
   });
   const ageData = Object.entries(ageGroups).map(([name, count]) => ({ name, count }));
 
-  // রেফারেল ডেটা
-  const referralCounts = {};
-  appointments.forEach(a => { const src = a.referralSource || 'Unknown'; referralCounts[src] = (referralCounts[src] || 0) + 1; });
-  const referralData = Object.entries(referralCounts).map(([name, value]) => ({ name, value }));
-
+  // স্ট্যাটাস ডেটা
   const statusData = [
     { name: 'Pending', value: pending },
     { name: 'Confirmed', value: confirmed },
@@ -80,19 +72,6 @@ export default function Overview({ appointments }) {
     { name: 'Cancelled', value: cancelled },
     { name: 'No-show', value: noShow }
   ];
-
-  // লোকেশন ডেটা (ঠিকানা থেকে বের করা)
-  const locationCounts = {};
-  appointments.forEach(a => {
-    if (a.address) {
-      const parts = a.address.split(',').map(s => s.trim()).filter(Boolean);
-      const location = parts.length > 0 ? parts[parts.length - 1] : 'Unknown';
-      locationCounts[location] = (locationCounts[location] || 0) + 1;
-    } else {
-      locationCounts['Unknown'] = (locationCounts['Unknown'] || 0) + 1;
-    }
-  });
-  const locationData = Object.entries(locationCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
 
   const last7Days = [];
   for (let i = 6; i >= 0; i--) {
@@ -130,7 +109,7 @@ export default function Overview({ appointments }) {
     <div style={styles.dashboardContainer}>
       <style>{CSSString}</style>
 
-      {/* ROW 1: KPI Cards */}
+      {/* KPI Cards */}
       <div style={styles.kpiGrid}>
         {kpis.map((kpi, index) => (
           <div key={index} style={styles.kpiCard}>
@@ -145,7 +124,7 @@ export default function Overview({ appointments }) {
         ))}
       </div>
 
-      {/* ROW 2: Conversion Metrics */}
+      {/* Conversion Metrics */}
       <div style={styles.conversionCard}>
         <h4 style={styles.chartTitle}>কনভার্সন মেট্রিক্স</h4>
         <div style={styles.conversionGrid}>
@@ -161,7 +140,7 @@ export default function Overview({ appointments }) {
         </div>
       </div>
 
-      {/* ROW 3: Charts (Trend & Status) */}
+      {/* Trend & Status */}
       <div className="overview-main-grid">
         <div style={styles.chartCard}>
           <h4 style={styles.chartTitle}>সিরিয়াল ট্রেন্ড (গত ৭ দিন)</h4>
@@ -196,28 +175,14 @@ export default function Overview({ appointments }) {
         </div>
       </div>
 
-      {/* ROW 4: Source & Department Charts */}
+      {/* Department & Age & Doctor */}
       <div className="overview-main-grid">
-        <div style={styles.chartCard}>
-          <h4 style={styles.chartTitle}>রেফারেল সোর্স</h4>
-          <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie data={referralData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={5}>
-                {referralData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
-              </Pie>
-              <Tooltip />
-              <Legend verticalAlign="bottom" height={36} formatter={renderLegend} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-
         <div style={styles.chartCard}>
           <h4 style={styles.chartTitle}>বিভাগভিত্তিক রোগী (Department-wise)</h4>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={departmentData} layout="vertical" margin={{ left: 20 }}>
               <CartesianGrid strokeDasharray="3 3" horizontal={false} />
               <XAxis type="number" tick={{ fontSize: 12 }} />
-              {/* ✅ Y-অক্ষের প্রস্থ 150 */}
               <YAxis type="category" dataKey="name" width={150} interval={0} tick={{ fontSize: 12, fill: '#334155' }} />
               <Tooltip />
               <Bar dataKey="count" fill="#0e8ca3" radius={[0, 5, 5, 0]} barSize={20}>
@@ -226,31 +191,10 @@ export default function Overview({ appointments }) {
             </BarChart>
           </ResponsiveContainer>
         </div>
-      </div>
 
-      {/* ROW 5: Detailed Charts (Location, Age, Doctor Leaderboard) */}
-      <div className="overview-main-grid">
-        {/* লোকেশন বার চার্ট */}
-        <div style={styles.chartCard}>
-          <h4 style={styles.chartTitle}>লোকেশনভিত্তিক রোগী (জেলা/শহর)</h4>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={locationData} layout="vertical" margin={{ left: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 12 }} />
-              {/* ✅ Y-অক্ষের প্রস্থ 150 */}
-              <YAxis type="category" dataKey="name" width={150} interval={0} tick={{ fontSize: 12, fill: '#334155' }} />
-              <Tooltip />
-              <Bar dataKey="count" fill="#d97706" radius={[0, 5, 5, 0]} barSize={20}>
-                <LabelList dataKey="count" position="right" style={{ fontSize: 12, fill: '#475569' }} />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* বয়সভিত্তিক চার্ট */}
         <div style={styles.chartCard}>
           <h4 style={styles.chartTitle}>রোগীর বয়স পরিসীমা</h4>
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={250}>
             <BarChart data={ageData}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="name" tick={{ fontSize: 12 }} />
@@ -263,14 +207,12 @@ export default function Overview({ appointments }) {
           </ResponsiveContainer>
         </div>
 
-        {/* ডাক্তারভিত্তিক সিরিয়াল (লিডারবোর্ড) */}
         <div style={styles.chartCard}>
           <h4 style={styles.chartTitle}>👨‍⚕️ ডাক্তারভিত্তিক সিরিয়াল (লিডারবোর্ড)</h4>
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={250}>
             <BarChart data={doctorData} layout="vertical" margin={{ left: 20 }}>
               <CartesianGrid strokeDasharray="3 3" horizontal={false} />
               <XAxis type="number" tick={{ fontSize: 12 }} />
-              {/* ✅ Y-অক্ষের প্রস্থ বাড়িয়ে 200 করা হয়েছে এবং Truncate লজিক মুছে ফেলা হয়েছে */}
               <YAxis 
                 type="category" 
                 dataKey="name" 

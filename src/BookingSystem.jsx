@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, doc, getDoc, setDoc, addDoc, collection } from './firebase';
-import { Send, Loader2, User, Phone, MapPin, Stethoscope, CalendarDays, ArrowLeft, PlusCircle, CheckCircle2 } from 'lucide-react';
+import { Send, Loader2, User, Phone, Stethoscope, CalendarDays, ArrowLeft, PlusCircle, CheckCircle2 } from 'lucide-react';
 
 const getTodayString = () => {
   const date = new Date();
@@ -69,9 +69,6 @@ const BookingCSS = `
   .form-group label { display: block; font-size: 13.5px; font-weight: 600; color: #475569; margin-bottom: 6px; }
   .input, .select, .textarea { width: 100%; padding: 12px 14px; border: 1.5px solid #cbd5e1; border-radius: 10px; font-size: 14px; font-family: inherit; color: #1e293b; background: #fff; transition: all 0.2s ease; box-sizing: border-box; }
   .input:focus, .select:focus, .textarea:focus { outline: none; border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15); }
-  .textarea { resize: vertical; min-height: 80px; }
-  .conditional-field { margin-top: 10px; padding: 10px; background: #f0fdfa; border-left: 3px solid #0d9488; border-radius: 0 8px 8px 0; animation: slideDown 0.3s ease; }
-  @keyframes slideDown { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
   .day-badge { display: inline-block; background: #0f766e; color: #fff; padding: 4px 10px; border-radius: 20px; font-size: 12px; margin-top: 5px; }
   .doctor-options { max-height: 250px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; margin-top: 10px; background: #fff; }
   .doctor-option { padding: 12px 15px; border-bottom: 1px solid #f1f5f9; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
@@ -128,9 +125,8 @@ const BookingCSS = `
 
 export default function BookingSystem({ departments, panels, onBack }) {
   const [formData, setFormData] = useState({
-    name: '', age: '', mobile: '', gender: 'পুরুষ', address: '', // ✅ শুধু ঠিকানা
-    referralSource: 'Walk-in / নিজে এসেছেন', referredDoctorName: '',
-    otherReferralNote: '', departmentId: '', doctorId: ''
+    name: '', age: '', mobile: '', gender: 'পুরুষ', // ✅ address ও referral বাদ
+    departmentId: '', doctorId: ''
   });
 
   const [selectedDate, setSelectedDate] = useState(getTodayString());
@@ -178,13 +174,12 @@ export default function BookingSystem({ departments, panels, onBack }) {
     const { name, value } = e.target;
     if (name === 'age' || name === 'mobile') setFormData(prev => ({ ...prev, [name]: toEnglishDigits(value) }));
     else setFormData(prev => ({ ...prev, [name]: value }));
-    
     if (name === 'departmentId' || name === 'doctorId') setSelectedDoctor(null);
     setSuccessMsg('');
   };
 
   const resetForm = () => {
-    setFormData({ name: '', age: '', mobile: '', gender: 'পুরুষ', address: '', referralSource: 'Walk-in / নিজে এসেছেন', referredDoctorName: '', otherReferralNote: '', departmentId: '', doctorId: '' });
+    setFormData({ name: '', age: '', mobile: '', gender: 'পুরুষ', departmentId: '', doctorId: '' });
     setSelectedDate(getTodayString()); setAvailableDoctors([]); setSelectedDoctor(null); setSuccessMsg('');
   };
 
@@ -194,14 +189,12 @@ export default function BookingSystem({ departments, panels, onBack }) {
     try {
       if (!selectedDoctor) throw new Error('ডাক্তার নির্বাচন করুন');
       if (!selectedDate) throw new Error('তারিখ নির্বাচন করুন');
-      
       const counterRef = doc(db, 'counters', selectedDoctor.id);
       let serialNo = 1;
       const counterDoc = await getDoc(counterRef);
       if (counterDoc.exists()) { serialNo = counterDoc.data().count + 1; await setDoc(counterRef, { count: serialNo }, { merge: true }); }
       else { await setDoc(counterRef, { count: serialNo }); }
       
-      // ✅ শুধু address ও বাকি ডেটা সেভ হবে
       const appointmentData = { 
         ...formData, 
         doctorName: selectedDoctor.name, 
@@ -291,46 +284,6 @@ export default function BookingSystem({ departments, panels, onBack }) {
                   <option value="অন্যান্য">অন্যান্য</option>
                 </select>
               </div>
-              
-              {/* ✅ শুধুমাত্র বর্তমান ঠিকানা */}
-              <div className="form-group">
-                <label>বর্তমান ঠিকানা</label>
-                <textarea className="textarea" name="address" value={formData.address} onChange={handleChange} required placeholder="আপনার বর্তমান ঠিকানা লিখুন (রোড, বাড়ি, এলাকা, জেলা)" />
-              </div>
-            </div>
-
-            <div className="form-section">
-              <div className="section-title"><MapPin size={18} /> রেফারেল তথ্য</div>
-              <div className="form-group">
-                <label>রোগী কীভাবে/কার মাধ্যমে এসেছেন?</label>
-                <select className="select" name="referralSource" value={formData.referralSource} onChange={handleChange}>
-                  <option>Walk-in / নিজে এসেছেন</option>
-                  <option>Refer Doctor</option>
-                  <option>Facebook</option>
-                  <option>Google</option>
-                  <option>Campaign / Medical Camp</option>
-                  <option>আত্মীয়/বন্ধু</option>
-                  <option>অন্যান্য</option>
-                </select>
-              </div>
-
-              {formData.referralSource === 'Refer Doctor' && (
-                <div className="conditional-field">
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label>রেফারিং ডাক্তারের নাম লিখুন</label>
-                    <input type="text" className="input" name="referredDoctorName" value={formData.referredDoctorName} onChange={handleChange} placeholder="যেমনঃ ডাঃ কামরুল হাসান" />
-                  </div>
-                </div>
-              )}
-
-              {formData.referralSource === 'অন্যান্য' && (
-                <div className="conditional-field">
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label>অন্যান্য উৎস সম্পর্কে লিখুন</label>
-                    <input type="text" className="input" name="otherReferralNote" value={formData.otherReferralNote} onChange={handleChange} placeholder="যেমনঃ ফেসবুক গ্রুপ, মাইক্রোব্লগ, পরিচিতজন ইত্যাদি" />
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="form-section">
@@ -368,28 +321,20 @@ export default function BookingSystem({ departments, panels, onBack }) {
                 
                 {selectedDoctor && (
                   <button type="button" className="clear-doctor-btn" onClick={() => setSelectedDoctor(null)}>
-                    ডাক্তার পরিবর্তন করুন (ডিসিলেক্ট)
+                    ডাক্তার পরিবর্তন করুন
                   </button>
                 )}
               </div>
             </div>
 
-            {(formData.name || selectedDoctor || formData.referralSource) && (
+            {(formData.name || selectedDoctor) && (
               <div className="summary-box">
                 <div className="section-title" style={{ borderBottom: 'none', marginBottom: '10px', paddingBottom: '0' }}>বুকিং সামারি</div>
                 <div className="summary-row"><span className="summary-label">তারিখ:</span><span className="summary-value">{selectedDate} ({selectedDayName})</span></div>
                 <div className="summary-row"><span className="summary-label">রোগীর নাম:</span><span className="summary-value">{formData.name || '-'}</span></div>
                 <div className="summary-row"><span className="summary-label">মোবাইল:</span><span className="summary-value">{formData.mobile || '-'}</span></div>
-                <div className="summary-row"><span className="summary-label">ঠিকানা:</span><span className="summary-value">{formData.address || '-'}</span></div>
                 <div className="summary-row"><span className="summary-label">নির্বাচিত ডাক্তার:</span><span className="summary-value">{selectedDoctor?.name || '-'}</span></div>
                 <div className="summary-row"><span className="summary-label">বিভাগ:</span><span className="summary-value">{selectedDoctor?.deptName || '-'}</span></div>
-                <div className="summary-row"><span className="summary-label">রেফারেল সোর্স:</span><span className="summary-value">{formData.referralSource || '-'}</span></div>
-                {formData.referredDoctorName && (
-                  <div className="summary-row"><span className="summary-label">রেফারিং ডাক্তার:</span><span className="summary-value">{formData.referredDoctorName}</span></div>
-                )}
-                {formData.otherReferralNote && (
-                  <div className="summary-row"><span className="summary-label">অন্যান্য নোট:</span><span className="summary-value">{formData.otherReferralNote}</span></div>
-                )}
               </div>
             )}
 
