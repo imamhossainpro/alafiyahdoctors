@@ -8,7 +8,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { db, doc, getDoc, setDoc, getDocs, collection, deleteDoc, updateDoc, query, where } from './firebase';
 import BookingSystem from './BookingSystem';
-import AdminDashboard from './components/AdminDashboard'; // 👈 সঠিক ইমপোর্ট
+import AdminDashboard from './components/AdminDashboard';
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const DAY_NAMES = ['শনিবার', 'রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার'];
@@ -43,7 +43,6 @@ const CSS = `
 .dpb .tab{border:none;background:transparent;padding:8px 16px;border-radius:8px;font-size:13.5px;font-weight:600;color:#6b7280;}
 .dpb .tab.active{background:#1c5fa8;color:#fff;}
 
-/* রোগী বুকিং বাটনের জন্য আকর্ষণীয় ডিজাইন */
 .dpb .tab.booking-tab {
   background: linear-gradient(45deg, #0d9488, #14b8a6);
   color: #fff;
@@ -55,28 +54,18 @@ const CSS = `
   box-shadow: 0 4px 10px rgba(13, 148, 136, 0.3);
   transition: all 0.3s ease;
 }
-
 .dpb .tab.booking-tab:hover {
   background: linear-gradient(45deg, #0f766e, #0d9488);
   box-shadow: 0 6px 15px rgba(13, 148, 136, 0.4);
   transform: translateY(-1px);
 }
-
 .dpb .tab.booking-tab.active {
   background: linear-gradient(45deg, #0f766e, #14b8a6);
   box-shadow: 0 6px 15px rgba(13, 148, 136, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
-
-/* বাটনের ভেতরের আইকন অ্যানিমেশন */
-.dpb .tab.booking-tab svg {
-  animation: pulse-booking 2s infinite;
-}
-
-@keyframes pulse-booking {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.1); }
-}
+.dpb .tab.booking-tab svg { animation: pulse-booking 2s infinite; }
+@keyframes pulse-booking { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
 
 .dpb .panel-switcher{display:flex;align-items:center;gap:10px;padding:10px 20px;background:#fff;border-bottom:1px solid #e2e6ee;flex-wrap:wrap;position:sticky;top:57px;z-index:19;}
 .dpb .panel-switcher-scroll{display:flex;gap:6px;flex-wrap:wrap;flex:1;min-width:0;}
@@ -321,7 +310,11 @@ function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
                   <td style={{ padding: '10px' }}>{u.designation}</td>
                   <td style={{ padding: '10px' }}>
                     <select value={u.role} onChange={(e) => onSetRole(u.id, e.target.value)} style={{ padding: '6px', borderRadius: '6px', border: '1px solid #e2e6ee' }}>
-                      <option value="pending">পেন্ডিং</option><option value="admin">অ্যাডমিন</option><option value="editor">এডিটর</option><option value="viewer">ভিউয়ার</option>
+                      <option value="pending">পেন্ডিং</option>
+                      <option value="admin">অ্যাডমিন</option>
+                      <option value="sub-admin">সাব-অ্যাডমিন</option>
+                      <option value="editor">এডিটর</option>
+                      <option value="viewer">ভিউয়ার</option>
                     </select>
                   </td>
                   <td style={{ padding: '10px' }}>{u.approved ? <span style={{ color: '#2f9e52', fontWeight: '700' }}>এপ্রুভড</span> : <span style={{ color: '#dc2626', fontWeight: '700' }}>পেন্ডিং</span>}</td>
@@ -607,7 +600,9 @@ export default function DoctorPanelBuilder() {
   const [reloadKey, setReloadKey] = useState(0);
 
   const isAdmin = user?.role === 'admin';
+  const isSubAdmin = user?.role === 'sub-admin';
   const isEditor = user?.role === 'editor';
+  const isViewer = user?.role === 'viewer';
   const isGuest = user?.isGuest === true;
 
   useEffect(() => {
@@ -798,7 +793,7 @@ export default function DoctorPanelBuilder() {
         <div className="topbar-title"><Stethoscope size={20} /><span>ডাক্তার প্যানেল</span></div>
         <div className="topbar-right">
           <div className="tabs">
-                        <button 
+            <button 
               className={activeView === 'booking' ? 'tab booking-tab active' : 'tab booking-tab'} 
               onClick={() => setActiveView('booking')}
             >
@@ -810,34 +805,37 @@ export default function DoctorPanelBuilder() {
                 <path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/>
                 <path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/>
               </svg>
-              সিরিয়াল নিশ্চিত করুন
+              সিরিয়াল নিশ্চিত করুন
             </button>
             
             {isGuest && (<button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button>)}
             {!isGuest && user.role === 'viewer' && (<button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button>)}
-            {!isGuest && user.role === 'editor' && (<><button className={activeView === 'edit' ? 'tab active' : 'tab'} onClick={() => setActiveView('edit')}>প্যানেল বিল্ডার</button><button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button></>)}
-            {!isGuest && user.role === 'admin' && (<>
-              <button className={activeView === 'doctors' ? 'tab active' : 'tab'} onClick={() => setActiveView('doctors')}>ডাক্তার লিস্ট</button>
-              <button className={activeView === 'edit' ? 'tab active' : 'tab'} onClick={() => setActiveView('edit')}>প্যানেল বিল্ডার</button>
-              <button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button>
-              <button className={activeView === 'admin' ? 'tab active' : 'tab'} onClick={() => setActiveView('admin')}>অ্যাডমিন প্যানেল</button>
-              {/* 👇 ড্যাশবোর্ড ট্যাব */}
-              <button className={activeView === 'dashboard' ? 'tab active' : 'tab'} onClick={() => setActiveView('dashboard')}>ড্যাশবোর্ড</button>
-            </>)}
+            {!isGuest && (user.role === 'editor' || user.role === 'sub-admin' || user.role === 'admin') && (
+              <><button className={activeView === 'edit' ? 'tab active' : 'tab'} onClick={() => setActiveView('edit')}>প্যানেল বিল্ডার</button><button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>প্রিভিউ</button></>
+            )}
+            {!isGuest && (user.role === 'admin' || user.role === 'sub-admin') && (
+              <>
+                <button className={activeView === 'doctors' ? 'tab active' : 'tab'} onClick={() => setActiveView('doctors')}>ডাক্তার লিস্ট</button>
+                <button className={activeView === 'dashboard' ? 'tab active' : 'tab'} onClick={() => setActiveView('dashboard')}>ড্যাশবোর্ড</button>
+              </>
+            )}
+            {isAdmin && (<button className={activeView === 'admin' ? 'tab active' : 'tab'} onClick={() => setActiveView('admin')}>অ্যাডমিন প্যানেল</button>)}
           </div>
           {isGuest ? (<button className="login-btn" onClick={() => setShowAuth(true)}>লগইন / রেজিস্ট্রেশন</button>) : (<button className="logout-btn" onClick={handleLogout}><LogOut size={14} /> লগআউট</button>)}
         </div>
       </div>
 
-      {(isGuest || (user && user.role === 'viewer')) && (
+      {(activeView === 'preview' && (isGuest || (user && user.role === 'viewer'))) && (
         <PanelSwitcher panels={panels} activePanelId={activePanelId} onSwitch={handleSwitchPanel} onAdd={() => {}} onRename={() => {}} onDelete={() => {}} isReadOnly={true} />
       )}
 
       {activeView === 'booking' && (<BookingSystem departments={departments} panels={panels}/>)}
 
       {activeView === 'preview' && (<PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} />)}
-      {activeView === 'doctors' && isAdmin && (<ManageDoctorsView departments={departments} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={handleDeleteDept} onMoveDept={handleMoveDept} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={handleDeleteDoctor} onMoveDoctor={handleMoveDoctor} isAdmin={true} onRefreshData={handleRefreshData} />)}
-      {activeView === 'edit' && !isGuest && (isEditor || isAdmin) && (
+      {activeView === 'doctors' && (isAdmin || isSubAdmin) && (
+        <ManageDoctorsView departments={departments} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={handleDeleteDept} onMoveDept={handleMoveDept} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={handleDeleteDoctor} onMoveDoctor={handleMoveDoctor} isAdmin={isAdmin} onRefreshData={handleRefreshData} />
+      )}
+      {activeView === 'edit' && !isGuest && (isEditor || isSubAdmin || isAdmin) && (
         <>
           <PanelSwitcher panels={panels} activePanelId={activePanelId} onSwitch={handleSwitchPanel} onAdd={() => setPanelModal({ mode: 'add', departments })} onRename={(panel) => setPanelModal({ mode: 'rename', panel })} onDelete={isAdmin ? handleDeletePanel : () => {}} isReadOnly={false} />
           {mode === 'edit' ? (
@@ -849,9 +847,8 @@ export default function DoctorPanelBuilder() {
       )}
       {activeView === 'admin' && isAdmin && (<AdminPanel users={allUsers} onApprove={handleApprove} onSetRole={handleSetRole} onDeleteUser={handleDeleteUser} />)}
       
-      {/* 👇 ড্যাশবোর্ড রেন্ডার */}
-      {activeView === 'dashboard' && isAdmin && (
-        <AdminDashboard />
+      {activeView === 'dashboard' && (isAdmin || isSubAdmin) && (
+        <AdminDashboard user={user} />
       )}
 
       {showAuth && <AuthPage onLogin={setUser} onClose={() => setShowAuth(false)} />}

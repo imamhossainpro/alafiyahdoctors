@@ -11,7 +11,8 @@ import {
   addDoc,
   query,
   where,
-  onSnapshot, // 👈 যুক্ত করা হয়েছে
+  orderBy, // 👈 এই লাইনটি যোগ করা হয়েছে
+  onSnapshot,
 } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -38,5 +39,6 @@ export {
   addDoc,
   query,
   where,
-  onSnapshot, // 👈 যুক্ত করা হয়েছে
+  orderBy, // 👈 এখানেও এক্সপোর্ট করতে হবে
+  onSnapshot,
 };

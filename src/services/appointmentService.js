@@ -1,4 +1,4 @@
-import { db, collection, onSnapshot, updateDoc, deleteDoc, doc } from '../firebase';
+import { db, collection, onSnapshot, updateDoc, deleteDoc, doc, addDoc, query, orderBy } from '../firebase';
 
 // পুরনো ডেটা (approved/deleted) কে নতুন স্ট্যাটাসে রূপান্তর করা
 const normalizeStatus = (appt) => {
@@ -13,11 +13,8 @@ export const subscribeToAppointments = (callback) => {
   return onSnapshot(q, (snapshot) => {
     const appointments = [];
     snapshot.forEach((doc) => {
-      // Normalize ও Filter (Archived default-এ বাদ)
       const normalized = normalizeStatus({ id: doc.id, ...doc.data() });
-      if (!normalized.isArchived) {
-        appointments.push(normalized);
-      }
+      if (!normalized.isArchived) appointments.push(normalized);
     });
     callback(appointments);
   });
@@ -30,30 +27,37 @@ export const subscribeToArchivedAppointments = (callback) => {
     const archived = [];
     snapshot.forEach((doc) => {
       const normalized = normalizeStatus({ id: doc.id, ...doc.data() });
-      if (normalized.isArchived || normalized.status === 'archived') {
-        archived.push(normalized);
-      }
+      if (normalized.isArchived || normalized.status === 'archived') archived.push(normalized);
     });
     callback(archived);
   });
 };
 
-// Status Transition Validation
-const VALID_TRANSITIONS = {
-  pending: ['confirmed', 'cancelled', 'archived'],
-  confirmed: ['checked-in', 'cancelled', 'no-show', 'archived'],
-  'checked-in': ['completed', 'archived'],
-  completed: ['archived'],
-  cancelled: ['archived'],
-  'no-show': ['archived'],
-  archived: [] // Archived থেকে আর ফেরা যাবে না
+// 📝 নতুন: অডিট লগ সাবস্ক্রাইব করার ফাংশন
+export const subscribeToAuditLogs = (callback) => {
+  const q = query(collection(db, 'audit_logs'), orderBy('timestamp', 'desc'));
+  return onSnapshot(q, (snapshot) => {
+    const logs = [];
+    snapshot.forEach((doc) => logs.push({ id: doc.id, ...doc.data() }));
+    callback(logs);
+  });
 };
 
-// Status Update (Invalid Transition Prevent)
-export const updateAppointmentStatus = async (id, newStatus) => {
-  // বর্তমান স্ট্যাটাস জানার জন্য ডেটা আগে থেকে নেই, তাই দুই ধাপে চেক করা যায়, তবে UI-তে অ্যাকশন বাটন সীমিত রাখাই নিরাপদ।
-  // UI-তে বাটন এনাবল/ডিসএবল করা আছে। এখানে শুধু আপডেট হচ্ছে।
-  await updateDoc(doc(db, 'appointments', id), { status: newStatus, isArchived: newStatus === 'archived' });
+// 📝 নতুন: অডিট লগ যোগ করার ফাংশন
+export const addAuditLog = async (logData) => {
+  try {
+    await addDoc(collection(db, 'audit_logs'), {
+      ...logData,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("Audit log error:", error);
+  }
+};
+
+// স্ট্যাটাস আপডেট
+export const updateAppointmentStatus = async (id, status) => {
+  await updateDoc(doc(db, 'appointments', id), { status, isArchived: status === 'archived' });
 };
 
 // Soft Delete / Archive
@@ -61,7 +65,12 @@ export const archiveAppointment = async (id) => {
   await updateDoc(doc(db, 'appointments', id), { status: 'archived', isArchived: true });
 };
 
-// Permanent Delete (শুধুমাত্র Archived ডেটার জন্য)
+// 🆕 নতুন: Archive থেকে ফিরিয়ে আনা (Restore)
+export const restoreAppointment = async (id) => {
+  await updateDoc(doc(db, 'appointments', id), { status: 'pending', isArchived: false });
+};
+
+// Permanent Delete (শুধুমাত্র অ্যাডমিনের জন্য UI-তে সীমাবদ্ধ করা হবে)
 export const deleteAppointment = async (id) => {
   await deleteDoc(doc(db, 'appointments', id));
 };
