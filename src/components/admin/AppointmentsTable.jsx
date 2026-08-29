@@ -1,101 +1,11 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   CheckCircle, XCircle, UserCheck, Archive, Trash2, Clock, 
   Stethoscope, LayoutList, Undo2, Eye, Search, Edit2, Save, X, 
-  ArrowUpDown, XCircle as XCircleIcon
+  ArrowUpDown, Printer, XCircle as XCircleIcon
 } from 'lucide-react';
 import { db, doc, updateDoc, getDoc } from '../../firebase';
 import { getPatientById } from '../../services/patientService';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-
-// ---------- 📄 অফিসার-নির্দিষ্ট PDF এক্সপোর্ট (শুধু মার্কেটিং রিপোর্টের জন্য) ----------
-const exportOfficerPDF = async (officerName, appointments) => {
-  const officerAppointments = appointments.filter(a => a.marketingOfficer === officerName);
-  if (officerAppointments.length === 0) {
-    alert('এই অফিসারের জন্য কোনো রোগী নেই');
-    return;
-  }
-
-  try {
-    const response = await fetch('https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts/hinted/ttf/NotoSansBengali/NotoSansBengali-Regular.ttf');
-    const arrayBuffer = await response.arrayBuffer();
-    const binary = String.fromCharCode(...new Uint8Array(arrayBuffer));
-    const fontBase64 = btoa(binary);
-    
-    const doc = new jsPDF('l', 'mm', 'a4');
-    doc.addFileToVFS('NotoSansBengali-Regular.ttf', fontBase64);
-    doc.addFont('NotoSansBengali-Regular.ttf', 'NotoSansBengali', 'normal');
-    doc.setFont('NotoSansBengali');
-    
-    doc.setFontSize(18);
-    doc.text(`${officerName} - মার্কেটিং রিপোর্ট`, 14, 15);
-    doc.setFontSize(11);
-    const today = new Date().toISOString().split('T')[0];
-    doc.text(`তারিখ: ${today}`, 14, 25);
-    doc.text(`মোট রোগী: ${officerAppointments.length} জন`, 14, 33);
-    doc.line(14, 38, 290, 38);
-    
-    const rows = await Promise.all(officerAppointments.map(async (a) => {
-      let patientType = 'অজানা';
-      if (a.patientId) {
-        const patient = await getPatientById(a.patientId);
-        if (patient) {
-          const visits = patient.visits || [];
-          const doctorVisits = visits.filter(v => v.doctorName === a.doctorName && v.date < a.bookingDate);
-          if (doctorVisits.length === 0) patientType = 'নতুন';
-          else {
-            const sorted = [...doctorVisits].sort((x, y) => new Date(y.date) - new Date(x.date));
-            const last = sorted[0];
-            const diffDays = Math.ceil(Math.abs(new Date(last.date) - new Date(a.bookingDate)) / (1000 * 60 * 60 * 24));
-            patientType = diffDays <= 7 ? 'রিপোর্ট' : 'ফলোআপ';
-          }
-        }
-      }
-      return [
-        a.serialNo || '-',
-        a.name || '-',
-        a.mobile || '-',
-        a.referralSource || '-',
-        a.doctorName || '-',
-        a.bookingDate || '-',
-        a.status || 'pending',
-        patientType
-      ];
-    }));
-    
-    autoTable(doc, {
-      head: [['সিরিয়াল', 'রোগীর নাম', 'মোবাইল', 'রেফারেল সোর্স', 'ডাক্তার', 'তারিখ', 'স্ট্যাটাস', 'রোগীর টাইপ']],
-      body: rows,
-      startY: 42,
-      styles: { fontSize: 7, cellPadding: 2, font: 'NotoSansBengali' },
-      headStyles: { fillColor: [28, 95, 168], textColor: 255, fontSize: 8, fontStyle: 'bold', font: 'NotoSansBengali' },
-      alternateRowStyles: { fillColor: [245, 248, 250] },
-      columnStyles: {
-        0: { cellWidth: 15, halign: 'center' },
-        1: { cellWidth: 30 },
-        2: { cellWidth: 25 },
-        3: { cellWidth: 30 },
-        4: { cellWidth: 30 },
-        5: { cellWidth: 25, halign: 'center' },
-        6: { cellWidth: 25, halign: 'center' },
-        7: { cellWidth: 20, halign: 'center' }
-      }
-    });
-    
-    const pageCount = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.text(`পৃষ্ঠা ${i} / ${pageCount}`, doc.internal.pageSize.getWidth() - 25, doc.internal.pageSize.getHeight() - 10);
-    }
-    
-    doc.save(`${officerName}_marketing_report.pdf`);
-  } catch (error) {
-    console.error('PDF Export Error:', error);
-    alert('PDF ডাউনলোড করতে সমস্যা হয়েছে।');
-  }
-};
 
 // ---------- স্ট্যাটাস ব্যাজ ----------
 const StatusBadge = ({ status }) => {
@@ -387,6 +297,139 @@ export default function AppointmentsTable({
     }
   };
 
+  // 🔥 ডাক্তার ওয়াইজ প্রিন্ট ফাংশন
+  const printDoctorWise = (doctorName, patients) => {
+    const printWindow = window.open('', '_blank', 'width=1000,height=800');
+    if (!printWindow) {
+      alert('পপ-আপ ব্লকার সক্রিয় থাকতে পারে। অনুগ্রহ করে পপ-আপ অনুমতি দিন।');
+      return;
+    }
+
+    const sortedPatients = [...patients].sort((a, b) => Number(a.serialNo) - Number(b.serialNo));
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>${doctorName} - রোগীর তালিকা</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+              font-family: 'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif;
+              padding: 30px;
+              background: #fff;
+              color: #1e293b;
+            }
+            .print-header {
+              text-align: center;
+              margin-bottom: 25px;
+              border-bottom: 2px solid #1c5fa8;
+              padding-bottom: 15px;
+            }
+            .print-header h1 { color: #1c5fa8; font-size: 24px; margin-bottom: 5px; }
+            .print-header .sub { color: #475569; font-size: 14px; }
+            .print-date { text-align: right; font-size: 13px; color: #64748b; margin-bottom: 15px; }
+            table { width: 100%; border-collapse: collapse; font-size: 14px; }
+            th { 
+              background: #1c5fa8; 
+              color: #fff; 
+              padding: 10px 12px; 
+              text-align: left;
+              font-weight: 700;
+            }
+            td { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; }
+            tr:nth-child(even) { background: #f8fafc; }
+            .status-badge {
+              display: inline-block;
+              padding: 2px 10px;
+              border-radius: 20px;
+              font-size: 12px;
+              font-weight: 700;
+            }
+            .status-pending { background: #fef3c7; color: #92400e; }
+            .status-confirmed { background: #dbeafe; color: #1e40af; }
+            .status-checked-in { background: #ede9fe; color: #6d28d9; }
+            .status-completed { background: #dcfce7; color: #166534; }
+            .status-cancelled { background: #fee2e2; color: #991b1b; }
+            .status-no-show { background: #f3f4f6; color: #4b5563; }
+            .status-archived { background: #e5e7eb; color: #374151; }
+            .footer { 
+              margin-top: 20px; 
+              text-align: center; 
+              font-size: 12px; 
+              color: #94a3b8;
+              border-top: 1px solid #e2e8f0;
+              padding-top: 15px;
+            }
+            .patient-type {
+              display: inline-block;
+              padding: 2px 10px;
+              border-radius: 20px;
+              font-size: 12px;
+              font-weight: 600;
+            }
+            .type-new { background: #dcfce7; color: #166534; }
+            .type-report { background: #fef3c7; color: #92400e; }
+            .type-followup { background: #dbeafe; color: #1e40af; }
+            @media print {
+              body { padding: 15px; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="no-print" style="text-align:right;margin-bottom:15px;">
+            <button onclick="window.print()" style="padding:8px 20px;background:#1c5fa8;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;">🖨️ প্রিন্ট করুন</button>
+            <button onclick="window.close()" style="padding:8px 20px;background:#e2e8f0;color:#1e293b;border:none;border-radius:6px;cursor:pointer;font-size:14px;margin-left:10px;">বন্ধ করুন</button>
+          </div>
+
+          <div class="print-header">
+            <h1>${doctorName}</h1>
+            <div class="sub">রোগীর বুকিং তালিকা</div>
+          </div>
+          <div class="print-date">প্রিন্ট তারিখ: ${new Date().toLocaleString('bn-BD')}</div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>সিরিয়াল</th>
+                <th>রোগীর নাম</th>
+                <th>মোবাইল</th>
+                <th>বুকিং তারিখ</th>
+                <th>রোগীর টাইপ</th>
+                <th>স্ট্যাটাস</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${sortedPatients.map(appt => `
+                <tr>
+                  <td>${appt.serialNo || '-'}</td>
+                  <td>${appt.name || '-'}</td>
+                  <td>${appt.mobile || '-'}</td>
+                  <td>${appt.bookingDate || '-'}</td>
+                  <td>
+                    <span class="patient-type type-${patientTypes[appt.id] === 'নতুন' ? 'new' : patientTypes[appt.id] === 'রিপোর্ট' ? 'report' : 'followup'}">
+                      ${patientTypes[appt.id] || 'অজানা'}
+                    </span>
+                  </td>
+                  <td><span class="status-badge status-${appt.status || 'pending'}">${appt.status || 'pending'}</span></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <div class="footer">
+            মোট রোগী: ${sortedPatients.length} জন
+          </div>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
   const doctorWiseData = {};
   filteredAppointments.forEach(appt => {
     const doctorName = appt.doctorName || 'Unknown Doctor';
@@ -506,7 +549,7 @@ export default function AppointmentsTable({
               <th style={{ padding: '12px' }}>বুকিং তারিখ</th>
               <th style={{ padding: '12px' }}>ডাক্তার</th>
               <th style={{ padding: '12px' }}>রেফারেল</th>
-              <th style={{ padding: '12px' }}>বুকিং সোর্স</th>
+              <th style={{ padding: '12px' }}>মার্কেটিং অফিসার</th>
               <th style={{ padding: '12px' }}>রোগীর টাইপ</th>
               <th style={{ padding: '12px' }}>রিমার্কস</th>
               <th style={{ padding: '12px' }}>স্ট্যাটাস</th>
@@ -666,7 +709,7 @@ export default function AppointmentsTable({
         </table>
       )}
 
-      {/* ---------- ডাক্তার ওয়াইজ ভিউ ---------- */}
+      {/* ---------- ডাক্তার ওয়াইজ ভিউ (প্রিন্ট বাটন সহ) ---------- */}
       {viewMode === 'doctor' && (
         <div>
           {Object.keys(doctorWiseData).length === 0 ? <div style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>কোনো বুকিং পাওয়া যায়নি</div> : (
@@ -674,7 +717,34 @@ export default function AppointmentsTable({
               <div key={doctorName} style={{ marginBottom: '20px', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
                 <div style={{ background: '#f8fafc', padding: '12px 15px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <strong style={{ color: '#1c5fa8', fontSize: '16px' }}>{doctorName}</strong>
-                  <span style={{ background: '#0d9488', color: '#fff', padding: '4px 10px', borderRadius: '20px', fontSize: '13px', fontWeight: '700' }}>মোট: {info.patients.length} জন</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ background: '#0d9488', color: '#fff', padding: '4px 10px', borderRadius: '20px', fontSize: '13px', fontWeight: '700' }}>
+                      মোট: {info.patients.length} জন
+                    </span>
+                    {/* 🔥 প্রিন্ট বাটন */}
+                    <button
+                      onClick={() => printDoctorWise(doctorName, info.patients)}
+                      title={`${doctorName} - প্রিন্ট`}
+                      style={{
+                        background: '#1c5fa8',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '4px 12px',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#154a82'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = '#1c5fa8'}
+                    >
+                      <Printer size={15} /> প্রিন্ট
+                    </button>
+                  </span>
                 </div>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>

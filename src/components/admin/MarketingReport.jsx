@@ -5,10 +5,13 @@ import { FileText, Trash2 } from 'lucide-react';
 import { db, doc, setDoc, collection, query, where, getDocs, updateDoc } from '../../firebase';
 import { getPatientById } from '../../services/patientService';
 
+// ---------- 📄 অফিসার-নির্দিষ্ট PDF এক্সপোর্ট (শুধু COMPLETED অ্যাপয়েন্টমেন্ট) ----------
 const exportOfficerPDF = async (officerName, appointments) => {
-  const officerAppointments = appointments.filter(a => a.marketingOfficer === officerName);
+  // শুধু 'completed' স্ট্যাটাসের অ্যাপয়েন্টমেন্ট ফিল্টার
+  const officerAppointments = appointments.filter(a => a.marketingOfficer === officerName && a.status === 'completed');
+  
   if (officerAppointments.length === 0) {
-    alert('এই অফিসারের জন্য কোনো রোগী নেই');
+    alert('এই অফিসারের কোনো সম্পন্ন (Completed) রোগী নেই');
     return;
   }
 
@@ -24,14 +27,14 @@ const exportOfficerPDF = async (officerName, appointments) => {
     document.body.appendChild(container);
 
     const header = document.createElement('h2');
-    header.textContent = `${officerName} - মার্কেটিং রিপোর্ট`;
+    header.textContent = `${officerName} - মার্কেটিং রিপোর্ট (সম্পন্ন রোগী)`;
     header.style.marginBottom = '10px';
     header.style.color = '#1c5fa8';
     container.appendChild(header);
 
     const dateInfo = document.createElement('p');
     const today = new Date().toISOString().split('T')[0];
-    dateInfo.textContent = `তারিখ: ${today}  |  মোট রোগী: ${officerAppointments.length} জন`;
+    dateInfo.textContent = `তারিখ: ${today}  |  মোট সম্পন্ন রোগী: ${officerAppointments.length} জন`;
     dateInfo.style.marginBottom = '20px';
     container.appendChild(dateInfo);
 
@@ -42,7 +45,8 @@ const exportOfficerPDF = async (officerName, appointments) => {
 
     const thead = document.createElement('thead');
     const headerRow = document.createElement('tr');
-    const headers = ['সিরিয়াল', 'রোগীর নাম', 'মোবাইল', 'রেফারেল সোর্স', 'ডাক্তার', 'তারিখ', 'স্ট্যাটাস'];
+    // হেডার: ক্রমিক নং, তারিখ, রোগীর নাম, ডাক্তার, রিমার্কস, স্ট্যাটাস
+    const headers = ['ক্রমিক নং', 'তারিখ', 'রোগীর নাম', 'ডাক্তার', 'রিমার্কস', 'স্ট্যাটাস'];
     headers.forEach(text => {
       const th = document.createElement('th');
       th.textContent = text;
@@ -57,16 +61,16 @@ const exportOfficerPDF = async (officerName, appointments) => {
     table.appendChild(thead);
 
     const tbody = document.createElement('tbody');
-    officerAppointments.forEach(a => {
+    officerAppointments.forEach((a, index) => {
       const tr = document.createElement('tr');
+      // ডেটা: ক্রমিক নং, তারিখ, রোগীর নাম, ডাক্তার, রিমার্কস, স্ট্যাটাস
       const cells = [
-        a.serialNo || '-',
-        a.name || '-',
-        a.mobile || '-',
-        a.referralSource || '-',
-        a.doctorName || '-',
+        (index + 1).toString(), // ক্রমিক নং
         a.bookingDate || '-',
-        a.status || 'pending'
+        a.name || '-',
+        a.doctorName || '-',
+        a.remarks || '-',
+        a.status || 'completed'
       ];
       cells.forEach(text => {
         const td = document.createElement('td');
@@ -103,13 +107,14 @@ const exportOfficerPDF = async (officerName, appointments) => {
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
     pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    pdf.save(`${officerName}_marketing_report.pdf`);
+    pdf.save(`${officerName}_completed_report.pdf`);
   } catch (error) {
     console.error('PDF Export Error:', error);
     alert('PDF ডাউনলোড করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।');
   }
 };
 
+// ---------- মূল কম্পোনেন্ট ----------
 export default function MarketingReport({ 
   appointments, 
   marketingTeam, 
@@ -125,6 +130,7 @@ export default function MarketingReport({
 
   const isAdmin = user?.role === 'admin';
 
+  // রোগীর ডেটা লোড
   useEffect(() => {
     const loadPatients = async () => {
       const cache = {};
@@ -141,6 +147,7 @@ export default function MarketingReport({
     loadPatients();
   }, [appointments]);
 
+  // ফিল্টার লজিক
   const filtered = useMemo(() => {
     return appointments.filter(a => {
       if (!a.bookingDate) return false;
@@ -150,49 +157,82 @@ export default function MarketingReport({
     });
   }, [appointments, startDate, endDate, selectedOfficer]);
 
+  // 🔥 অফিসার ওয়াইজ অ্যাগ্রিগেটেড ডেটা (মার্কেটিং টিমের সব অফিসার দেখাবে)
   const reportData = useMemo(() => {
-    const groups = {};
+    // প্রথমে marketingTeam থেকে সব অফিসারের নাম নিয়ে একটি ম্যাপ তৈরি করি
+    const officerMap = {};
+    marketingTeam.forEach(m => {
+      const name = typeof m === 'string' ? m : m.name;
+      officerMap[name] = {
+        name,
+        total: 0,
+        newPatients: 0,
+        repeatPatients: 0,
+        sources: {},
+        completed: 0,
+        checkedIn: 0
+      };
+    });
+
+    // এখন filtered অ্যাপয়েন্টমেন্ট থেকে কাউন্ট আপডেট করি
     filtered.forEach(a => {
       const officer = a.marketingOfficer || 'Unassigned';
-      if (!groups[officer]) {
-        groups[officer] = { 
-          total: 0, 
-          newPatients: 0, 
+      
+      // 'Unassigned' এর জন্য আলাদা এন্ট্রি
+      if (!officerMap[officer]) {
+        officerMap[officer] = {
+          name: officer,
+          total: 0,
+          newPatients: 0,
           repeatPatients: 0,
-          sources: {}, 
-          completed: 0, 
-          checkedIn: 0 
+          sources: {},
+          completed: 0,
+          checkedIn: 0
         };
       }
-      groups[officer].total++;
+
+      const entry = officerMap[officer];
+      entry.total++;
       
       const patient = patientCache[a.patientId];
       if (patient) {
         if (patient.totalVisits === 1) {
-          groups[officer].newPatients++;
+          entry.newPatients++;
         } else {
-          groups[officer].repeatPatients++;
+          entry.repeatPatients++;
         }
       }
       
       const src = a.referralSource || 'Unknown';
-      groups[officer].sources[src] = (groups[officer].sources[src] || 0) + 1;
-      if (a.status === 'completed') groups[officer].completed++;
-      if (a.status === 'checked-in') groups[officer].checkedIn++;
+      entry.sources[src] = (entry.sources[src] || 0) + 1;
+      if (a.status === 'completed') entry.completed++;
+      if (a.status === 'checked-in') entry.checkedIn++;
     });
-    return Object.entries(groups).map(([name, data]) => ({
-      name,
-      total: data.total,
-      newPatients: data.newPatients,
-      repeatPatients: data.repeatPatients,
-      sources: data.sources,
-      completed: data.completed,
-      checkedIn: data.checkedIn,
-      conversionRate: data.total > 0 ? (((data.completed + data.checkedIn) / data.total) * 100).toFixed(1) : 0,
-      repeatRate: data.total > 0 ? ((data.repeatPatients / data.total) * 100).toFixed(1) : 0
-    }));
-  }, [filtered, patientCache]);
 
+    // অবজেক্ট থেকে অ্যারে বানাই
+    const result = Object.values(officerMap).map(entry => ({
+      name: entry.name,
+      total: entry.total,
+      newPatients: entry.newPatients,
+      repeatPatients: entry.repeatPatients,
+      sources: entry.sources,
+      completed: entry.completed,
+      checkedIn: entry.checkedIn,
+      conversionRate: entry.total > 0 ? (((entry.completed + entry.checkedIn) / entry.total) * 100).toFixed(1) : 0,
+      repeatRate: entry.total > 0 ? ((entry.repeatPatients / entry.total) * 100).toFixed(1) : 0
+    }));
+
+    // Unassigned কে শেষে রাখি
+    result.sort((a, b) => {
+      if (a.name === 'Unassigned') return 1;
+      if (b.name === 'Unassigned') return -1;
+      return 0;
+    });
+
+    return result;
+  }, [filtered, patientCache, marketingTeam]);
+
+  // ডিলেট ফাংশন
   const handleDelete = async (officerName) => {
     if (!isAdmin) {
       alert('শুধুমাত্র অ্যাডমিন অফিসার ডিলিট করতে পারবেন।');
@@ -232,6 +272,7 @@ export default function MarketingReport({
     <div style={{ background: '#fff', padding: '20px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
       <h3 style={{ margin: '0 0 15px 0' }}>📊 মার্কেটিং রিপোর্ট</h3>
       
+      {/* ফিল্টার */}
       <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', marginBottom: '20px', alignItems: 'flex-end' }}>
         <div>
           <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#64748b' }}>অফিসার</label>
@@ -268,6 +309,7 @@ export default function MarketingReport({
         </div>
       </div>
 
+      {/* টেবিল */}
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
@@ -278,7 +320,7 @@ export default function MarketingReport({
               <th style={{ padding: '10px 12px' }}>🔄 ফলোআপ</th>
               <th style={{ padding: '10px 12px' }}>রিপিট রেট</th>
               <th style={{ padding: '10px 12px' }}>চেক-ইন</th>
-              <th style={{ padding: '10px 12px' }}>কমপ্লিট</th>
+              <th style={{ padding: '10px 12px' }}>✅ কমপ্লিট</th>
               <th style={{ padding: '10px 12px' }}>কনভার্সন</th>
               <th style={{ padding: '10px 12px' }}>সোর্স ব্রেকডাউন</th>
               {isAdmin && <th style={{ padding: '10px 12px', textAlign: 'center' }}>অ্যাকশন</th>}
@@ -293,10 +335,11 @@ export default function MarketingReport({
                   <td style={{ padding: '10px 12px', fontWeight: '700' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       <span>{row.name}</span>
+                      {/* 🔥 সব অফিসারের জন্য PDF বাটন (Unassigned বাদে) */}
                       {row.name !== 'Unassigned' && (
                         <button 
                           onClick={() => exportOfficerPDF(row.name, filtered)}
-                          title={`${row.name} এর বিস্তারিত রিপোর্ট ডাউনলোড`}
+                          title={`${row.name} এর সম্পন্ন রোগীদের রিপোর্ট ডাউনলোড`}
                           style={{ 
                             background: '#dc2626', 
                             color: '#fff', 
@@ -321,7 +364,7 @@ export default function MarketingReport({
                   <td style={{ padding: '10px 12px', color: '#d97706', fontWeight: '600' }}>{row.repeatPatients}</td>
                   <td style={{ padding: '10px 12px', fontWeight: '600' }}>{row.repeatRate}%</td>
                   <td style={{ padding: '10px 12px' }}>{row.checkedIn}</td>
-                  <td style={{ padding: '10px 12px' }}>{row.completed}</td>
+                  <td style={{ padding: '10px 12px', fontWeight: '700', color: '#166534' }}>{row.completed}</td>
                   <td style={{ padding: '10px 12px', fontWeight: '600', color: row.conversionRate > 50 ? '#22c55e' : '#d97706' }}>{row.conversionRate}%</td>
                   <td style={{ padding: '10px 12px' }}>
                     {Object.entries(row.sources).map(([k, v]) => (
