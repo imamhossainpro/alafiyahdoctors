@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, BellRing, CheckCheck, Stethoscope, Check } from 'lucide-react';
-import { db, collection, onSnapshot, query, orderBy } from '../firebase';
+import { Bell, BellRing, Check, Stethoscope } from 'lucide-react';
+import { db, collection, onSnapshot, query, where, doc, updateDoc } from '../firebase';
 
 const BellCSS = `
 .notification-bell-wrapper { position: relative; }
@@ -10,16 +10,13 @@ const BellCSS = `
 .notification-dropdown { position: absolute; right: 0; top: 45px; width: 340px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 100; overflow: hidden; }
 .notification-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
 .notification-header h4 { margin: 0; font-size: 15px; color: #1e293b; }
-.notification-clear-btn { background: transparent; border: none; color: #64748b; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+.notification-header button { background: transparent; border: none; color: #64748b; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
 .notification-list { max-height: 350px; overflow-y: auto; padding: 0; }
 
-/* নতুন (Unread) - হাইলাইট */
-.notification-item.unread { background: #eff6ff; border-left: 4px solid #3b82f6; }
+/* নতুন (Unread) - হালকা সবুজ ব্যাকগ্রাউন্ড */
+.notification-item.unread { background: #f0fdf4; border-left: 4px solid #22c55e; }
 .notification-item { padding: 12px 15px; border-bottom: 1px solid #f1f5f9; display: flex; gap: 10px; align-items: center; transition: background 0.2s; }
 .notification-item:hover { background: #f8fafc; }
-
-/* পড়া হয়ে গেছে (Read) - হাইলাইট মুছে যাবে */
-.notification-item.read { background: #ffffff; border-left: 4px solid transparent; opacity: 0.7; }
 .notification-item:last-child { border-bottom: none; }
 .notification-icon { width: 36px; height: 36px; border-radius: 50%; background: #eff6ff; color: #1c5fa8; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .notification-content { flex: 1; min-width: 0; }
@@ -27,9 +24,8 @@ const BellCSS = `
 .notification-sub { font-size: 12px; color: #64748b; }
 .notification-datetime { font-size: 11px; color: #94a3b8; margin-top: 4px; display: flex; align-items: center; gap: 4px; }
 .empty-notification { padding: 30px; text-align: center; color: #64748b; font-size: 13px; }
-.notification-read-btn { background: transparent; border: none; cursor: pointer; color: #94a3b8; padding: 6px; border-radius: 50%; flex-shrink: 0; transition: all 0.2s; }
+.notification-read-btn { background: transparent; border: none; cursor: pointer; color: #94a3b8; padding: 6px; border-radius: 50%; transition: all 0.2s; }
 .notification-read-btn:hover { background: #dcfce7; color: #22c55e; }
-.notification-read-btn.marked { background: #dcfce7; color: #22c55e; }
 `;
 
 const timeAgo = (date) => {
@@ -48,118 +44,104 @@ export default function NotificationBell({ user }) {
   const allowedRoles = ['admin', 'sub-admin', 'editor'];
   const canView = user && allowedRoles.includes(user.role);
 
-  const [notifications, setNotifications] = useState([]);
+  const [unreadNotifications, setUnreadNotifications] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
-  
-  const [readIds, setReadIds] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('notif_read_ids') || '[]');
-    } catch (e) {
-      return [];
-    }
-  });
+  const [loading, setLoading] = useState(true);
+  const prevIdsRef = useRef(new Set());
 
-  // 🔥 latest readIds ট্র্যাক করার জন্য Ref
-  const readIdsRef = useRef(readIds);
-  
-  // 🔥 readIds পরিবর্তন হলে সাথে সাথে Ref আপডেট হবে
-  useEffect(() => {
-    readIdsRef.current = readIds;
-  }, [readIds]);
-  
-  const isFirstLoad = useRef(true);
-
-  // প্রতি ৩০ সেকেন্ডে টাইম আপডেট
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    const timer = setInterval(() => setTick(t => t + 1), 30000);
-    return () => clearInterval(timer);
-  }, []);
-
+  // ব্রাউজার নোটিফিকেশন পারমিশন
   useEffect(() => {
     if (!canView) return;
-
-    // ব্রাউজার পারমিশন চাওয়া
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
     }
+  }, [canView]);
 
-    // Firebase রিয়েল-টাইম লিসেনার
-    const q = query(collection(db, 'appointments'), orderBy('timestamp', 'desc'));
+  // ফায়ারবেস থেকে শুধু আনরিড অ্যাপয়েন্টমেন্ট লোড
+  useEffect(() => {
+    if (!canView) return;
+
+    const q = query(collection(db, 'appointments'), where('isRead', '==', false));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const newItems = [];
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === 'added') {
-          const data = change.doc.data();
-          
-          // সঠিক টাইমস্ট্যাম্প পার্সিং
-          let date = new Date();
-          if (data.timestamp) {
-            if (typeof data.timestamp === 'object' && data.timestamp.seconds) {
-              date = new Date(data.timestamp.seconds * 1000);
-            } else {
-              date = new Date(data.timestamp);
-            }
+      const items = [];
+      const currentIds = new Set();
+      
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        // আমরা শুধু 'isNew' true থাকলেও দেখাব, কিন্তু ফিল্টার isRead false ই যথেষ্ট
+        // তবে আমরা চাই নতুন অ্যাপয়েন্টমেন্টগুলো হাইলাইট থাকবে, isNew দিয়ে আমরা আলাদা করতে পারি
+        // কিন্তু isRead false মানেই আনরিড, তাই সব আনরিড দেখাব
+        // সময় পার্সিং
+        let date = new Date();
+        if (data.timestamp) {
+          if (typeof data.timestamp === 'object' && data.timestamp.seconds) {
+            date = new Date(data.timestamp.seconds * 1000);
+          } else {
+            date = new Date(data.timestamp);
           }
-          
-          const notifObj = {
-            id: change.doc.id,
-            name: data.name || 'অজানা রোগী',
-            doctor: data.doctorName || 'অজানা ডাক্তার',
-            time: date
-          };
-          newItems.push(notifObj);
+        }
+        const notif = {
+          id: doc.id,
+          name: data.name || 'অজানা রোগী',
+          doctor: data.doctorName || 'অজানা ডাক্তার',
+          time: date,
+          isNew: data.isNew || false // নতুন কিনা জানতে
+        };
+        items.push(notif);
+        currentIds.add(doc.id);
+      });
 
-          // 🔥 ব্রাউজার নোটিফিকেশন পাঠানোর আগে চেক করা হচ্ছে:
-          // ১. প্রথম লোড নয় (নাহলে পুরনো ডেটার জন্য নোটিফিকেশন আসবে)
-          // ২. পারমিশন দেওয়া আছে
-          // ৩. এই আইডিটি readIds তে নেই (অর্থাৎ ড্যাশবোর্ডে দেখা হয়নি)
-          if (
-            !isFirstLoad.current && 
-            "Notification" in window && 
-            Notification.permission === "granted" &&
-            !readIdsRef.current.includes(change.doc.id)
-          ) {
-            new Notification("নতুন সিরিয়াল বুকিং!", {
-              body: `${data.name || 'রোগী'} - ${data.doctorName || 'ডাক্তার'}`,
+      // সাজানো (নতুন -> পুরনো)
+      items.sort((a, b) => b.time - a.time);
+      setUnreadNotifications(items);
+      setLoading(false);
+
+      // নতুন আইডি ডিটেক্ট করে ব্রাউজার নোটিফিকেশন পাঠানো
+      const newIds = new Set([...currentIds].filter(id => !prevIdsRef.current.has(id)));
+      if (newIds.size > 0 && !loading) {
+        newIds.forEach(id => {
+          const notif = items.find(n => n.id === id);
+          if (notif && "Notification" in window && Notification.permission === "granted") {
+            new Notification("🆕 নতুন সিরিয়াল বুকিং!", {
+              body: `${notif.name} - ${notif.doctor}`,
               icon: "/logo.png"
             });
           }
-        }
-      });
-
-      if (!isFirstLoad.current) {
-        if (newItems.length > 0) {
-          setNotifications((prev) => [...newItems, ...prev].slice(0, 10));
-        }
-      } else {
-        setNotifications(newItems);
-        isFirstLoad.current = false;
+        });
       }
+      prevIdsRef.current = currentIds;
     });
 
     return () => unsubscribe();
-  }, [canView]);
+  }, [canView, loading]);
 
-  useEffect(() => {
-    const unread = notifications.filter(n => !readIds.includes(n.id)).length;
-    setUnreadCount(unread);
-  }, [notifications, readIds]);
-
-  const handleMarkAsRead = (id) => {
-    const newReadIds = readIds.includes(id) ? readIds : [...readIds, id];
-    setReadIds(newReadIds);
-    localStorage.setItem('notif_read_ids', JSON.stringify(newReadIds));
+  // মার্ক এজ রিড (টিক ক্লিক)
+  const handleMarkAsRead = async (id) => {
+    try {
+      await updateDoc(doc(db, 'appointments', id), { isRead: true });
+      // রিয়েল-টাইম আপডেটের কারণে লিস্ট অটো আপডেট হবে
+    } catch (error) {
+      console.error('Error marking as read:', error);
+      alert('রিড করতে সমস্যা হয়েছে');
+    }
   };
 
-  const handleMarkAllRead = () => {
-    const allIds = notifications.map(n => n.id);
-    setReadIds(allIds);
-    localStorage.setItem('notif_read_ids', JSON.stringify(allIds));
+  // মার্ক অল রিড
+  const handleMarkAllRead = async () => {
+    try {
+      const promises = unreadNotifications.map(n => 
+        updateDoc(doc(db, 'appointments', n.id), { isRead: true })
+      );
+      await Promise.all(promises);
+    } catch (error) {
+      console.error('Error marking all as read:', error);
+      alert('সব রিড করতে সমস্যা হয়েছে');
+    }
   };
 
   if (!canView) return null;
+
+  const unreadCount = unreadNotifications.length;
 
   return (
     <div className="notification-bell-wrapper">
@@ -174,36 +156,37 @@ export default function NotificationBell({ user }) {
         <div className="notification-dropdown" onMouseLeave={() => setShowDropdown(false)}>
           <div className="notification-header">
             <h4>নতুন বুকিং</h4>
-            <button className="notification-clear-btn" onClick={handleMarkAllRead}>
-              <CheckCheck size={14} /> সব পড়া হয়েছে
-            </button>
+            {unreadCount > 0 && (
+              <button onClick={handleMarkAllRead}>
+                <Check size={14} /> সব পড়া হয়েছে
+              </button>
+            )}
           </div>
           
           <div className="notification-list">
-            {notifications.length === 0 ? (
+            {loading ? (
+              <div className="empty-notification">লোড হচ্ছে...</div>
+            ) : unreadNotifications.length === 0 ? (
               <div className="empty-notification">কোনো নতুন নোটিফিকেশন নেই</div>
             ) : (
-              notifications.map((notif, index) => {
-                const isRead = readIds.includes(notif.id);
-                return (
-                  <div key={notif.id || index} className={`notification-item ${isRead ? 'read' : 'unread'}`}>
-                    <div className="notification-icon"><Stethoscope size={18} /></div>
-                    <div className="notification-content">
-                      <div className="notification-title">{notif.name}</div>
-                      <div className="notification-sub">ডাক্তার: {notif.doctor}</div>
-                      <div className="notification-datetime">🕒 {timeAgo(notif.time)}</div>
-                    </div>
-                    
-                    <button 
-                      className={`notification-read-btn ${isRead ? 'marked' : ''}`} 
-                      onClick={() => handleMarkAsRead(notif.id)}
-                      title={isRead ? 'পড়া হয়েছে' : 'পড়া হয়েছে হিসেবে চিহ্নিত করুন'}
-                    >
-                      <Check size={16} />
-                    </button>
+              unreadNotifications.map((notif) => (
+                <div key={notif.id} className="notification-item unread">
+                  <div className="notification-icon"><Stethoscope size={18} /></div>
+                  <div className="notification-content">
+                    <div className="notification-title">{notif.name}</div>
+                    <div className="notification-sub">ডাক্তার: {notif.doctor}</div>
+                    <div className="notification-datetime">🕒 {timeAgo(notif.time)}</div>
                   </div>
-                );
-              })
+                  
+                  <button 
+                    className="notification-read-btn" 
+                    onClick={() => handleMarkAsRead(notif.id)}
+                    title="পড়া হয়েছে হিসেবে চিহ্নিত করুন"
+                  >
+                    <Check size={16} />
+                  </button>
+                </div>
+              ))
             )}
           </div>
         </div>

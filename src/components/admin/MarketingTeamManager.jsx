@@ -28,7 +28,6 @@ export default function MarketingTeamManager({ user, onTeamUpdate }) {
       if (docSnap.exists()) {
         teamData = docSnap.data().members || [];
       } else {
-        // ডিফল্ট টিম (যদি ডকুমেন্ট না থাকে)
         teamData = [
           { id: '1', name: 'আরিফ', designation: 'মার্কেটিং অফিসার', status: 'active', joinDate: '2025-01-01' },
           { id: '2', name: 'সাবরিনা', designation: 'মার্কেটিং অফিসার', status: 'active', joinDate: '2025-01-15' }
@@ -36,7 +35,6 @@ export default function MarketingTeamManager({ user, onTeamUpdate }) {
         await setDoc(docRef, { members: teamData });
       }
       setTeam(teamData);
-      // প্যারেন্টকে পুরো অবজেক্ট অ্যারে পাঠানো হচ্ছে
       if (onTeamUpdate) onTeamUpdate(teamData);
     } catch (error) {
       console.error('Team load error:', error);
@@ -49,7 +47,7 @@ export default function MarketingTeamManager({ user, onTeamUpdate }) {
     try {
       await setDoc(doc(db, 'master', 'marketingTeam'), { members: updatedTeam });
       setTeam(updatedTeam);
-      if (onTeamUpdate) onTeamUpdate(updatedTeam); // পুরো অ্যারে পাঠানো
+      if (onTeamUpdate) onTeamUpdate(updatedTeam);
     } catch (error) {
       console.error('Save error:', error);
       alert('সংরক্ষণ করতে সমস্যা হয়েছে।');
@@ -138,7 +136,7 @@ export default function MarketingTeamManager({ user, onTeamUpdate }) {
   return (
     <div style={{ background: '#fff', padding: '20px', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
       
-      {/* ---------- হেডার ---------- */}
+      {/* হেডার */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
         <div>
           <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -169,7 +167,7 @@ export default function MarketingTeamManager({ user, onTeamUpdate }) {
         )}
       </div>
 
-      {/* ---------- অফিসার কার্ড গ্রিড ---------- */}
+      {/* অফিসার কার্ড গ্রিড */}
       <div style={{ 
         display: 'grid', 
         gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
@@ -182,7 +180,7 @@ export default function MarketingTeamManager({ user, onTeamUpdate }) {
         ) : (
           team.map((officer) => (
             <div 
-              key={officer.id} 
+              key={officer.id} // ✅ unique key
               style={{ 
                 border: `1px solid ${officer.status === 'active' ? '#bbf7d0' : '#fee2e2'}`,
                 borderRadius: '12px',
@@ -228,6 +226,7 @@ export default function MarketingTeamManager({ user, onTeamUpdate }) {
               {isAdmin && (
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px', borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
                   <button 
+                    key={`status-${officer.id}`} // ✅ key added
                     onClick={() => toggleStatus(officer.id)}
                     style={{
                       padding: '6px 14px',
@@ -247,6 +246,7 @@ export default function MarketingTeamManager({ user, onTeamUpdate }) {
                     {officer.status === 'active' ? 'নিষ্ক্রিয় করুন' : 'সক্রিয় করুন'}
                   </button>
                   <button 
+                    key={`edit-${officer.id}`} // ✅ key added
                     onClick={() => handleEdit(officer)}
                     style={{
                       padding: '6px 14px',
@@ -265,6 +265,7 @@ export default function MarketingTeamManager({ user, onTeamUpdate }) {
                     <Edit2 size={14} /> সম্পাদনা
                   </button>
                   <button 
+                    key={`delete-${officer.id}`} // ✅ key added
                     onClick={() => handleDelete(officer.id)}
                     style={{
                       padding: '6px 14px',
@@ -289,7 +290,7 @@ export default function MarketingTeamManager({ user, onTeamUpdate }) {
         )}
       </div>
 
-      {/* ---------- মোডাল (যোগ/সম্পাদনা) ---------- */}
+      {/* মোডাল (যোগ/সম্পাদনা) */}
       {showModal && (
         <div style={{
           position: 'fixed',

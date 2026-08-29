@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, doc, getDoc, setDoc, addDoc, collection } from './firebase';
+import { findPatientByMobile, createPatient, addPatientVisit } from './services/patientService';
 import { Send, Loader2, User, Phone, MapPin, Stethoscope, CalendarDays, ArrowLeft, PlusCircle, CheckCircle2 } from 'lucide-react';
 
 const getTodayString = () => {
@@ -133,8 +134,8 @@ export default function BookingSystem({ departments, panels, onBack }) {
     age: '',
     mobile: '',
     gender: 'পুরুষ',
-    address: '', // ✅ ঐচ্ছিক
-    referralSource: 'Walk-in / নিজে এসেছেন', // ✅ ঐচ্ছিক
+    address: '',
+    referralSource: 'Walk-in / নিজে এসেছেন',
     referredDoctorName: '',
     otherReferralNote: '',
     departmentId: '',
@@ -197,23 +198,48 @@ export default function BookingSystem({ departments, panels, onBack }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true); setSuccessMsg('');
+    setLoading(true);
+    setSuccessMsg('');
     try {
-      // ✅ শুধু রিকোয়ার্ড ফিল্ডগুলো চেক করা হচ্ছে
       if (!formData.name.trim()) throw new Error('রোগীর নাম লিখুন');
       if (!formData.age.trim()) throw new Error('বয়স লিখুন');
       if (!formData.mobile.trim()) throw new Error('মোবাইল নম্বর লিখুন');
       if (!selectedDoctor) throw new Error('ডাক্তার নির্বাচন করুন');
       if (!selectedDate) throw new Error('তারিখ নির্বাচন করুন');
 
+      // রোগী খোঁজা বা তৈরি করা
+      let patient = await findPatientByMobile(formData.mobile);
+      let patientId;
+      
+      if (patient) {
+        patientId = patient.id;
+        await addPatientVisit(patientId, selectedDoctor.name, selectedDate);
+      } else {
+        const newPatient = await createPatient({
+          name: formData.name,
+          mobile: formData.mobile,
+          age: formData.age,
+          gender: formData.gender,
+          address: formData.address
+        });
+        patientId = newPatient.id;
+        await addPatientVisit(patientId, selectedDoctor.name, selectedDate);
+      }
+
+      // সিরিয়াল কাউন্ট
       const counterRef = doc(db, 'counters', selectedDoctor.id);
       let serialNo = 1;
       const counterDoc = await getDoc(counterRef);
-      if (counterDoc.exists()) { serialNo = counterDoc.data().count + 1; await setDoc(counterRef, { count: serialNo }, { merge: true }); }
-      else { await setDoc(counterRef, { count: serialNo }); }
+      if (counterDoc.exists()) { 
+        serialNo = counterDoc.data().count + 1; 
+        await setDoc(counterRef, { count: serialNo }, { merge: true }); 
+      } else { 
+        await setDoc(counterRef, { count: serialNo }); 
+      }
       
       const appointmentData = { 
         ...formData, 
+        patientId: patientId,
         doctorName: selectedDoctor.name, 
         doctorDept: selectedDoctor.deptName, 
         doctorQuals: selectedDoctor.quals || '', 
@@ -221,7 +247,9 @@ export default function BookingSystem({ departments, panels, onBack }) {
         bookingDay: selectedDayName, 
         serialNo: serialNo, 
         status: 'pending', 
-        timestamp: new Date().toISOString() 
+        timestamp: new Date().toISOString(),
+        isNew: true,
+        isRead: false // 👈 এই লাইনটি যোগ করুন
       };
       
       await addDoc(collection(db, 'appointments'), appointmentData);
@@ -230,7 +258,9 @@ export default function BookingSystem({ departments, panels, onBack }) {
     } catch (error) {
       console.error("Booking error:", error);
       alert(error.message || "বুকিং সম্পন্ন হয়নি। আবার চেষ্টা করুন।");
-    } finally { setLoading(false); }
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   const handleNewBooking = () => { resetForm(); setIsBooked(false); };

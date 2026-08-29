@@ -19,13 +19,13 @@ export default function AdminDashboard({ user }) {
   const [showArchived, setShowArchived] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // মার্কেটিং টিম স্টেট (অবজেক্ট অ্যারে)
+  // মার্কেটিং টিম স্টেট
   const [marketingTeam, setMarketingTeam] = useState([]);
 
-  // ডেট ফিল্টার স্টেট
-  const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(today);
-  const [filterPreset, setFilterPreset] = useState('today');
+  // ডেট ফিল্টার স্টেট - ডিফল্ট "all"
+  const [startDate, setStartDate] = useState('2020-01-01');
+  const [endDate, setEndDate] = useState('2030-12-31');
+  const [filterPreset, setFilterPreset] = useState('all');
 
   const isAdmin = user?.role === 'admin';
   const isSubAdmin = user?.role === 'sub-admin';
@@ -50,32 +50,42 @@ export default function AdminDashboard({ user }) {
   const applyPreset = (preset) => {
     setFilterPreset(preset);
     const now = new Date();
-    let start = new Date();
+    const todayStr = now.toISOString().split('T')[0];
     
     switch (preset) {
+      case 'all':
+        setStartDate('2020-01-01');
+        setEndDate('2030-12-31');
+        break;
       case 'today':
-        start = new Date(now);
+        setStartDate(todayStr);
+        setEndDate(todayStr);
         break;
       case 'week':
-        start = new Date(now);
-        start.setDate(now.getDate() - 7);
+        const weekStart = new Date(now);
+        weekStart.setDate(now.getDate() - 7);
+        setStartDate(weekStart.toISOString().split('T')[0]);
+        setEndDate(todayStr);
         break;
       case 'month':
-        start = new Date(now);
-        start.setMonth(now.getMonth() - 1);
+        const monthStart = new Date(now);
+        monthStart.setMonth(now.getMonth() - 1);
+        setStartDate(monthStart.toISOString().split('T')[0]);
+        setEndDate(todayStr);
         break;
       case 'year':
-        start = new Date(now);
-        start.setFullYear(now.getFullYear() - 1);
+        const yearStart = new Date(now);
+        yearStart.setFullYear(now.getFullYear() - 1);
+        setStartDate(yearStart.toISOString().split('T')[0]);
+        setEndDate(todayStr);
         break;
       case 'custom':
+        // কাস্টম রেঞ্জ ইউজার সেট করবে, এখানে কিছু করব না
         return;
       default:
-        start = new Date(now);
+        setStartDate('2020-01-01');
+        setEndDate('2030-12-31');
     }
-    
-    setStartDate(start.toISOString().split('T')[0]);
-    setEndDate(now.toISOString().split('T')[0]);
   };
 
   const handleStartDateChange = (e) => {
@@ -171,7 +181,7 @@ export default function AdminDashboard({ user }) {
         </div>
       </div>
 
-      {/* ---------- 📅 ফিল্টার সেকশন (শুধু Overview ও Appointments-এর জন্য) ---------- */}
+      {/* ---------- 📅 ফিল্টার সেকশন (প্রিসেট + ডেট পিকার) ---------- */}
       {(tab === 'overview' || tab === 'appointments') && (
         <div style={{ 
           background: '#ffffff', 
@@ -186,6 +196,21 @@ export default function AdminDashboard({ user }) {
         }}>
           {/* প্রিসেট বাটন */}
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button 
+              onClick={() => applyPreset('all')} 
+              style={{ 
+                padding: '6px 14px', 
+                background: filterPreset === 'all' ? '#1c5fa8' : '#f1f5f9', 
+                color: filterPreset === 'all' ? '#fff' : '#334155', 
+                border: 'none', 
+                borderRadius: '6px', 
+                cursor: 'pointer', 
+                fontWeight: '600', 
+                fontSize: '13px' 
+              }}
+            >
+              সব
+            </button>
             <button 
               onClick={() => applyPreset('today')} 
               style={{ 
@@ -313,7 +338,6 @@ export default function AdminDashboard({ user }) {
 
       {tab === 'marketing' && (isAdmin || isSubAdmin) && (
         <>
-          {/* শুধু অ্যাডমিন টিম ম্যানেজ দেখতে পাবে */}
           {isAdmin && <MarketingTeamManager user={user} onTeamUpdate={setMarketingTeam} />}
           <MarketingReport 
             appointments={filteredAppointments} 

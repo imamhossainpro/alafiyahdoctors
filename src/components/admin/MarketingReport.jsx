@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { FileText, Trash2 } from 'lucide-react';
 import { db, doc, setDoc, collection, query, where, getDocs, updateDoc } from '../../firebase';
+import { getPatientById } from '../../services/patientService';
 
-// ---------- 📄 অফিসার-নির্দিষ্ট PDF এক্সপোর্ট ----------
 const exportOfficerPDF = async (officerName, appointments) => {
   const officerAppointments = appointments.filter(a => a.marketingOfficer === officerName);
   if (officerAppointments.length === 0) {
@@ -110,7 +110,6 @@ const exportOfficerPDF = async (officerName, appointments) => {
   }
 };
 
-// ---------- মূল কম্পোনেন্ট ----------
 export default function MarketingReport({ 
   appointments, 
   marketingTeam, 
@@ -122,10 +121,26 @@ export default function MarketingReport({
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
   const [deletingId, setDeletingId] = useState(null);
+  const [patientCache, setPatientCache] = useState({});
 
   const isAdmin = user?.role === 'admin';
 
-  // ফিল্টার লজিক
+  useEffect(() => {
+    const loadPatients = async () => {
+      const cache = {};
+      for (const appt of appointments) {
+        if (appt.patientId && !cache[appt.patientId]) {
+          const patient = await getPatientById(appt.patientId);
+          if (patient) {
+            cache[appt.patientId] = patient;
+          }
+        }
+      }
+      setPatientCache(cache);
+    };
+    loadPatients();
+  }, [appointments]);
+
   const filtered = useMemo(() => {
     return appointments.filter(a => {
       if (!a.bookingDate) return false;
@@ -135,15 +150,31 @@ export default function MarketingReport({
     });
   }, [appointments, startDate, endDate, selectedOfficer]);
 
-  // রিপোর্ট ডেটা
   const reportData = useMemo(() => {
     const groups = {};
     filtered.forEach(a => {
       const officer = a.marketingOfficer || 'Unassigned';
       if (!groups[officer]) {
-        groups[officer] = { total: 0, sources: {}, completed: 0, checkedIn: 0 };
+        groups[officer] = { 
+          total: 0, 
+          newPatients: 0, 
+          repeatPatients: 0,
+          sources: {}, 
+          completed: 0, 
+          checkedIn: 0 
+        };
       }
       groups[officer].total++;
+      
+      const patient = patientCache[a.patientId];
+      if (patient) {
+        if (patient.totalVisits === 1) {
+          groups[officer].newPatients++;
+        } else {
+          groups[officer].repeatPatients++;
+        }
+      }
+      
       const src = a.referralSource || 'Unknown';
       groups[officer].sources[src] = (groups[officer].sources[src] || 0) + 1;
       if (a.status === 'completed') groups[officer].completed++;
@@ -152,14 +183,16 @@ export default function MarketingReport({
     return Object.entries(groups).map(([name, data]) => ({
       name,
       total: data.total,
+      newPatients: data.newPatients,
+      repeatPatients: data.repeatPatients,
       sources: data.sources,
       completed: data.completed,
       checkedIn: data.checkedIn,
-      conversionRate: data.total > 0 ? (((data.completed + data.checkedIn) / data.total) * 100).toFixed(1) : 0
+      conversionRate: data.total > 0 ? (((data.completed + data.checkedIn) / data.total) * 100).toFixed(1) : 0,
+      repeatRate: data.total > 0 ? ((data.repeatPatients / data.total) * 100).toFixed(1) : 0
     }));
-  }, [filtered]);
+  }, [filtered, patientCache]);
 
-  // 🗑️ ডিলেট ফাংশন (অ্যাপয়েন্টমেন্ট আপডেট সহ)
   const handleDelete = async (officerName) => {
     if (!isAdmin) {
       alert('শুধুমাত্র অ্যাডমিন অফিসার ডিলিট করতে পারবেন।');
@@ -172,14 +205,12 @@ export default function MarketingReport({
     try {
       setDeletingId(officerName);
 
-      // ১. অফিসারকে টিম থেকে বাদ দেওয়া
       const updatedTeam = marketingTeam.filter(m => {
         const name = typeof m === 'string' ? m : m.name;
         return name !== officerName;
       });
       await setDoc(doc(db, 'master', 'marketingTeam'), { members: updatedTeam });
 
-      // ২. 🔥 অ্যাপয়েন্টমেন্ট আপডেট করা - যাদের marketingOfficer = officerName, তাদের খালি করা
       const q = query(collection(db, 'appointments'), where('marketingOfficer', '==', officerName));
       const querySnapshot = await getDocs(q);
       const updatePromises = querySnapshot.docs.map(docSnap => 
@@ -187,9 +218,8 @@ export default function MarketingReport({
       );
       await Promise.all(updatePromises);
 
-      // ৩. প্যারেন্ট স্টেট আপডেট
       if (onTeamUpdate) onTeamUpdate(updatedTeam);
-      alert(`${officerName} সফলভাবে ডিলিট করা হয়েছে এবং তার সাথে যুক্ত সব রোগীর অফিসার ফিল্ড খালি করা হয়েছে।`);
+      alert(`${officerName} সফলভাবে ডিলিট করা হয়েছে।`);
     } catch (error) {
       console.error('Delete error:', error);
       alert('ডিলিট করতে সমস্যা হয়েছে।');
@@ -202,7 +232,6 @@ export default function MarketingReport({
     <div style={{ background: '#fff', padding: '20px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
       <h3 style={{ margin: '0 0 15px 0' }}>📊 মার্কেটিং রিপোর্ট</h3>
       
-      {/* ফিল্টার */}
       <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', marginBottom: '20px', alignItems: 'flex-end' }}>
         <div>
           <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#64748b' }}>অফিসার</label>
@@ -239,26 +268,28 @@ export default function MarketingReport({
         </div>
       </div>
 
-      {/* টেবিল */}
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: '#f1f5f9', textAlign: 'left' }}>
               <th style={{ padding: '10px 12px' }}>অফিসার</th>
-              <th style={{ padding: '10px 12px' }}>মোট রোগী</th>
+              <th style={{ padding: '10px 12px' }}>মোট</th>
+              <th style={{ padding: '10px 12px' }}>🆕 নতুন</th>
+              <th style={{ padding: '10px 12px' }}>🔄 ফলোআপ</th>
+              <th style={{ padding: '10px 12px' }}>রিপিট রেট</th>
               <th style={{ padding: '10px 12px' }}>চেক-ইন</th>
               <th style={{ padding: '10px 12px' }}>কমপ্লিট</th>
-              <th style={{ padding: '10px 12px' }}>কনভার্সন রেট</th>
+              <th style={{ padding: '10px 12px' }}>কনভার্সন</th>
               <th style={{ padding: '10px 12px' }}>সোর্স ব্রেকডাউন</th>
               {isAdmin && <th style={{ padding: '10px 12px', textAlign: 'center' }}>অ্যাকশন</th>}
             </tr>
           </thead>
           <tbody>
             {reportData.length === 0 ? (
-              <tr><td colSpan={isAdmin ? 7 : 6} style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>কোনো ডেটা পাওয়া যায়নি</td></tr>
+              <tr><td colSpan={isAdmin ? 10 : 9} style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>কোনো ডেটা পাওয়া যায়নি</td></tr>
             ) : (
               reportData.map((row, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+                <tr key={row.name + i} style={{ borderBottom: '1px solid #eee' }}>
                   <td style={{ padding: '10px 12px', fontWeight: '700' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       <span>{row.name}</span>
@@ -285,7 +316,10 @@ export default function MarketingReport({
                       )}
                     </div>
                   </td>
-                  <td style={{ padding: '10px 12px' }}>{row.total}</td>
+                  <td style={{ padding: '10px 12px', fontWeight: '700' }}>{row.total}</td>
+                  <td style={{ padding: '10px 12px', color: '#22c55e', fontWeight: '600' }}>{row.newPatients}</td>
+                  <td style={{ padding: '10px 12px', color: '#d97706', fontWeight: '600' }}>{row.repeatPatients}</td>
+                  <td style={{ padding: '10px 12px', fontWeight: '600' }}>{row.repeatRate}%</td>
                   <td style={{ padding: '10px 12px' }}>{row.checkedIn}</td>
                   <td style={{ padding: '10px 12px' }}>{row.completed}</td>
                   <td style={{ padding: '10px 12px', fontWeight: '600', color: row.conversionRate > 50 ? '#22c55e' : '#d97706' }}>{row.conversionRate}%</td>

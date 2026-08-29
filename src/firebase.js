@@ -11,7 +11,7 @@ import {
   addDoc,
   query,
   where,
-  orderBy, // 👈 এই লাইনটি যোগ করা হয়েছে
+  orderBy,
   onSnapshot,
 } from 'firebase/firestore';
 
@@ -39,6 +39,6 @@ export {
   addDoc,
   query,
   where,
-  orderBy, // 👈 এখানেও এক্সপোর্ট করতে হবে
+  orderBy,
   onSnapshot,
 };

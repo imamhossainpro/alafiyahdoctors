@@ -11,7 +11,7 @@ import { db, doc, getDoc, setDoc, getDocs, collection, deleteDoc, updateDoc, que
 import BookingSystem from './BookingSystem';
 import AdminDashboard from './components/AdminDashboard';
 import NotificationBell from './components/NotificationBell';
-import NotFoundPage from './components/NotFoundPage'; // 👈 নতুন ইমপোর্ট
+import NotFoundPage from './components/NotFoundPage';
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const DAY_NAMES = ['শনিবার', 'রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার'];
@@ -307,7 +307,7 @@ function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
               </tr>
             </thead>
             <tbody>
-              {users.map(u => (
+              {users.map((u) => (
                 <tr key={u.id} style={{ borderBottom: '1px solid #eef1f7', fontSize: '14px' }}>
                   <td style={{ padding: '10px', fontWeight: '600' }}>{u.name}</td>
                   <td style={{ padding: '10px' }}>{u.designation}</td>
@@ -339,7 +339,7 @@ function DoctorRow({ doc, index, total, checked, onToggleChecked, onEdit, onDele
   const [confirmDelete, setConfirmDelete] = useState(false);
   useEffect(() => { if (!confirmDelete) return; const t = setTimeout(() => setConfirmDelete(false), 3000); return () => clearTimeout(t); }, [confirmDelete]);
   return (
-    <div className="doctor-row">
+    <div className="doctor-row" key={doc.id}>
       {showCheckbox && (<input type="checkbox" className="doctor-checkbox" checked={checked} onChange={onToggleChecked} title="প্রিভিউতে দেখাতে টিক দিন" />)}
       <div className="doctor-row-info"><div className="doctor-row-name">{doc.name || 'নামহীন ডাক্তার'}</div>{doc.specialty ? <div className="doctor-row-specialty">{doc.specialty}</div> : null}</div>
       <div className="doctor-row-actions">
@@ -359,7 +359,7 @@ function DepartmentCard({ dept, index, total, checkedIds, onEdit, onDelete, onMo
   const deptDoctorIds = dept.doctors.map(doc => doc.id);
   const allChecked = deptDoctorIds.length > 0 && deptDoctorIds.every(id => checkedIds.has(id));
   return (
-    <div className="dept-card" style={{ borderLeftColor: dept.color }}>
+    <div className="dept-card" style={{ borderLeftColor: dept.color }} key={dept.id}>
       <div className="dept-card-header">
         <div className="dept-card-title">
           <span className="dept-card-icon" style={{ background: dept.color }}><Icon size={15} color="#fff" /></span>
@@ -581,7 +581,6 @@ function ManageDoctorsView({ departments, onAddDept, onEditDept, onDeleteDept, o
   );
 }
 
-// ===================== MAIN COMPONENT =====================
 export default function DoctorPanelBuilder() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -621,7 +620,6 @@ export default function DoctorPanelBuilder() {
   const isViewer = user?.role === 'viewer';
   const isGuest = user?.isGuest === true;
 
-  // 🔥 অ্যাক্সেস নিয়ন্ত্রণ (404 চেক)
   const getIsAuthorized = () => {
     if (path === '/' || path === '/booking' || path === '/display' || path === '/preview') {
       return true;
@@ -813,7 +811,6 @@ export default function DoctorPanelBuilder() {
 
   if (loading) { return (<div className="dpb"><style>{CSS}</style><div className="loading-screen"><Loader2 className="spin" size={26} /><span>লোড হচ্ছে...</span></div></div>); }
 
-  // 🔥 যদি অ্যাক্সেস না থাকে, 404 পেইজ দেখানো হবে
   if (!getIsAuthorized()) {
     return <NotFoundPage />;
   }

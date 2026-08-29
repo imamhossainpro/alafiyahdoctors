@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, PieChart, Pie, Cell, Legend, LabelList
 } from 'recharts';
+import { getAllPatients } from '../../services/patientService';
 
-// ---------- অটোমেটিক লোকেশন গ্রুপিং ইউটিলিটি (আগের মতো) ----------
+// ---------- অটোমেটিক লোকেশন গ্রুপিং ইউটিলিটি ----------
 const banglaToEnglishMap = {
   'অ': 'o', 'আ': 'a', 'ই': 'i', 'ঈ': 'i', 'উ': 'u', 'ঊ': 'u',
   'ঋ': 'ri', 'এ': 'e', 'ঐ': 'oi', 'ও': 'o', 'ঔ': 'ou',
@@ -146,7 +147,20 @@ const CSSString = `
 
 // ---------- মূল কম্পোনেন্ট ----------
 export default function Overview({ appointments }) {
-  // ---------- ডেটা প্রসেসিং ----------
+  const [patients, setPatients] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // 🆕 রোগী ডেটা লোড
+  useEffect(() => {
+    const loadPatients = async () => {
+      const data = await getAllPatients();
+      setPatients(data);
+      setLoading(false);
+    };
+    loadPatients();
+  }, []);
+
+  // ---------- অ্যাপয়েন্টমেন্ট থেকে KPI ----------
   const total = appointments.length;
   const pending = appointments.filter(a => a.status === 'pending').length;
   const confirmed = appointments.filter(a => a.status === 'confirmed').length;
@@ -159,6 +173,12 @@ export default function Overview({ appointments }) {
   const checkedInRate = total > 0 ? (checkedIn / total) * 100 : 0;
   const noShowRate = total > 0 ? (noShow / total) * 100 : 0;
   const cancellationRate = total > 0 ? (cancelled / total) * 100 : 0;
+
+  // 🆕 রোগী-ভিত্তিক KPI
+  const totalPatients = patients.length;
+  const newPatients = patients.filter(p => p.totalVisits === 1).length;
+  const followUpPatients = patients.filter(p => p.totalVisits > 1).length;
+  const repeatRate = totalPatients > 0 ? (followUpPatients / totalPatients) * 100 : 0;
 
   // ডাক্তারভিত্তিক ডেটা
   const doctorCounts = {};
@@ -190,12 +210,12 @@ export default function Overview({ appointments }) {
   appointments.forEach(a => { const src = a.referralSource || 'Unknown'; referralCounts[src] = (referralCounts[src] || 0) + 1; });
   const referralData = Object.entries(referralCounts).map(([name, value]) => ({ name, value }));
 
-  // ---------- লোকেশন ডেটা - অটোমেটিক গ্রুপিং ----------
+  // লোকেশন ডেটা
   const rawLocations = appointments.map(a => a.address).filter(Boolean);
   const groupedLocations = groupLocationsAutomatically(rawLocations);
   const locationData = groupedLocations.map(({ canonical, count }) => ({ name: canonical, count }));
 
-  // ---------- স্ট্যাটাস ডেটা ----------
+  // স্ট্যাটাস ডেটা
   const statusData = [
     { name: 'Pending', value: pending },
     { name: 'Confirmed', value: confirmed },
@@ -205,36 +225,14 @@ export default function Overview({ appointments }) {
     { name: 'No-show', value: noShow }
   ];
 
-  // 🔥 সিরিয়াল ট্রেন্ড (গত ৭ দিন) - ফিক্সড
-  const getLast7Days = () => {
-    const days = [];
-    const today = new Date();
-    const banglaDays = ['রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহঃ', 'শুক্র', 'শনি'];
-    
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      const dateStr = `${year}-${month}-${day}`;
-      
-      const dayIndex = d.getDay();
-      const dayName = banglaDays[dayIndex === 0 ? 6 : dayIndex - 1];
-      
-      const count = appointments.filter(a => a.bookingDate === dateStr).length;
-      
-      days.push({ 
-        name: dayName, 
-        date: dateStr,
-        count: count 
-      });
-    }
-    return days;
-  };
-
-  const last7Days = getLast7Days();
+  const last7Days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dayStr = d.toISOString().split('T')[0];
+    const dayName = d.toLocaleDateString('bn-BD', { weekday: 'short' });
+    last7Days.push({ name: dayName, count: appointments.filter(a => a.bookingDate === dayStr).length });
+  }
 
   const renderLegend = (value, entry) => {
     const totalValue = entry.payload.value;
@@ -242,14 +240,20 @@ export default function Overview({ appointments }) {
     return <span style={{ color: '#475569', fontSize: '13px' }}>{value} ({percentage}%)</span>;
   };
 
+  // KPI কার্ড (অ্যাপয়েন্টমেন্ট + রোগী)
   const kpis = [
-    { label: 'Total', value: total, color: '#1c5fa8', bg: 'rgba(28, 95, 168, 0.1)' },
+    { label: 'Total Bookings', value: total, color: '#1c5fa8', bg: 'rgba(28, 95, 168, 0.1)' },
     { label: 'Pending', value: pending, color: '#d97706', bg: 'rgba(217, 119, 6, 0.1)' },
     { label: 'Confirmed', value: confirmed, color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' },
     { label: 'Checked-in', value: checkedIn, color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.1)' },
     { label: 'Completed', value: completed, color: '#22c55e', bg: 'rgba(34, 197, 94, 0.1)' },
     { label: 'Cancelled', value: cancelled, color: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)' },
-    { label: 'No-show', value: noShow, color: '#6b7280', bg: 'rgba(107, 114, 128, 0.1)' }
+    { label: 'No-show', value: noShow, color: '#6b7280', bg: 'rgba(107, 114, 128, 0.1)' },
+    // 🆕 রোগী KPI
+    { label: 'Total Patients', value: totalPatients, color: '#1c5fa8', bg: 'rgba(28, 95, 168, 0.1)' },
+    { label: 'New Patients', value: newPatients, color: '#22c55e', bg: 'rgba(34, 197, 94, 0.1)' },
+    { label: 'Follow-up', value: followUpPatients, color: '#d97706', bg: 'rgba(217, 119, 6, 0.1)' },
+    { label: 'Repeat Rate', value: repeatRate.toFixed(1) + '%', color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.1)' }
   ];
 
   const conversions = [
@@ -258,6 +262,8 @@ export default function Overview({ appointments }) {
     { label: 'No-show Rate', value: noShowRate.toFixed(1), color: '#6b7280', prefix: '%' },
     { label: 'Cancellation Rate', value: cancellationRate.toFixed(1), color: '#ef4444', prefix: '%' }
   ];
+
+  if (loading) return <div style={{ padding: '20px' }}>লোড হচ্ছে...</div>;
 
   return (
     <div style={styles.dashboardContainer}>
