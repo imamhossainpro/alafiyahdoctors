@@ -1,13 +1,12 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   CheckCircle, XCircle, UserCheck, Archive, Trash2, Clock, 
   Stethoscope, LayoutList, Undo2, Eye, Search, Edit2, Save, X, 
-  ArrowUpDown, Printer, XCircle as XCircleIcon
+  ArrowUpDown, Printer, XCircle as XCircleIcon, QrCode
 } from 'lucide-react';
 import { db, doc, updateDoc, getDoc } from '../../firebase';
-import { getPatientById } from '../../services/patientService';
+import { getPatientById, getAllPatients } from '../../services/patientService';
 
-// ---------- স্ট্যাটাস ব্যাজ ----------
 const StatusBadge = ({ status }) => {
   const styles = {
     pending: { bg: '#fef3c7', color: '#92400e', label: 'Pending' },
@@ -22,7 +21,6 @@ const StatusBadge = ({ status }) => {
   return <span style={{ background: style.bg, color: style.color, padding: '4px 8px', borderRadius: '20px', fontSize: '12px', fontWeight: '700', whiteSpace: 'nowrap' }}>{style.label}</span>;
 };
 
-// ---------- স্ট্যাটাস ট্রানজিশন ----------
 const validTransitions = {
   pending: ['confirmed', 'cancelled'],
   confirmed: ['checked-in', 'cancelled', 'no-show', 'pending'],
@@ -73,7 +71,6 @@ export default function AppointmentsTable({
   const canEdit = user?.role === 'admin' || user?.role === 'sub-admin' || user?.role === 'editor';
   const isAdmin = user?.role === 'admin';
 
-  // ইউনিক ডাক্তার লিস্ট
   const uniqueDoctors = useMemo(() => {
     const doctors = new Set();
     appointments.forEach(a => { if (a.doctorName) doctors.add(a.doctorName); });
@@ -82,7 +79,6 @@ export default function AppointmentsTable({
 
   const uniqueStatuses = ['all', 'pending', 'confirmed', 'checked-in', 'completed', 'cancelled', 'no-show'];
 
-  // ফিল্টার ও সাজানো
   const filteredAppointments = useMemo(() => {
     let filtered = appointments;
     
@@ -117,27 +113,26 @@ export default function AppointmentsTable({
     return filtered;
   }, [appointments, searchTerm, filterOfficer, filterStatus, filterDoctor, sortOrder]);
 
-  // রোগীর টাইপ নির্ধারণ
-  const getPatientCategory = (patient, doctorName, bookingDate) => {
-    if (!patient) return 'অজানা';
-    const visits = patient.visits || [];
-    const doctorVisits = visits.filter(v => v.doctorName === doctorName && v.date < bookingDate);
-    if (doctorVisits.length === 0) return 'নতুন';
-    const sorted = [...doctorVisits].sort((a, b) => new Date(b.date) - new Date(a.date));
-    const last = sorted[0];
-    const diffDays = Math.ceil(Math.abs(new Date(last.date) - new Date(bookingDate)) / (1000 * 60 * 60 * 24));
-    return diffDays <= 7 ? 'রিপোর্ট' : 'ফলোআপ';
-  };
-
-  // রোগীর টাইপ লোড
   useEffect(() => {
     const loadPatientTypes = async () => {
+      const allPatients = await getAllPatients();
+      const patientMap = {};
+      allPatients.forEach(p => { patientMap[p.id] = p; });
+
       const types = {};
       for (const appt of filteredAppointments) {
         if (appt.patientId && !types[appt.id]) {
-          const patient = await getPatientById(appt.patientId);
+          const patient = patientMap[appt.patientId];
           if (patient) {
-            types[appt.id] = getPatientCategory(patient, appt.doctorName, appt.bookingDate);
+            const visits = patient.visits || [];
+            const doctorVisits = visits.filter(v => v.doctorName === appt.doctorName && v.date < appt.bookingDate);
+            if (doctorVisits.length === 0) types[appt.id] = 'নতুন';
+            else {
+              const sorted = [...doctorVisits].sort((a, b) => new Date(b.date) - new Date(a.date));
+              const last = sorted[0];
+              const diffDays = Math.ceil(Math.abs(new Date(last.date) - new Date(appt.bookingDate)) / (1000 * 60 * 60 * 24));
+              types[appt.id] = diffDays <= 7 ? 'রিপোর্ট' : 'ফলোআপ';
+            }
           } else {
             types[appt.id] = 'অজানা';
           }
@@ -145,10 +140,11 @@ export default function AppointmentsTable({
       }
       setPatientTypes(types);
     };
-    loadPatientTypes();
+    if (filteredAppointments.length > 0) {
+      loadPatientTypes();
+    }
   }, [filteredAppointments]);
 
-  // হাইলাইট রিমুভ
   const handleRowClick = async (apptId) => {
     const appt = appointments.find(a => a.id === apptId);
     if (!appt || !appt.isNew || updatingHighlight) return;
@@ -162,7 +158,6 @@ export default function AppointmentsTable({
     }
   };
 
-  // ম্যানুয়ালি ক্যাটাগরি পরিবর্তন
   const handleManualCategoryChange = async (appointmentId, patientId, newCategory) => {
     if (!isAdmin) {
       alert('শুধুমাত্র অ্যাডমিন রোগীর টাইপ পরিবর্তন করতে পারবেন।');
@@ -297,7 +292,6 @@ export default function AppointmentsTable({
     }
   };
 
-  // 🔥 ডাক্তার ওয়াইজ প্রিন্ট ফাংশন
   const printDoctorWise = (doctorName, patients) => {
     const printWindow = window.open('', '_blank', 'width=1000,height=800');
     if (!printWindow) {
@@ -437,12 +431,35 @@ export default function AppointmentsTable({
     doctorWiseData[doctorName].patients.push(appt);
   });
 
+  // 🔥 QR কোড দেখানোর ফাংশন
+  const handleShowQR = (appointmentId) => {
+    if (!appointmentId) {
+      alert('অ্যাপয়েন্টমেন্ট আইডি পাওয়া যায়নি');
+      return;
+    }
+    const url = `${window.location.origin}/checkin/${appointmentId}`;
+    window.open(url, '_blank');
+  };
+
   const renderActions = (appt) => {
     const currentStatus = appt.status || 'pending';
     const nextStatuses = validTransitions[currentStatus] || [];
     let actions = [];
 
     actions.push(<ActionButton key="view" onClick={() => setViewDetails(appt)} title="বিস্তারিত দেখুন" bg="#64748b" icon={<Eye size={14} />} />);
+    
+    // 🔥 QR কোড দেখানোর বাটন - শুধু pending বা confirmed স্ট্যাটাসের জন্য
+    if (currentStatus === 'pending' || currentStatus === 'confirmed') {
+      actions.push(
+        <ActionButton 
+          key="qr" 
+          onClick={() => handleShowQR(appt.id)} 
+          title="QR কোড দেখুন" 
+          bg="#8b5cf6" 
+          icon={<QrCode size={14} />} 
+        />
+      );
+    }
 
     if (!canEdit) return <span style={{ fontSize: '12px', color: '#9ca3af' }}>(View Only)</span>;
 
@@ -525,7 +542,6 @@ export default function AppointmentsTable({
         </div>
       </div>
 
-      {/* ফিল্টার ইনফো */}
       {(filterOfficer !== 'all' || filterStatus !== 'all' || filterDoctor !== 'all' || searchTerm) && (
         <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '10px' }}>
           🔍 ফিল্টার প্রয়োগ করা হয়েছে: 
@@ -537,7 +553,6 @@ export default function AppointmentsTable({
         </div>
       )}
 
-      {/* ---------- লিস্ট ভিউ ---------- */}
       {viewMode === 'list' && (
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1400px' }}>
           <thead>
@@ -587,7 +602,6 @@ export default function AppointmentsTable({
                   <td style={{ padding: '12px' }}>{appt.bookingDate} ({appt.bookingDay})</td>
                   <td style={{ padding: '12px' }}>{appt.doctorName}<br/><small style={{ color: '#64748b' }}>{appt.doctorDept}</small></td>
                   
-                  {/* রেফারেল সোর্স */}
                   <td style={{ padding: '12px' }}>
                     {isEditing ? (
                       <select 
@@ -602,7 +616,6 @@ export default function AppointmentsTable({
                     )}
                   </td>
 
-                  {/* মার্কেটিং অফিসার */}
                   <td style={{ padding: '12px' }}>
                     {isEditing ? (
                       <select 
@@ -622,7 +635,6 @@ export default function AppointmentsTable({
                     )}
                   </td>
 
-                  {/* রোগীর টাইপ - ড্রপডাউন */}
                   <td style={{ padding: '12px' }}>
                     {isAdmin && appt.patientId ? (
                       <select
@@ -680,7 +692,6 @@ export default function AppointmentsTable({
                     {isUpdating && <span style={{ fontSize: '11px', color: '#64748b', marginLeft: '6px' }}>⏳</span>}
                   </td>
 
-                  {/* রিমার্কস */}
                   <td style={{ padding: '12px', minWidth: '150px' }}>
                     {isEditing ? (
                       <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
@@ -709,7 +720,6 @@ export default function AppointmentsTable({
         </table>
       )}
 
-      {/* ---------- ডাক্তার ওয়াইজ ভিউ (প্রিন্ট বাটন সহ) ---------- */}
       {viewMode === 'doctor' && (
         <div>
           {Object.keys(doctorWiseData).length === 0 ? <div style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>কোনো বুকিং পাওয়া যায়নি</div> : (
@@ -721,7 +731,6 @@ export default function AppointmentsTable({
                     <span style={{ background: '#0d9488', color: '#fff', padding: '4px 10px', borderRadius: '20px', fontSize: '13px', fontWeight: '700' }}>
                       মোট: {info.patients.length} জন
                     </span>
-                    {/* 🔥 প্রিন্ট বাটন */}
                     <button
                       onClick={() => printDoctorWise(doctorName, info.patients)}
                       title={`${doctorName} - প্রিন্ট`}
@@ -836,7 +845,6 @@ export default function AppointmentsTable({
         </div>
       )}
 
-      {/* রোগীর বিস্তারিত তথ্য */}
       {viewDetails && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0, 0, 0, 0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} onClick={() => setViewDetails(null)}>
           <div style={{ background: '#fff', borderRadius: '12px', maxWidth: '500px', width: '100%', padding: '24px', position: 'relative', maxHeight: '80vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>

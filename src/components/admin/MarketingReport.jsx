@@ -3,11 +3,9 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { FileText, Trash2 } from 'lucide-react';
 import { db, doc, setDoc, collection, query, where, getDocs, updateDoc } from '../../firebase';
-import { getPatientById } from '../../services/patientService';
+import { getAllPatients } from '../../services/patientService';
 
-// ---------- 📄 অফিসার-নির্দিষ্ট PDF এক্সপোর্ট (শুধু COMPLETED অ্যাপয়েন্টমেন্ট) ----------
 const exportOfficerPDF = async (officerName, appointments) => {
-  // শুধু 'completed' স্ট্যাটাসের অ্যাপয়েন্টমেন্ট ফিল্টার
   const officerAppointments = appointments.filter(a => a.marketingOfficer === officerName && a.status === 'completed');
   
   if (officerAppointments.length === 0) {
@@ -45,7 +43,6 @@ const exportOfficerPDF = async (officerName, appointments) => {
 
     const thead = document.createElement('thead');
     const headerRow = document.createElement('tr');
-    // হেডার: ক্রমিক নং, তারিখ, রোগীর নাম, ডাক্তার, রিমার্কস, স্ট্যাটাস
     const headers = ['ক্রমিক নং', 'তারিখ', 'রোগীর নাম', 'ডাক্তার', 'রিমার্কস', 'স্ট্যাটাস'];
     headers.forEach(text => {
       const th = document.createElement('th');
@@ -63,9 +60,8 @@ const exportOfficerPDF = async (officerName, appointments) => {
     const tbody = document.createElement('tbody');
     officerAppointments.forEach((a, index) => {
       const tr = document.createElement('tr');
-      // ডেটা: ক্রমিক নং, তারিখ, রোগীর নাম, ডাক্তার, রিমার্কস, স্ট্যাটাস
       const cells = [
-        (index + 1).toString(), // ক্রমিক নং
+        (index + 1).toString(),
         a.bookingDate || '-',
         a.name || '-',
         a.doctorName || '-',
@@ -114,7 +110,6 @@ const exportOfficerPDF = async (officerName, appointments) => {
   }
 };
 
-// ---------- মূল কম্পোনেন্ট ----------
 export default function MarketingReport({ 
   appointments, 
   marketingTeam, 
@@ -126,28 +121,22 @@ export default function MarketingReport({
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
   const [deletingId, setDeletingId] = useState(null);
-  const [patientCache, setPatientCache] = useState({});
+  const [allPatients, setAllPatients] = useState([]);
+  const [patientMap, setPatientMap] = useState({});
 
   const isAdmin = user?.role === 'admin';
 
-  // রোগীর ডেটা লোড
   useEffect(() => {
     const loadPatients = async () => {
-      const cache = {};
-      for (const appt of appointments) {
-        if (appt.patientId && !cache[appt.patientId]) {
-          const patient = await getPatientById(appt.patientId);
-          if (patient) {
-            cache[appt.patientId] = patient;
-          }
-        }
-      }
-      setPatientCache(cache);
+      const patients = await getAllPatients();
+      setAllPatients(patients);
+      const map = {};
+      patients.forEach(p => { map[p.id] = p; });
+      setPatientMap(map);
     };
     loadPatients();
-  }, [appointments]);
+  }, []);
 
-  // ফিল্টার লজিক
   const filtered = useMemo(() => {
     return appointments.filter(a => {
       if (!a.bookingDate) return false;
@@ -157,9 +146,7 @@ export default function MarketingReport({
     });
   }, [appointments, startDate, endDate, selectedOfficer]);
 
-  // 🔥 অফিসার ওয়াইজ অ্যাগ্রিগেটেড ডেটা (মার্কেটিং টিমের সব অফিসার দেখাবে)
   const reportData = useMemo(() => {
-    // প্রথমে marketingTeam থেকে সব অফিসারের নাম নিয়ে একটি ম্যাপ তৈরি করি
     const officerMap = {};
     marketingTeam.forEach(m => {
       const name = typeof m === 'string' ? m : m.name;
@@ -174,11 +161,8 @@ export default function MarketingReport({
       };
     });
 
-    // এখন filtered অ্যাপয়েন্টমেন্ট থেকে কাউন্ট আপডেট করি
     filtered.forEach(a => {
       const officer = a.marketingOfficer || 'Unassigned';
-      
-      // 'Unassigned' এর জন্য আলাদা এন্ট্রি
       if (!officerMap[officer]) {
         officerMap[officer] = {
           name: officer,
@@ -194,7 +178,7 @@ export default function MarketingReport({
       const entry = officerMap[officer];
       entry.total++;
       
-      const patient = patientCache[a.patientId];
+      const patient = patientMap[a.patientId];
       if (patient) {
         if (patient.totalVisits === 1) {
           entry.newPatients++;
@@ -209,7 +193,6 @@ export default function MarketingReport({
       if (a.status === 'checked-in') entry.checkedIn++;
     });
 
-    // অবজেক্ট থেকে অ্যারে বানাই
     const result = Object.values(officerMap).map(entry => ({
       name: entry.name,
       total: entry.total,
@@ -222,7 +205,6 @@ export default function MarketingReport({
       repeatRate: entry.total > 0 ? ((entry.repeatPatients / entry.total) * 100).toFixed(1) : 0
     }));
 
-    // Unassigned কে শেষে রাখি
     result.sort((a, b) => {
       if (a.name === 'Unassigned') return 1;
       if (b.name === 'Unassigned') return -1;
@@ -230,9 +212,8 @@ export default function MarketingReport({
     });
 
     return result;
-  }, [filtered, patientCache, marketingTeam]);
+  }, [filtered, patientMap, marketingTeam]);
 
-  // ডিলেট ফাংশন
   const handleDelete = async (officerName) => {
     if (!isAdmin) {
       alert('শুধুমাত্র অ্যাডমিন অফিসার ডিলিট করতে পারবেন।');
@@ -272,7 +253,6 @@ export default function MarketingReport({
     <div style={{ background: '#fff', padding: '20px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
       <h3 style={{ margin: '0 0 15px 0' }}>📊 মার্কেটিং রিপোর্ট</h3>
       
-      {/* ফিল্টার */}
       <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', marginBottom: '20px', alignItems: 'flex-end' }}>
         <div>
           <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#64748b' }}>অফিসার</label>
@@ -309,7 +289,6 @@ export default function MarketingReport({
         </div>
       </div>
 
-      {/* টেবিল */}
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
@@ -335,7 +314,6 @@ export default function MarketingReport({
                   <td style={{ padding: '10px 12px', fontWeight: '700' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       <span>{row.name}</span>
-                      {/* 🔥 সব অফিসারের জন্য PDF বাটন (Unassigned বাদে) */}
                       {row.name !== 'Unassigned' && (
                         <button 
                           onClick={() => exportOfficerPDF(row.name, filtered)}

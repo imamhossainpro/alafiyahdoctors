@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db, doc, getDoc, setDoc, addDoc, collection } from './firebase';
 import { findPatientByMobile, createPatient, addPatientVisit } from './services/patientService';
+import { generateQRCode } from './services/qrService';
 import { Send, Loader2, User, Phone, MapPin, Stethoscope, CalendarDays, ArrowLeft, PlusCircle, CheckCircle2 } from 'lucide-react';
 
 const getTodayString = () => {
@@ -149,6 +150,8 @@ export default function BookingSystem({ departments, panels, onBack }) {
   const [loading, setLoading] = useState(false);
   const [isBooked, setIsBooked] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [qrCode, setQrCode] = useState(null);
+  const [appointmentId, setAppointmentId] = useState(null);
 
   useEffect(() => {
     if (!panels || panels.length === 0 || !departments || departments.length === 0) { setAvailableDoctors([]); return; }
@@ -193,7 +196,7 @@ export default function BookingSystem({ departments, panels, onBack }) {
 
   const resetForm = () => {
     setFormData({ name: '', age: '', mobile: '', gender: 'পুরুষ', address: '', referralSource: 'Walk-in / নিজে এসেছেন', referredDoctorName: '', otherReferralNote: '', departmentId: '', doctorId: '' });
-    setSelectedDate(getTodayString()); setAvailableDoctors([]); setSelectedDoctor(null); setSuccessMsg('');
+    setSelectedDate(getTodayString()); setAvailableDoctors([]); setSelectedDoctor(null); setSuccessMsg(''); setQrCode(null); setAppointmentId(null);
   };
 
   const handleSubmit = async (e) => {
@@ -207,7 +210,6 @@ export default function BookingSystem({ departments, panels, onBack }) {
       if (!selectedDoctor) throw new Error('ডাক্তার নির্বাচন করুন');
       if (!selectedDate) throw new Error('তারিখ নির্বাচন করুন');
 
-      // রোগী খোঁজা বা তৈরি করা
       let patient = await findPatientByMobile(formData.mobile);
       let patientId;
       
@@ -226,7 +228,6 @@ export default function BookingSystem({ departments, panels, onBack }) {
         await addPatientVisit(patientId, selectedDoctor.name, selectedDate);
       }
 
-      // সিরিয়াল কাউন্ট
       const counterRef = doc(db, 'counters', selectedDoctor.id);
       let serialNo = 1;
       const counterDoc = await getDoc(counterRef);
@@ -237,23 +238,32 @@ export default function BookingSystem({ departments, panels, onBack }) {
         await setDoc(counterRef, { count: serialNo }); 
       }
       
+      // 🔥 doctorTime যোগ করা হলো
       const appointmentData = { 
         ...formData, 
         patientId: patientId,
         doctorName: selectedDoctor.name, 
         doctorDept: selectedDoctor.deptName, 
         doctorQuals: selectedDoctor.quals || '', 
+        doctorTime: selectedDoctor.time || '', // 🔥 ডাক্তারের সময়
         bookingDate: selectedDate, 
         bookingDay: selectedDayName, 
         serialNo: serialNo, 
         status: 'pending', 
         timestamp: new Date().toISOString(),
         isNew: true,
-        isRead: false // 👈 এই লাইনটি যোগ করুন
+        isRead: false
       };
       
-      await addDoc(collection(db, 'appointments'), appointmentData);
-      setSuccessMsg('আপনার সিরিয়ালটি সফলভাবে কনফার্ম করা হয়েছে। শীঘ্রই একজন প্রতিনিধি আপনাকে সিরিয়াল নাম্বার ও সময় জানিয়ে দিবেন।');
+      const docRef = await addDoc(collection(db, 'appointments'), appointmentData);
+      setAppointmentId(docRef.id);
+
+      const qrImage = await generateQRCode(docRef.id);
+      if (qrImage) {
+        setQrCode(qrImage);
+      }
+
+      setSuccessMsg('আপনার সিরিয়ালটি সফলভাবে কনফার্ম করা হয়েছে। চেক-ইন করতে QR কোড ব্যবহার করুন।');
       setIsBooked(true);
     } catch (error) {
       console.error("Booking error:", error);
@@ -287,6 +297,47 @@ export default function BookingSystem({ departments, panels, onBack }) {
             </div>
             <h3 className="success-title">বুকিং সফল হয়েছে!</h3>
             <p className="success-text">{successMsg}</p>
+            
+            {qrCode && (
+              <div style={{ marginBottom: '16px' }}>
+                <p style={{ fontSize: '14px', color: '#475569', marginBottom: '8px' }}>
+                  📱 চেক-ইন করতে QR কোড স্ক্যান করুন
+                </p>
+                <img 
+                  src={qrCode} 
+                  alt="QR Code" 
+                  style={{ 
+                    width: '150px', 
+                    height: '150px', 
+                    borderRadius: '8px',
+                    border: '1px solid #e2e8f0',
+                    padding: '4px'
+                  }} 
+                />
+                {appointmentId && (
+                  <>
+                    <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px' }}>
+                      অ্যাপয়েন্টমেন্ট আইডি: {appointmentId}
+                    </p>
+                    <p style={{ fontSize: '13px', marginTop: '8px' }}>
+                      <a 
+                        href={`${window.location.origin}/checkin/${appointmentId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ 
+                          color: '#1c5fa8', 
+                          fontWeight: '600',
+                          textDecoration: 'underline',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        🔗 চেক-ইন করতে এখানে ক্লিক করুন
+                      </a>
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
             
             <div className="success-buttons">
               <button className="success-btn success-btn-secondary" onClick={handleBackToDoctors}>
@@ -397,6 +448,7 @@ export default function BookingSystem({ departments, panels, onBack }) {
                         <div>
                           <div className="doctor-name">{doc.name}</div>
                           <div className="doctor-details">{doc.specialty || doc.quals || doc.deptName}</div>
+                          {doc.time && <div className="doctor-details" style={{ color: '#b45309' }}>⏱ {doc.time}</div>}
                         </div>
                         {selectedDoctor?.id === doc.id && <CheckCircle2 size={18} color="#0d9488" />}
                       </div>
@@ -419,6 +471,9 @@ export default function BookingSystem({ departments, panels, onBack }) {
               <div className="summary-row"><span className="summary-label">মোবাইল:</span><span className="summary-value">{formData.mobile || '-'}</span></div>
               <div className="summary-row"><span className="summary-label">ঠিকানা:</span><span className="summary-value">{formData.address || '-'}</span></div>
               <div className="summary-row"><span className="summary-label">নির্বাচিত ডাক্তার:</span><span className="summary-value">{selectedDoctor?.name || '-'}</span></div>
+              {selectedDoctor?.time && (
+                <div className="summary-row"><span className="summary-label">ডাক্তারের সময়:</span><span className="summary-value">{selectedDoctor.time}</span></div>
+              )}
               <div className="summary-row"><span className="summary-label">রেফারেল সোর্স:</span><span className="summary-value">{formData.referralSource || '-'}</span></div>
               {formData.referredDoctorName && (
                 <div className="summary-row"><span className="summary-label">রেফারিং ডাক্তার:</span><span className="summary-value">{formData.referredDoctorName}</span></div>

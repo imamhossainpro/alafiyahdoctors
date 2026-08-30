@@ -13,6 +13,7 @@ import {
   where,
   orderBy,
   onSnapshot,
+  writeBatch,
 } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -41,4 +42,5 @@ export {
   where,
   orderBy,
   onSnapshot,
+  writeBatch,
 };

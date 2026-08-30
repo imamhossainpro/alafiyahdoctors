@@ -46,7 +46,7 @@ export const addAuditLog = async (logData) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error("Audit log error:", error);
+    console.error('Audit log error:', error);
   }
 };
 

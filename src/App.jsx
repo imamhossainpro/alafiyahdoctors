@@ -1,35 +1,35 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route } from 'react-router-dom';
-import DoctorPanelBuilder from './doctor-panel-builder';
-import QueueDisplay from './components/QueueDisplay';
-import NotFoundPage from './components/NotFoundPage'; // 👈 নতুন ইমপোর্ট
+
+const DoctorPanelBuilder = lazy(() => import('./doctor-panel-builder'));
+const QueueDisplay = lazy(() => import('./components/QueueDisplay'));
+const NotFoundPage = lazy(() => import('./components/NotFoundPage'));
+const CheckIn = lazy(() => import('./components/CheckIn')); // 👈 নতুন
+
+const Loader = () => (
+  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', fontSize: '18px', color: '#64748b' }}>
+    <span>লোড হচ্ছে...</span>
+  </div>
+);
 
 function App() {
   return (
-    <Routes>
-      {/* হোমপেইজ - প্রিভিউ */}
-      <Route path="/" element={<DoctorPanelBuilder />} />
-      
-      {/* রোগী বুকিং */}
-      <Route path="/booking" element={<DoctorPanelBuilder />} />
-      
-      {/* ডাক্তার লিস্ট (অ্যাডমিন/সাব-অ্যাডমিন) */}
-      <Route path="/doctors" element={<DoctorPanelBuilder />} />
-      
-      {/* প্যানেল বিল্ডার (এডিটর/অ্যাডমিন) */}
-      <Route path="/edit" element={<DoctorPanelBuilder />} />
-      
-      {/* ড্যাশবোর্ড (অ্যাডমিন/সাব-অ্যাডমিন) */}
-      <Route path="/dashboard" element={<DoctorPanelBuilder />} />
-      
-      {/* অ্যাডমিন প্যানেল (শুধু অ্যাডমিন) */}
-      <Route path="/admin" element={<DoctorPanelBuilder />} />
-      
-      {/* টিভি ডিসপ্লে */}
-      <Route path="/display" element={<QueueDisplay />} />
-      
-      {/* 👇 404 Not Found */}
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+    <Suspense fallback={<Loader />}>
+      <Routes>
+        <Route path="/" element={<DoctorPanelBuilder />} />
+        <Route path="/booking" element={<DoctorPanelBuilder />} />
+        <Route path="/doctors" element={<DoctorPanelBuilder />} />
+        <Route path="/edit" element={<DoctorPanelBuilder />} />
+        <Route path="/dashboard" element={<DoctorPanelBuilder />} />
+        <Route path="/admin" element={<DoctorPanelBuilder />} />
+        <Route path="/display" element={<QueueDisplay />} />
+        
+        {/* 🔥 চেক-ইন রাউট */}
+        <Route path="/checkin/:appointmentId" element={<CheckIn />} />
+        
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </Suspense>
   );
 }
 

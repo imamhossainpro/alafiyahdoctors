@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { db, collection, onSnapshot, query, where, doc, getDoc, getDocs } from '../firebase';
+import { db, collection, onSnapshot, query, where, doc, getDoc, getDocs, setDoc } from '../firebase';
 
 const getTodayString = () => {
   const date = new Date();
@@ -37,7 +37,7 @@ const parseBanglaTimeToMinutes = (timeString) => {
   return { start: startMinutes, end: endMinutes };
 };
 
-// ---------- CSS ----------
+// ---------- CSS (লাইট থিম) ----------
 const QueueCSS = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
   
@@ -54,7 +54,6 @@ const QueueCSS = `
     height: 100vh;
   }
 
-  /* হেডার */
   .tv-header {
     text-align: center;
     margin-bottom: 24px;
@@ -66,8 +65,8 @@ const QueueCSS = `
     flex-shrink: 0;
   }
   .tv-header img {
-    height: 150px;
-    width: 150px;
+    height: 64px;
+    width: auto;
     object-fit: contain;
     margin-bottom: 4px;
   }
@@ -79,7 +78,6 @@ const QueueCSS = `
   }
   .tv-datetime span { color: #0f172a; }
 
-  /* ক্যারোসেল কন্টেইনার */
   .carousel-container {
     flex: 1;
     position: relative;
@@ -88,7 +86,6 @@ const QueueCSS = `
     min-height: 0;
   }
 
-  /* ক্যারোসেল স্লাইড */
   .carousel-slide {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -112,7 +109,6 @@ const QueueCSS = `
   .carousel-slide::-webkit-scrollbar-track { background: #e9edf2; border-radius: 10px; }
   .carousel-slide::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 10px; }
 
-  /* ডাক্তার কার্ড - ইমেজের ডিজাইন অনুযায়ী */
   .tv-doctor-card {
     background: #ffffff;
     border-radius: 16px;
@@ -129,7 +125,6 @@ const QueueCSS = `
     box-shadow: 0 8px 30px rgba(0,0,0,0.06);
   }
 
-  /* ডাক্তার হেডার: নাম ও বিশেষত্ব */
   .doctor-header {
     border-bottom: 2px solid #eef2f6;
     padding-bottom: 12px;
@@ -170,7 +165,6 @@ const QueueCSS = `
     display: inline-block;
   }
 
-  /* বর্তমান রোগী - ইমেজের মতো */
   .current-patient-box {
     background: #f0fdf4;
     border-radius: 12px;
@@ -208,7 +202,6 @@ const QueueCSS = `
     margin-top: 2px;
   }
 
-  /* ওয়েটিং লিস্ট - "পরবর্তী সিরিয়াল" লেবেল */
   .queue-section {
     flex: 1;
   }
@@ -267,7 +260,34 @@ const QueueCSS = `
     padding: 8px 0;
   }
 
-  /* খালি স্টেট */
+  .display-off-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #ffffff;
+    border-radius: 16px;
+    border: 1px solid #e9edf2;
+    padding: 40px 20px;
+    text-align: center;
+  }
+  .display-off-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+    opacity: 0.6;
+  }
+  .display-off-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: #94a3b8;
+    margin-bottom: 8px;
+  }
+  .display-off-sub {
+    font-size: 18px;
+    color: #cbd5e1;
+  }
+
   .empty-state {
     font-size: 22px;
     color: #94a3b8;
@@ -283,7 +303,6 @@ const QueueCSS = `
     height: 100%;
   }
 
-  /* ক্যারোসেল ইন্ডিকেটর */
   .carousel-indicators {
     display: flex;
     justify-content: center;
@@ -311,7 +330,6 @@ const QueueCSS = `
     background: #94a3b8;
   }
 
-  /* 📱 রেসপন্সিভ */
   @media (max-width: 1200px) {
     .carousel-slide { grid-template-columns: repeat(3, 1fr); gap: 18px; }
   }
@@ -329,9 +347,11 @@ const QueueCSS = `
     .queue-badge { font-size: 18px; min-width: 28px; }
     .queue-name { font-size: 14px; }
     .tv-datetime { font-size: 14px; }
+    .display-off-title { font-size: 22px; }
+    .display-off-sub { font-size: 16px; }
+    .display-off-icon { font-size: 48px; }
   }
 
-  /* অ্যান্ড্রয়েড টিভি/বড় স্ক্রিনে ৩ কলাম ফোর্স */
   @media (min-width: 1024px) {
     .carousel-slide { grid-template-columns: repeat(3, 1fr) !important; }
   }
@@ -346,6 +366,16 @@ export default function QueueDisplay() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [slides, setSlides] = useState([]);
   const autoScrollRef = useRef(null);
+  const refreshIntervalRef = useRef(null);
+
+  // ডিসপ্লে সেটিংস স্টেট
+  const [displaySettings, setDisplaySettings] = useState({
+    isActive: true,
+    useTimeRange: false,
+    startTime: '08:00',
+    endTime: '22:00'
+  });
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   // প্রতি সেকেন্ডে ঘড়ি আপডেট
   useEffect(() => {
@@ -353,9 +383,33 @@ export default function QueueDisplay() {
     return () => clearInterval(timer);
   }, []);
 
-  // ডেটা লোড
-  useEffect(() => {
-    const fetchData = async () => {
+  // ডিসপ্লে সেটিংস লোড
+  const loadDisplaySettings = async () => {
+    try {
+      const docRef = doc(db, 'master', 'displaySettings');
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        setDisplaySettings(docSnap.data());
+      } else {
+        const defaults = {
+          isActive: true,
+          useTimeRange: false,
+          startTime: '08:00',
+          endTime: '22:00'
+        };
+        await setDoc(docRef, defaults);
+        setDisplaySettings(defaults);
+      }
+    } catch (error) {
+      console.error('Error loading display settings:', error);
+    } finally {
+      setSettingsLoaded(true);
+    }
+  };
+
+  // ডাক্তার লিস্ট রিফ্রেশ (প্রতি ১২০ সেকেন্ডে)
+  const refreshDoctorList = async () => {
+    try {
       const deptDoc = await getDoc(doc(db, 'master', 'departments'));
       const docs = [];
       if (deptDoc.exists()) {
@@ -386,6 +440,29 @@ export default function QueueDisplay() {
         }
       });
       setActiveDoctorIds(activeIds);
+    } catch (error) {
+      console.error('Error refreshing doctors:', error);
+    }
+  };
+
+  // ডিসপ্লে চালু থাকবে কিনা চেক
+  const isDisplayActive = () => {
+    if (!displaySettings.isActive) return false;
+    
+    if (displaySettings.useTimeRange) {
+      const now = new Date();
+      const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      return currentTimeStr >= displaySettings.startTime && currentTimeStr <= displaySettings.endTime;
+    }
+    
+    return true;
+  };
+
+  // ডেটা লোড (শুধু একবার)
+  useEffect(() => {
+    const fetchData = async () => {
+      await loadDisplaySettings();
+      await refreshDoctorList();
 
       const todayStr = getTodayString();
       const q = query(collection(db, 'appointments'), where('bookingDate', '==', todayStr));
@@ -396,7 +473,12 @@ export default function QueueDisplay() {
         setAppointments(data);
       });
 
-      return () => unsubscribe();
+      refreshIntervalRef.current = setInterval(refreshDoctorList, 120000);
+
+      return () => {
+        unsubscribe();
+        if (refreshIntervalRef.current) clearInterval(refreshIntervalRef.current);
+      };
     };
 
     fetchData();
@@ -429,7 +511,7 @@ export default function QueueDisplay() {
     });
   };
 
-  // স্লাইড তৈরি (প্রতি স্লাইডে ৬ জন ডাক্তার)
+  // স্লাইড তৈরি
   useEffect(() => {
     const grouped = buildGroupedData();
     const itemsPerSlide = 6;
@@ -443,7 +525,7 @@ export default function QueueDisplay() {
     }
   }, [appointments, allDoctors, activeDoctorIds]);
 
-  // অটো-স্ক্রল ক্যারোসেল (৮ সেকেন্ড)
+  // অটো-স্ক্রল (৮ সেকেন্ড)
   useEffect(() => {
     if (slides.length <= 1) {
       if (autoScrollRef.current) clearInterval(autoScrollRef.current);
@@ -468,6 +550,54 @@ export default function QueueDisplay() {
     }
   };
 
+  // ডিসপ্লে সক্রিয় কিনা চেক
+  const displayActive = isDisplayActive();
+
+  if (!settingsLoaded) {
+    return (
+      <div className="tv-display">
+        <style>{QueueCSS}</style>
+        <div className="tv-header">
+          <img src="/logo.png" alt="আল-আফিয়া হাসপাতাল" />
+          <div className="tv-datetime">
+            <span>{currentTime.toLocaleDateString('bn-BD', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+            {' | '}
+            <span>{currentTime.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+          </div>
+        </div>
+        <div className="display-off-container">
+          <div className="display-off-icon">⏳</div>
+          <div className="display-off-title">লোড হচ্ছে...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!displayActive) {
+    return (
+      <div className="tv-display">
+        <style>{QueueCSS}</style>
+        <div className="tv-header">
+          <img src="/logo.png" alt="আল-আফিয়া হাসপাতাল" />
+          <div className="tv-datetime">
+            <span>{currentTime.toLocaleDateString('bn-BD', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+            {' | '}
+            <span>{currentTime.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+          </div>
+        </div>
+        <div className="display-off-container">
+          <div className="display-off-icon">📺</div>
+          <div className="display-off-title">ডিসপ্লে বন্ধ আছে</div>
+          <div className="display-off-sub">
+            {displaySettings.useTimeRange 
+              ? `চালু হবে ${displaySettings.startTime} – ${displaySettings.endTime} সময়ের মধ্যে`
+              : 'অ্যাডমিন দ্বারা বন্ধ করা হয়েছে'}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (slides.length === 0) {
     return (
       <div className="tv-display">
@@ -486,8 +616,6 @@ export default function QueueDisplay() {
       </div>
     );
   }
-
-  const currentSlideData = slides[currentSlide] || [];
 
   return (
     <div className="tv-display">

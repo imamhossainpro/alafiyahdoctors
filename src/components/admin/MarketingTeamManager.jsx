@@ -136,7 +136,6 @@ export default function MarketingTeamManager({ user, onTeamUpdate }) {
   return (
     <div style={{ background: '#fff', padding: '20px', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
       
-      {/* হেডার */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
         <div>
           <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -167,7 +166,6 @@ export default function MarketingTeamManager({ user, onTeamUpdate }) {
         )}
       </div>
 
-      {/* অফিসার কার্ড গ্রিড */}
       <div style={{ 
         display: 'grid', 
         gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
@@ -180,7 +178,7 @@ export default function MarketingTeamManager({ user, onTeamUpdate }) {
         ) : (
           team.map((officer) => (
             <div 
-              key={officer.id} // ✅ unique key
+              key={officer.id}
               style={{ 
                 border: `1px solid ${officer.status === 'active' ? '#bbf7d0' : '#fee2e2'}`,
                 borderRadius: '12px',
@@ -190,7 +188,6 @@ export default function MarketingTeamManager({ user, onTeamUpdate }) {
                 position: 'relative'
               }}
             >
-              {/* স্ট্যাটাস ব্যাজ */}
               <div style={{ 
                 position: 'absolute', 
                 top: '12px', 
@@ -205,28 +202,24 @@ export default function MarketingTeamManager({ user, onTeamUpdate }) {
                 {officer.status === 'active' ? 'সক্রিয়' : 'নিষ্ক্রিয়'}
               </div>
 
-              {/* নাম */}
               <h4 style={{ margin: '0 0 8px 0', fontSize: '18px', color: '#1e293b' }}>
                 {officer.name}
               </h4>
 
-              {/* ডেসিগনেশন */}
               <p style={{ margin: '0 0 6px 0', fontSize: '13px', color: '#64748b' }}>
                 {officer.designation || 'মার্কেটিং অফিসার'}
               </p>
 
-              {/* যোগদানের তারিখ */}
               {officer.joinDate && (
                 <p style={{ margin: '0 0 12px 0', fontSize: '12px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <Calendar size={14} /> যোগদান: {officer.joinDate}
                 </p>
               )}
 
-              {/* অ্যাকশন বাটন (শুধুমাত্র অ্যাডমিন) */}
               {isAdmin && (
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px', borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
                   <button 
-                    key={`status-${officer.id}`} // ✅ key added
+                    key={`status-${officer.id}`}
                     onClick={() => toggleStatus(officer.id)}
                     style={{
                       padding: '6px 14px',
@@ -246,7 +239,7 @@ export default function MarketingTeamManager({ user, onTeamUpdate }) {
                     {officer.status === 'active' ? 'নিষ্ক্রিয় করুন' : 'সক্রিয় করুন'}
                   </button>
                   <button 
-                    key={`edit-${officer.id}`} // ✅ key added
+                    key={`edit-${officer.id}`}
                     onClick={() => handleEdit(officer)}
                     style={{
                       padding: '6px 14px',
@@ -265,7 +258,7 @@ export default function MarketingTeamManager({ user, onTeamUpdate }) {
                     <Edit2 size={14} /> সম্পাদনা
                   </button>
                   <button 
-                    key={`delete-${officer.id}`} // ✅ key added
+                    key={`delete-${officer.id}`}
                     onClick={() => handleDelete(officer.id)}
                     style={{
                       padding: '6px 14px',
@@ -290,7 +283,6 @@ export default function MarketingTeamManager({ user, onTeamUpdate }) {
         )}
       </div>
 
-      {/* মোডাল (যোগ/সম্পাদনা) */}
       {showModal && (
         <div style={{
           position: 'fixed',
