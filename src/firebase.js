@@ -15,6 +15,15 @@ import {
   onSnapshot,
   writeBatch,
 } from 'firebase/firestore';
+import { 
+  getAuth, 
+  setPersistence, 
+  browserSessionPersistence,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut 
+} from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAhAGpQ4ACx-EDePKTxqjKXoS_qN2UoC2M",
@@ -29,7 +38,18 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 
+const auth = getAuth(app);
+
+// ✅ session persistence (ট্যাব বন্ধ করলে লগআউট)
+setPersistence(auth, browserSessionPersistence)
+  .catch((error) => console.error('Auth persistence error:', error));
+
 export {
+  auth,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
   collection,
   doc,
   getDoc,

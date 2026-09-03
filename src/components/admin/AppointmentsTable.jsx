@@ -4,8 +4,16 @@ import {
   Stethoscope, LayoutList, Undo2, Eye, Search, Edit2, Save, X, 
   ArrowUpDown, Printer, XCircle as XCircleIcon, QrCode
 } from 'lucide-react';
-import { db, doc, updateDoc, getDoc } from '../../firebase';
+import { db, doc, updateDoc } from '../../firebase';
+import { useHospital } from '../../context/HospitalContext';
 import { getPatientById, getAllPatients } from '../../services/patientService';
+import { 
+  updateAppointmentStatus, 
+  archiveAppointment, 
+  restoreAppointment, 
+  deleteAppointment,
+  addAuditLog 
+} from '../../services/appointmentService';
 
 const StatusBadge = ({ status }) => {
   const styles = {
@@ -54,6 +62,9 @@ export default function AppointmentsTable({
   user,
   marketingTeam = [] 
 }) {
+  const { currentHospital } = useHospital();
+  const hospitalId = currentHospital?.id;
+
   const [viewMode, setViewMode] = useState('list');
   const [searchTerm, setSearchTerm] = useState('');
   const [viewDetails, setViewDetails] = useState(null);
@@ -105,9 +116,9 @@ export default function AppointmentsTable({
     }
     
     filtered = [...filtered].sort((a, b) => {
-      const serialA = Number(a.serialNo) || 0;
-      const serialB = Number(b.serialNo) || 0;
-      return sortOrder === 'asc' ? serialA - serialB : serialB - serialA;
+      const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+      const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+      return sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
     });
     
     return filtered;
@@ -145,14 +156,17 @@ export default function AppointmentsTable({
     }
   }, [filteredAppointments]);
 
+  // ✅ হাইলাইট রিমুভ – hospitalId ব্যবহার করে
   const handleRowClick = async (apptId) => {
+    if (!hospitalId) return;
     const appt = appointments.find(a => a.id === apptId);
     if (!appt || !appt.isNew || updatingHighlight) return;
     try {
       setUpdatingHighlight(apptId);
-      await updateDoc(doc(db, 'appointments', apptId), { isNew: false });
+      await updateDoc(doc(db, 'hospitals', hospitalId, 'appointments', apptId), { isNew: false });
     } catch (error) {
       console.error('Error removing highlight:', error);
+      alert('হাইলাইট সরাতে সমস্যা হয়েছে!');
     } finally {
       setUpdatingHighlight(null);
     }
@@ -257,6 +271,7 @@ export default function AppointmentsTable({
     setFilterDoctor('all');
   };
 
+  // ✅ রিমার্কস আপডেট – hospitalId ব্যবহার করে
   const startEdit = (appt) => {
     setEditingId(appt.id);
     setEditData({
@@ -267,14 +282,20 @@ export default function AppointmentsTable({
   };
 
   const saveEdit = async (id) => {
+    if (!hospitalId) {
+      alert('হাসপাতাল আইডি পাওয়া যায়নি!');
+      return;
+    }
     try {
-      await updateDoc(doc(db, 'appointments', id), {
+      await updateDoc(doc(db, 'hospitals', hospitalId, 'appointments', id), {
         referralSource: editData.referralSource,
         marketingOfficer: editData.marketingOfficer,
         remarks: editData.remarks
       });
       setEditingId(null);
+      alert('✅ আপডেট সফল হয়েছে!');
     } catch (error) {
+      console.error('Save edit error:', error);
       alert('আপডেট করতে সমস্যা হয়েছে।');
     }
   };
@@ -431,7 +452,6 @@ export default function AppointmentsTable({
     doctorWiseData[doctorName].patients.push(appt);
   });
 
-  // 🔥 QR কোড দেখানোর ফাংশন
   const handleShowQR = (appointmentId) => {
     if (!appointmentId) {
       alert('অ্যাপয়েন্টমেন্ট আইডি পাওয়া যায়নি');
@@ -448,7 +468,6 @@ export default function AppointmentsTable({
 
     actions.push(<ActionButton key="view" onClick={() => setViewDetails(appt)} title="বিস্তারিত দেখুন" bg="#64748b" icon={<Eye size={14} />} />);
     
-    // 🔥 QR কোড দেখানোর বাটন - শুধু pending বা confirmed স্ট্যাটাসের জন্য
     if (currentStatus === 'pending' || currentStatus === 'confirmed') {
       actions.push(
         <ActionButton 
@@ -530,7 +549,7 @@ export default function AppointmentsTable({
           </button>
 
           <button onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')} style={{ padding: '6px 12px', background: '#e2e8f0', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <ArrowUpDown size={14} /> {sortOrder === 'asc' ? 'ছোট→বড়' : 'বড়→ছোট'}
+            <ArrowUpDown size={14} /> {sortOrder === 'asc' ? 'পুরনো→নতুন' : 'নতুন→পুরনো'}
           </button>
 
           {!isArchivedView && (
@@ -600,8 +619,17 @@ export default function AppointmentsTable({
                   <td style={{ padding: '12px' }}>{appt.age || '-'}</td>
                   <td style={{ padding: '12px' }}>{appt.mobile}</td>
                   <td style={{ padding: '12px' }}>{appt.bookingDate} ({appt.bookingDay})</td>
-                  <td style={{ padding: '12px' }}>{appt.doctorName}<br/><small style={{ color: '#64748b' }}>{appt.doctorDept}</small></td>
-                  
+                  <td style={{ padding: '12px' }}>
+                    {appt.doctorName}
+                    <br/>
+                    <small style={{ color: '#64748b' }}>{appt.doctorDept}</small>
+                    {appt.doctorTime && (
+                      <>
+                        <br/>
+                        <small style={{ color: '#b45309', fontWeight: '500' }}>⏱ {appt.doctorTime}</small>
+                      </>
+                    )}
+                  </td>
                   <td style={{ padding: '12px' }}>
                     {isEditing ? (
                       <select 
@@ -860,6 +888,7 @@ export default function AppointmentsTable({
               <div><strong>সিরিয়াল:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.serialNo}</span></div>
               <div><strong>ডাক্তার:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.doctorName}</span></div>
               <div><strong>বিভাগ:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.doctorDept}</span></div>
+              <div><strong>সময়:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.doctorTime || '-'}</span></div>
               <div><strong>রেফারেল সোর্স:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.referralSource || '-'}</span></div>
               {viewDetails.referredDoctorName && <div style={{ gridColumn: '1 / -1' }}><strong>রেফারিং ডাক্তার:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.referredDoctorName}</span></div>}
               <div><strong>মার্কেটিং অফিসার:</strong><br/><span style={{ fontWeight: '700' }}>{viewDetails.marketingOfficer || '-'}</span></div>

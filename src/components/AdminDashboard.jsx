@@ -4,6 +4,8 @@ import {
   updateAppointmentStatus, deleteAppointment, archiveAppointment, restoreAppointment,
   subscribeToAuditLogs, addAuditLog 
 } from '../services/appointmentService';
+import { useHospital } from '../context/HospitalContext';
+import { useAuth } from '../context/AuthContext';
 import Overview from './admin/Overview';
 import AppointmentsTable from './admin/AppointmentsTable';
 import MarketingTeamManager from './admin/MarketingTeamManager';
@@ -11,7 +13,12 @@ import MarketingReport from './admin/MarketingReport';
 import DisplaySettings from './admin/DisplaySettings';
 import LocationManager from './admin/LocationManager';
 
-export default function AdminDashboard({ user }) {
+export default function AdminDashboard({ user: propUser }) {
+  const { currentHospital } = useHospital();
+  const hospitalId = currentHospital?.id;
+  const { user: authUser } = useAuth();
+  const user = propUser || authUser;
+
   const today = new Date().toISOString().split('T')[0];
   
   const [appointments, setAppointments] = useState([]);
@@ -20,9 +27,7 @@ export default function AdminDashboard({ user }) {
   const [tab, setTab] = useState('overview');
   const [showArchived, setShowArchived] = useState(false);
   const [loading, setLoading] = useState(true);
-
   const [marketingTeam, setMarketingTeam] = useState([]);
-
   const [startDate, setStartDate] = useState('2020-01-01');
   const [endDate, setEndDate] = useState('2030-12-31');
   const [filterPreset, setFilterPreset] = useState('all');
@@ -30,21 +35,37 @@ export default function AdminDashboard({ user }) {
   const isAdmin = user?.role === 'admin';
   const isSubAdmin = user?.role === 'sub-admin';
 
+  // অ্যাপয়েন্টমেন্ট লিসেনার
   useEffect(() => {
-    const unsubActive = subscribeToAppointments((data) => { 
-      setAppointments(data); 
-      setLoading(false); 
-    });
-    const unsubArchived = subscribeToArchivedAppointments((data) => setArchivedAppointments(data));
-    
-    if (isAdmin) {
-      const unsubLogs = subscribeToAuditLogs((data) => setAuditLogs(data));
-      return () => { unsubActive(); unsubArchived(); unsubLogs(); };
-    } else {
-      return () => { unsubActive(); unsubArchived(); };
+    if (!hospitalId) {
+      setLoading(false);
+      return;
     }
-  }, [isAdmin]);
 
+    const unsubActive = subscribeToAppointments(hospitalId, (data) => {
+      setAppointments(data || []);
+      setLoading(false);
+    });
+
+    const unsubArchived = subscribeToArchivedAppointments(hospitalId, (data) => {
+      setArchivedAppointments(data || []);
+    });
+
+    let unsubLogs = () => {};
+    if (isAdmin) {
+      unsubLogs = subscribeToAuditLogs(hospitalId, (data) => {
+        setAuditLogs(data || []);
+      });
+    }
+
+    return () => {
+      unsubActive();
+      unsubArchived();
+      if (isAdmin) unsubLogs();
+    };
+  }, [hospitalId, isAdmin]);
+
+  // ফিল্টার প্রিসেট
   const applyPreset = (preset) => {
     setFilterPreset(preset);
     const now = new Date();
@@ -58,24 +79,27 @@ export default function AdminDashboard({ user }) {
         setStartDate(todayStr);
         setEndDate(todayStr);
         break;
-      case 'week':
+      case 'week': {
         const weekStart = new Date(now);
         weekStart.setDate(now.getDate() - 7);
         setStartDate(weekStart.toISOString().split('T')[0]);
         setEndDate(todayStr);
         break;
-      case 'month':
+      }
+      case 'month': {
         const monthStart = new Date(now);
         monthStart.setMonth(now.getMonth() - 1);
         setStartDate(monthStart.toISOString().split('T')[0]);
         setEndDate(todayStr);
         break;
-      case 'year':
+      }
+      case 'year': {
         const yearStart = new Date(now);
         yearStart.setFullYear(now.getFullYear() - 1);
         setStartDate(yearStart.toISOString().split('T')[0]);
         setEndDate(todayStr);
         break;
+      }
       case 'custom':
         return;
       default:
@@ -94,7 +118,9 @@ export default function AdminDashboard({ user }) {
     setFilterPreset('custom');
   };
 
+  // ফিল্টারড ডেটা
   const filteredAppointments = useMemo(() => {
+    if (!appointments || !Array.isArray(appointments)) return [];
     return appointments.filter(item => {
       if (!item.bookingDate) return false;
       return item.bookingDate >= startDate && item.bookingDate <= endDate;
@@ -102,6 +128,7 @@ export default function AdminDashboard({ user }) {
   }, [appointments, startDate, endDate]);
 
   const filteredArchived = useMemo(() => {
+    if (!archivedAppointments || !Array.isArray(archivedAppointments)) return [];
     return archivedAppointments.filter(item => {
       if (!item.bookingDate) return false;
       return item.bookingDate >= startDate && item.bookingDate <= endDate;
@@ -109,6 +136,7 @@ export default function AdminDashboard({ user }) {
   }, [archivedAppointments, startDate, endDate]);
 
   const filteredAuditLogs = useMemo(() => {
+    if (!auditLogs || !Array.isArray(auditLogs)) return [];
     return auditLogs.filter(item => {
       if (!item.timestamp) return false;
       let logDate;
@@ -122,32 +150,62 @@ export default function AdminDashboard({ user }) {
     });
   }, [auditLogs, startDate, endDate]);
 
+  // হ্যান্ডলার
   const handleStatusChange = async (id, newStatus) => {
+    if (!hospitalId) return;
     const currentAppt = appointments.find(a => a.id === id);
     if (newStatus === 'PERMANENT_DELETE') {
       if (confirm('আপনি কি নিশ্চিত এই রেকর্ডটি স্থায়ীভাবে মুছে ফেলতে চান?')) {
-        await deleteAppointment(id);
-        if (isAdmin) await addAuditLog({ action: 'deleted', entityId: id, performedBy: user?.name || 'Unknown', role: user?.role, details: `রোগী ${currentAppt?.name || 'Unknown'} স্থায়ীভাবে ডিলিট করেছেন` });
+        await deleteAppointment(hospitalId, id);
+        if (isAdmin) await addAuditLog(hospitalId, { 
+          action: 'deleted', 
+          entityId: id, 
+          performedBy: user?.name || 'Unknown', 
+          role: user?.role, 
+          details: `রোগী ${currentAppt?.name || 'Unknown'} স্থায়ীভাবে ডিলিট করেছেন` 
+        });
       }
     } else {
-      await updateAppointmentStatus(id, newStatus);
-      if (isAdmin) await addAuditLog({ action: 'status_changed', entityId: id, performedBy: user?.name || 'Unknown', role: user?.role, oldStatus: currentAppt?.status || 'Unknown', newStatus, details: `${currentAppt?.name || 'Unknown'} এর স্ট্যাটাস ${currentAppt?.status || 'Unknown'} থেকে ${newStatus} এ পরিবর্তন করেছেন` });
+      await updateAppointmentStatus(hospitalId, id, newStatus);
+      if (isAdmin) await addAuditLog(hospitalId, { 
+        action: 'status_changed', 
+        entityId: id, 
+        performedBy: user?.name || 'Unknown', 
+        role: user?.role, 
+        oldStatus: currentAppt?.status || 'Unknown', 
+        newStatus, 
+        details: `${currentAppt?.name || 'Unknown'} এর স্ট্যাটাস ${currentAppt?.status || 'Unknown'} থেকে ${newStatus} এ পরিবর্তন করেছেন` 
+      });
     }
   };
 
   const handleArchive = async (id) => {
+    if (!hospitalId) return;
     const currentAppt = appointments.find(a => a.id === id);
     if (confirm('আপনি কি এই রেকর্ডটি আর্কাইভ করতে চান?')) {
-      await archiveAppointment(id);
-      if (isAdmin) await addAuditLog({ action: 'archived', entityId: id, performedBy: user?.name || 'Unknown', role: user?.role, details: `${currentAppt?.name || 'Unknown'} এর বুকিং আর্কাইভ করেছেন` });
+      await archiveAppointment(hospitalId, id);
+      if (isAdmin) await addAuditLog(hospitalId, { 
+        action: 'archived', 
+        entityId: id, 
+        performedBy: user?.name || 'Unknown', 
+        role: user?.role, 
+        details: `${currentAppt?.name || 'Unknown'} এর বুকিং আর্কাইভ করেছেন` 
+      });
     }
   };
 
   const handleRestore = async (id) => {
+    if (!hospitalId) return;
     const currentAppt = archivedAppointments.find(a => a.id === id);
     if (confirm('আপনি কি এই বুকিংটি আবার মেইন লিস্টে ফিরিয়ে আনতে চান?')) {
-      await restoreAppointment(id);
-      if (isAdmin) await addAuditLog({ action: 'restored', entityId: id, performedBy: user?.name || 'Unknown', role: user?.role, details: `${currentAppt?.name || 'Unknown'} এর বুকিং পুনরুদ্ধার করেছেন` });
+      await restoreAppointment(hospitalId, id);
+      if (isAdmin) await addAuditLog(hospitalId, { 
+        action: 'restored', 
+        entityId: id, 
+        performedBy: user?.name || 'Unknown', 
+        role: user?.role, 
+        details: `${currentAppt?.name || 'Unknown'} এর বুকিং পুনরুদ্ধার করেছেন` 
+      });
     }
   };
 
@@ -163,24 +221,30 @@ export default function AdminDashboard({ user }) {
           <button onClick={() => { setShowArchived(false); setTab('overview'); }} style={{ padding: '8px 16px', background: tab === 'overview' && !showArchived ? '#1c5fa8' : '#ffffff', color: tab === 'overview' && !showArchived ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>পরিসংখ্যান</button>
           <button onClick={() => { setShowArchived(false); setTab('appointments'); }} style={{ padding: '8px 16px', background: tab === 'appointments' && !showArchived ? '#1c5fa8' : '#ffffff', color: tab === 'appointments' && !showArchived ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>বুকিং লিস্ট</button>
           
+          {/* ✅ মার্কেটিং রিপোর্ট – সবসময় দেখাবে (শুধু অ্যাডমিন/সাব-অ্যাডমিন) */}
           {(isAdmin || isSubAdmin) && (
             <button onClick={() => { setShowArchived(false); setTab('marketing'); }} style={{ padding: '8px 16px', background: tab === 'marketing' ? '#1c5fa8' : '#ffffff', color: tab === 'marketing' ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>মার্কেটিং রিপোর্ট</button>
           )}
           
+          {/* ✅ ডিসপ্লে সেটিংস – শুধু অ্যাডমিন */}
           {isAdmin && (
             <button onClick={() => { setShowArchived(false); setTab('display'); }} style={{ padding: '8px 16px', background: tab === 'display' ? '#1c5fa8' : '#ffffff', color: tab === 'display' ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>📺 ডিসপ্লে সেটিংস</button>
           )}
           
+          {/* ✅ লোকেশন ম্যানেজার – শুধু অ্যাডমিন */}
           {isAdmin && (
             <button onClick={() => { setShowArchived(false); setTab('locations'); }} style={{ padding: '8px 16px', background: tab === 'locations' ? '#1c5fa8' : '#ffffff', color: tab === 'locations' ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>📍 লোকেশন ম্যানেজার</button>
           )}
           
+          {/* ✅ Activity Log – শুধু অ্যাডমিন */}
           {isAdmin && <button onClick={() => setTab('logs')} style={{ padding: '8px 16px', background: tab === 'logs' ? '#1c5fa8' : '#ffffff', color: tab === 'logs' ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>Activity Log</button>}
           
+          {/* ✅ Archived বাটন – সবসময় দেখাবে */}
           <button onClick={() => { setShowArchived(!showArchived); setTab('appointments'); }} style={{ padding: '8px 16px', background: showArchived ? '#374151' : '#ffffff', color: showArchived ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>{showArchived ? 'Active List' : 'Archived'}</button>
         </div>
       </div>
 
+      {/* ফিল্টার */}
       {(tab === 'overview' || tab === 'appointments') && (
         <div style={{ 
           background: '#ffffff', 
@@ -219,6 +283,7 @@ export default function AdminDashboard({ user }) {
         </div>
       )}
 
+      {/* কন্টেন্ট */}
       {tab === 'overview' && !showArchived && <Overview appointments={filteredAppointments} />}
       
       {tab === 'appointments' && (
@@ -230,6 +295,7 @@ export default function AdminDashboard({ user }) {
           isArchivedView={showArchived}
           user={user}
           marketingTeam={marketingTeam}
+          hospitalId={hospitalId}  // ✅ যোগ করুন
         />
       )}
 

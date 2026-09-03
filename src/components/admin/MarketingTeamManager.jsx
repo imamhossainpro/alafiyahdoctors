@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { db, doc, getDoc, setDoc } from '../../firebase';
+import { db, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs } from '../../firebase';
+import { useHospital } from '../../context/HospitalContext';
 import { Plus, Edit2, Trash2, UserCheck, UserX, Calendar, Shield } from 'lucide-react';
 
 export default function MarketingTeamManager({ user, onTeamUpdate }) {
+  const { currentHospital } = useHospital();
+  const hospitalId = currentHospital?.id;
+
   const [team, setTeam] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -14,38 +18,47 @@ export default function MarketingTeamManager({ user, onTeamUpdate }) {
     joinDate: new Date().toISOString().split('T')[0]
   });
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.role === 'admin' || user?.role === 'sub-admin';
 
+  // ✅ হাসপাতাল-নির্দিষ্ট পাথে ডেটা লোড করুন
   useEffect(() => {
-    loadTeam();
-  }, []);
-
-  const loadTeam = async () => {
-    try {
-      const docRef = doc(db, 'master', 'marketingTeam');
-      const docSnap = await getDoc(docRef);
-      let teamData = [];
-      if (docSnap.exists()) {
-        teamData = docSnap.data().members || [];
-      } else {
-        teamData = [
-          { id: '1', name: 'আরিফ', designation: 'মার্কেটিং অফিসার', status: 'active', joinDate: '2025-01-01' },
-          { id: '2', name: 'সাবরিনা', designation: 'মার্কেটিং অফিসার', status: 'active', joinDate: '2025-01-15' }
-        ];
-        await setDoc(docRef, { members: teamData });
+    const loadTeam = async () => {
+      if (!hospitalId) {
+        setLoading(false);
+        return;
       }
-      setTeam(teamData);
-      if (onTeamUpdate) onTeamUpdate(teamData);
-    } catch (error) {
-      console.error('Team load error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+      try {
+        const docRef = doc(db, 'hospitals', hospitalId, 'settings', 'marketingTeam');
+        const docSnap = await getDoc(docRef);
+        let teamData = [];
+        if (docSnap.exists()) {
+          teamData = docSnap.data().members || [];
+        } else {
+          // ডিফল্ট ডেটা তৈরি (ঐচ্ছিক)
+          teamData = [
+            { id: '1', name: 'আরিফ', designation: 'মার্কেটিং অফিসার', status: 'active', joinDate: '2025-01-01' },
+            { id: '2', name: 'সাবরিনা', designation: 'মার্কেটিং অফিসার', status: 'active', joinDate: '2025-01-15' }
+          ];
+          await setDoc(docRef, { members: teamData });
+        }
+        setTeam(teamData);
+        if (onTeamUpdate) onTeamUpdate(teamData);
+      } catch (error) {
+        console.error('Team load error:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
+    loadTeam();
+  }, [hospitalId, onTeamUpdate]);
+
+  // ✅ ডেটা সেভ (হাসপাতাল-নির্দিষ্ট)
   const saveTeam = async (updatedTeam) => {
+    if (!hospitalId) return;
     try {
-      await setDoc(doc(db, 'master', 'marketingTeam'), { members: updatedTeam });
+      const docRef = doc(db, 'hospitals', hospitalId, 'settings', 'marketingTeam');
+      await setDoc(docRef, { members: updatedTeam });
       setTeam(updatedTeam);
       if (onTeamUpdate) onTeamUpdate(updatedTeam);
     } catch (error) {

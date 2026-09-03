@@ -4,6 +4,8 @@ import { CheckCircle, AlertCircle, Loader2, User, Stethoscope, Calendar, Clock, 
 import { verifyQRCode, checkInWithQR, getAppointmentQR } from '../services/qrService';
 import { db, doc, getDoc } from '../firebase';
 
+const HOSPITAL_PATH = 'hospitals/alafiyah_main';
+
 const CheckInCSS = `
   .checkin-wrapper {
     min-height: 100vh;
@@ -109,8 +111,7 @@ export default function CheckIn() {
       hasChecked.current = true;
       
       try {
-        // অ্যাপয়েন্টমেন্ট ডেটা লোড
-        const apptRef = doc(db, 'appointments', appointmentId);
+        const apptRef = doc(db, HOSPITAL_PATH, 'appointments', appointmentId);
         const apptSnap = await getDoc(apptRef);
         if (!apptSnap.exists()) {
           setError('অ্যাপয়েন্টমেন্ট পাওয়া যায়নি');
@@ -120,11 +121,9 @@ export default function CheckIn() {
         const data = apptSnap.data();
         setAppointment({ id: appointmentId, ...data });
         
-        // QR কোড লোড
         const qr = await getAppointmentQR(appointmentId);
         setQrCode(qr);
         
-        // যদি ইতিমধ্যে চেক-ইন হয়ে থাকে
         if (data.status === 'checked-in' || data.status === 'completed') {
           setSuccess(true);
         }
@@ -143,10 +142,8 @@ export default function CheckIn() {
     setError('');
     
     try {
-      // QR কোড দিয়ে চেক-ইন
       await checkInWithQR(appointmentId);
       setSuccess(true);
-      // অ্যাপয়েন্টমেন্ট স্টেট আপডেট
       setAppointment(prev => ({ ...prev, status: 'checked-in' }));
     } catch (err) {
       setError(err.message || 'চেক-ইন করতে সমস্যা হয়েছে');
@@ -176,7 +173,6 @@ export default function CheckIn() {
       <style>{CheckInCSS}</style>
       <div className="checkin-card">
         
-        {/* এরর মেসেজ */}
         {error && (
           <div className="checkin-error">
             <AlertCircle size={20} />
@@ -184,7 +180,6 @@ export default function CheckIn() {
           </div>
         )}
 
-        {/* সাকসেস */}
         {success ? (
           <>
             <div className="checkin-success">
@@ -212,7 +207,6 @@ export default function CheckIn() {
             <h1 className="checkin-title">চেক-ইন করুন</h1>
             <p className="checkin-sub">আপনার সিরিয়াল নিশ্চিত করতে নিচের বাটনে ক্লিক করুন</p>
 
-            {/* রোগীর তথ্য */}
             {appointment && (
               <div className="checkin-patient-info">
                 <div className="checkin-info-row">
@@ -234,7 +228,6 @@ export default function CheckIn() {
               </div>
             )}
 
-            {/* QR কোড (যদি থাকে) */}
             {qrCode && (
               <div style={{ marginBottom: '16px' }}>
                 <img src={qrCode} alt="QR Code" style={{ width: '120px', height: '120px' }} />

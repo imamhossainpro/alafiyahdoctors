@@ -5,9 +5,17 @@ import { FileText, Trash2 } from 'lucide-react';
 import { db, doc, setDoc, collection, query, where, getDocs, updateDoc } from '../../firebase';
 import { getAllPatients } from '../../services/patientService';
 
+// ✅ অফিসারভিত্তিক PDF এক্সপোর্ট – কেস-ইনসেনসিটিভ ও ট্রিম
 const exportOfficerPDF = async (officerName, appointments) => {
-  const officerAppointments = appointments.filter(a => a.marketingOfficer === officerName && a.status === 'completed');
-  
+  // Normalize officer name for matching
+  const normalizedOfficer = officerName.trim().toLowerCase();
+
+  const officerAppointments = appointments.filter(a => {
+    const apptOfficer = a.marketingOfficer?.trim().toLowerCase() || '';
+    const status = a.status?.toLowerCase() || '';
+    return apptOfficer === normalizedOfficer && status === 'completed';
+  });
+
   if (officerAppointments.length === 0) {
     alert('এই অফিসারের কোনো সম্পন্ন (Completed) রোগী নেই');
     return;

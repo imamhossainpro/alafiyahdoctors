@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db, collection, onSnapshot, query, where, doc, getDoc, getDocs, setDoc } from '../firebase';
 
+const HOSPITAL_PATH = 'hospitals/alafiyah_main';
+
 const getTodayString = () => {
   const date = new Date();
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -386,7 +388,7 @@ export default function QueueDisplay() {
   // ডিসপ্লে সেটিংস লোড
   const loadDisplaySettings = async () => {
     try {
-      const docRef = doc(db, 'master', 'displaySettings');
+      const docRef = doc(db, HOSPITAL_PATH, 'displaySettings');
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         setDisplaySettings(docSnap.data());
@@ -410,30 +412,33 @@ export default function QueueDisplay() {
   // ডাক্তার লিস্ট রিফ্রেশ (প্রতি ১২০ সেকেন্ডে)
   const refreshDoctorList = async () => {
     try {
-      const deptDoc = await getDoc(doc(db, 'master', 'departments'));
+      // ডিপার্টমেন্ট থেকে ডাক্তার লোড
+      const deptSnapshot = await getDocs(collection(db, HOSPITAL_PATH, 'departments'));
       const docs = [];
-      if (deptDoc.exists()) {
-        deptDoc.data().departments.forEach(dept => {
-          dept.doctors.forEach(d => {
+      deptSnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.doctors) {
+          data.doctors.forEach((d) => {
             docs.push({
               id: d.id,
               name: d.name,
-              specialty: d.specialty || d.quals || dept.name,
+              specialty: d.specialty || d.quals || data.name,
               time: d.time || '',
-              dept: dept.name
+              dept: data.name
             });
           });
-        });
-      }
+        }
+      });
       setAllDoctors(docs);
 
+      // প্যানেল থেকে আজকের অ্যাক্টিভ ডাক্তার আইডি লোড
       const today = new Date();
       const weekDays = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
       const todayName = weekDays[today.getDay()];
 
-      const panelsSnapshot = await getDocs(collection(db, 'panels'));
+      const panelsSnapshot = await getDocs(collection(db, HOSPITAL_PATH, 'panels'));
       let activeIds = [];
-      panelsSnapshot.forEach(panelDoc => {
+      panelsSnapshot.forEach((panelDoc) => {
         const data = panelDoc.data();
         if (data.name === todayName || panelDoc.id === todayName) {
           activeIds = data.activeDoctorIds || [];
@@ -465,7 +470,7 @@ export default function QueueDisplay() {
       await refreshDoctorList();
 
       const todayStr = getTodayString();
-      const q = query(collection(db, 'appointments'), where('bookingDate', '==', todayStr));
+      const q = query(collection(db, HOSPITAL_PATH, 'appointments'), where('bookingDate', '==', todayStr));
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const data = [];
         snapshot.forEach((doc) => data.push({ id: doc.id, ...doc.data() }));
@@ -558,7 +563,7 @@ export default function QueueDisplay() {
       <div className="tv-display">
         <style>{QueueCSS}</style>
         <div className="tv-header">
-          <img src="/logo.png" alt="আল-আফিয়া হাসপাতাল" />
+          <img src="/logo.png" alt="আল-আফিয়া হাসপাতাল" />
           <div className="tv-datetime">
             <span>{currentTime.toLocaleDateString('bn-BD', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
             {' | '}
@@ -578,7 +583,7 @@ export default function QueueDisplay() {
       <div className="tv-display">
         <style>{QueueCSS}</style>
         <div className="tv-header">
-          <img src="/logo.png" alt="আল-আফিয়া হাসপাতাল" />
+          <img src="/logo.png" alt="আল-আফিয়া হাসপাতাল" />
           <div className="tv-datetime">
             <span>{currentTime.toLocaleDateString('bn-BD', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
             {' | '}
@@ -603,7 +608,7 @@ export default function QueueDisplay() {
       <div className="tv-display">
         <style>{QueueCSS}</style>
         <div className="tv-header">
-          <img src="/logo.png" alt="আল-আফিয়া হাসপাতাল" />
+          <img src="/logo.png" alt="আল-আফিয়া হাসপাতাল" />
           <div className="tv-datetime">
             <span>{currentTime.toLocaleDateString('bn-BD', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
             {' | '}
@@ -622,7 +627,7 @@ export default function QueueDisplay() {
       <style>{QueueCSS}</style>
 
       <div className="tv-header">
-        <img src="/logo.png" alt="আল-আফিয়া হাসপাতাল" />
+        <img src="/logo.png" alt="আল-আফিয়া হাসপাতাল" />
         <div className="tv-datetime">
           <span>
             {currentTime.toLocaleDateString('bn-BD', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}

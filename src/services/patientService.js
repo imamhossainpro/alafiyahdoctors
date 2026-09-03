@@ -1,8 +1,10 @@
 import { db, collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where } from '../firebase';
 
+const HOSPITAL_PATH = 'hospitals/alafiyah_main';
+
 export const findPatientByMobile = async (mobile) => {
   try {
-    const q = query(collection(db, 'patients'), where('mobile', '==', mobile));
+    const q = query(collection(db, HOSPITAL_PATH, 'patients'), where('mobile', '==', mobile));
     const snapshot = await getDocs(q);
     if (snapshot.empty) return null;
     return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
@@ -20,7 +22,7 @@ export const createPatient = async (patientData) => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
-    const docRef = await addDoc(collection(db, 'patients'), newPatient);
+    const docRef = await addDoc(collection(db, HOSPITAL_PATH, 'patients'), newPatient);
     return { id: docRef.id, ...newPatient };
   } catch (error) {
     console.error('Create patient error:', error);
@@ -30,7 +32,7 @@ export const createPatient = async (patientData) => {
 
 export const addPatientVisit = async (patientId, doctorName, date) => {
   try {
-    const docRef = doc(db, 'patients', patientId);
+    const docRef = doc(db, HOSPITAL_PATH, 'patients', patientId);
     const docSnap = await getDoc(docRef);
     if (!docSnap.exists()) throw new Error('Patient not found');
     const data = docSnap.data();
@@ -50,7 +52,7 @@ export const addPatientVisit = async (patientId, doctorName, date) => {
 export const getPatientById = async (patientId) => {
   if (!patientId) return null;
   try {
-    const docRef = doc(db, 'patients', patientId);
+    const docRef = doc(db, HOSPITAL_PATH, 'patients', patientId);
     const docSnap = await getDoc(docRef);
     if (!docSnap.exists()) return null;
     return { id: docSnap.id, ...docSnap.data() };
@@ -62,7 +64,7 @@ export const getPatientById = async (patientId) => {
 
 export const getAllPatients = async () => {
   try {
-    const snapshot = await getDocs(collection(db, 'patients'));
+    const snapshot = await getDocs(collection(db, HOSPITAL_PATH, 'patients'));
     const patients = [];
     snapshot.forEach((doc) => {
       patients.push({ id: doc.id, ...doc.data() });

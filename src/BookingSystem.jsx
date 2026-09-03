@@ -4,6 +4,9 @@ import { findPatientByMobile, createPatient, addPatientVisit } from './services/
 import { generateQRCode } from './services/qrService';
 import { Send, Loader2, User, Phone, MapPin, Stethoscope, CalendarDays, ArrowLeft, PlusCircle, CheckCircle2 } from 'lucide-react';
 
+const HOSPITAL_PATH = 'hospitals/alafiyah_main';
+
+// আজকের তারিখ ফরম্যাট YYYY-MM-DD
 const getTodayString = () => {
   const date = new Date();
   const year = date.getFullYear();
@@ -18,17 +21,45 @@ const toEnglishDigits = (str) => {
   return str.replace(/[০-৯]/g, (char) => banglaDigits.indexOf(char) !== -1 ? englishDigits[banglaDigits.indexOf(char)] : char);
 };
 
+// ---------- ক্যালেন্ডার কম্পোনেন্ট (সরাসরি new Date() ব্যবহার) ----------
 function CustomCalendar({ selectedDate, onDateChange }) {
-  const [viewDate, setViewDate] = useState(new Date(selectedDate));
-  const days = ['রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহঃ', 'শুক্র', 'শনি'];
+  const today = new Date();
+  const todayStr = getTodayString();
+  
+  // viewDate: selectedDate থেকে তৈরি, নাহলে আজকের তারিখ
+  const [viewDate, setViewDate] = useState(() => {
+    if (selectedDate) {
+      const parts = selectedDate.split('-').map(Number);
+      return new Date(parts[0], parts[1] - 1, parts[2]);
+    }
+    return new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  });
+
+  // selectedDate পরিবর্তন হলে viewDate আপডেট
+  useEffect(() => {
+    if (selectedDate) {
+      const parts = selectedDate.split('-').map(Number);
+      const newDate = new Date(parts[0], parts[1] - 1, parts[2]);
+      setViewDate(newDate);
+    }
+  }, [selectedDate]);
+
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const todayStr = getTodayString();
-  
-  const handlePrevMonth = () => setViewDate(new Date(year, month - 1, 1));
-  const handleNextMonth = () => setViewDate(new Date(year, month + 1, 1));
+
+  const monthNames = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
+  const dayNames = ['রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহঃ', 'শুক্র', 'শনি'];
+
+  const handlePrevMonth = () => {
+    setViewDate(new Date(year, month - 1, 1));
+  };
+
+  const handleNextMonth = () => {
+    setViewDate(new Date(year, month + 1, 1));
+  };
+
   const handleDateClick = (day) => {
     const formattedDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     onDateChange(formattedDate);
@@ -38,22 +69,33 @@ function CustomCalendar({ selectedDate, onDateChange }) {
     <div className="custom-calendar">
       <div className="cal-header">
         <button type="button" onClick={handlePrevMonth}>&lt;</button>
-        <span>{viewDate.toLocaleString('bn-BD', { month: 'long', year: 'numeric' })}</span>
+        <span>{monthNames[month]} {year}</span>
         <button type="button" onClick={handleNextMonth}>&gt;</button>
       </div>
       <div className="cal-grid cal-weekdays">
-        {days.map(d => <div key={d} className="cal-day-name">{d}</div>)}
+        {dayNames.map(d => <div key={d} className="cal-day-name">{d}</div>)}
       </div>
       <div className="cal-grid cal-days">
-        {Array.from({ length: firstDay }).map((_, i) => <div key={`empty-${i}`} className="cal-day empty"></div>)}
+        {/* খালি ঘর */}
+        {Array.from({ length: firstDay }).map((_, i) => (
+          <div key={`empty-${i}`} className="cal-day empty"></div>
+        ))}
+        {/* দিনগুলো */}
         {Array.from({ length: daysInMonth }).map((_, i) => {
           const day = i + 1;
           const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           const isSelected = selectedDate === dateStr;
           const isPast = dateStr < todayStr;
           const isToday = dateStr === todayStr;
+
           return (
-            <div key={day} className={`cal-day ${isSelected ? 'selected' : ''} ${isPast ? 'disabled' : ''} ${isToday ? 'today' : ''}`} onClick={() => !isPast && handleDateClick(day)}>{day}</div>
+            <div
+              key={day}
+              className={`cal-day ${isSelected ? 'selected' : ''} ${isPast ? 'disabled' : ''} ${isToday ? 'today' : ''}`}
+              onClick={() => !isPast && handleDateClick(day)}
+            >
+              {day}
+            </div>
           );
         })}
       </div>
@@ -61,6 +103,7 @@ function CustomCalendar({ selectedDate, onDateChange }) {
   );
 }
 
+// ---------- CSS ----------
 const BookingCSS = `
   .booking-wrapper { max-width: 650px; margin: 40px auto; padding: 20px; font-family: 'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif; background: #f4f7f6; border-radius: 20px; }
   .booking-card { background: #fff; border-radius: 16px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06); padding: 30px; border: 1px solid #e2e8f0; min-height: 500px; position: relative; }
@@ -129,6 +172,7 @@ const BookingCSS = `
   @media (max-width: 600px) { .booking-wrapper { margin: 0; padding: 10px; } .booking-card { padding: 20px; } .summary-row { flex-direction: column; gap: 4px; } .summary-value { text-align: left; } .cal-day { width: 30px; height: 30px; font-size: 12px; } }
 `;
 
+// ---------- মূল BookingSystem কম্পোনেন্ট ----------
 export default function BookingSystem({ departments, panels, onBack }) {
   const [formData, setFormData] = useState({
     name: '',
@@ -143,6 +187,7 @@ export default function BookingSystem({ departments, panels, onBack }) {
     doctorId: ''
   });
 
+  // ✅ শুরুতে আজকের তারিখ সেট করা
   const [selectedDate, setSelectedDate] = useState(getTodayString());
   const [selectedDayName, setSelectedDayName] = useState('');
   const [availableDoctors, setAvailableDoctors] = useState([]);
@@ -153,50 +198,62 @@ export default function BookingSystem({ departments, panels, onBack }) {
   const [qrCode, setQrCode] = useState(null);
   const [appointmentId, setAppointmentId] = useState(null);
 
+  // দিনের নাম ও ডাক্তার লিস্ট আপডেট
   useEffect(() => {
-    if (!panels || panels.length === 0 || !departments || departments.length === 0) { setAvailableDoctors([]); return; }
-    
-    const dateObj = selectedDate ? new Date(selectedDate) : new Date();
+    if (!panels || panels.length === 0 || !departments || departments.length === 0) {
+      setAvailableDoctors([]);
+      return;
+    }
+
+    const dateObj = new Date(selectedDate);
     const englishDay = dateObj.getDay();
     const banglaDays = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
     const dayName = banglaDays[englishDay];
     setSelectedDayName(dayName);
-    
+
     const dayPanel = panels.find(p => p.name === dayName);
-    
+
     if (!dayPanel) {
-      let nextDate = new Date(dateObj); let found = false;
-      for (let i = 0; i < 7; i++) {
-        nextDate.setDate(nextDate.getDate() + 1);
-        let nextDay = nextDate.getDay();
-        let nextDayName = banglaDays[nextDay];
-        let nextPanel = panels.find(p => p.name === nextDayName);
-        if (nextPanel) {
-          const formattedDate = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`;
-          setSelectedDate(formattedDate); found = true; return;
-        }
-      }
-      if (!found) setAvailableDoctors([]); return;
+      setAvailableDoctors([]);
+      return;
     }
 
     const activeIds = dayPanel.activeDoctorIds || [];
     const filteredDocs = [];
-    departments.forEach(dept => { dept.doctors.forEach(doc => { if (activeIds.includes(doc.id)) filteredDocs.push({ ...doc, deptName: dept.name, deptId: dept.id }); }); });
+    departments.forEach(dept => {
+      dept.doctors.forEach(doc => {
+        if (activeIds.includes(doc.id)) {
+          filteredDocs.push({ ...doc, deptName: dept.name, deptId: dept.id });
+        }
+      });
+    });
     setAvailableDoctors(filteredDocs);
     setSelectedDoctor(null);
   }, [selectedDate, panels, departments]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    if (name === 'age' || name === 'mobile') setFormData(prev => ({ ...prev, [name]: toEnglishDigits(value) }));
-    else setFormData(prev => ({ ...prev, [name]: value }));
+    if (name === 'age' || name === 'mobile') {
+      setFormData(prev => ({ ...prev, [name]: toEnglishDigits(value) }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
     if (name === 'departmentId' || name === 'doctorId') setSelectedDoctor(null);
     setSuccessMsg('');
   };
 
   const resetForm = () => {
-    setFormData({ name: '', age: '', mobile: '', gender: 'পুরুষ', address: '', referralSource: 'Walk-in / নিজে এসেছেন', referredDoctorName: '', otherReferralNote: '', departmentId: '', doctorId: '' });
-    setSelectedDate(getTodayString()); setAvailableDoctors([]); setSelectedDoctor(null); setSuccessMsg(''); setQrCode(null); setAppointmentId(null);
+    setFormData({
+      name: '', age: '', mobile: '', gender: 'পুরুষ', address: '',
+      referralSource: 'Walk-in / নিজে এসেছেন', referredDoctorName: '',
+      otherReferralNote: '', departmentId: '', doctorId: ''
+    });
+    setSelectedDate(getTodayString());
+    setAvailableDoctors([]);
+    setSelectedDoctor(null);
+    setSuccessMsg('');
+    setQrCode(null);
+    setAppointmentId(null);
   };
 
   const handleSubmit = async (e) => {
@@ -212,7 +269,7 @@ export default function BookingSystem({ departments, panels, onBack }) {
 
       let patient = await findPatientByMobile(formData.mobile);
       let patientId;
-      
+
       if (patient) {
         patientId = patient.id;
         await addPatientVisit(patientId, selectedDoctor.name, selectedDate);
@@ -228,34 +285,33 @@ export default function BookingSystem({ departments, panels, onBack }) {
         await addPatientVisit(patientId, selectedDoctor.name, selectedDate);
       }
 
-      const counterRef = doc(db, 'counters', selectedDoctor.id);
+      const counterRef = doc(db, HOSPITAL_PATH, 'counters', selectedDoctor.id);
       let serialNo = 1;
       const counterDoc = await getDoc(counterRef);
-      if (counterDoc.exists()) { 
-        serialNo = counterDoc.data().count + 1; 
-        await setDoc(counterRef, { count: serialNo }, { merge: true }); 
-      } else { 
-        await setDoc(counterRef, { count: serialNo }); 
+      if (counterDoc.exists()) {
+        serialNo = counterDoc.data().count + 1;
+        await setDoc(counterRef, { count: serialNo }, { merge: true });
+      } else {
+        await setDoc(counterRef, { count: serialNo });
       }
-      
-      // 🔥 doctorTime যোগ করা হলো
-      const appointmentData = { 
-        ...formData, 
+
+      const appointmentData = {
+        ...formData,
         patientId: patientId,
-        doctorName: selectedDoctor.name, 
-        doctorDept: selectedDoctor.deptName, 
-        doctorQuals: selectedDoctor.quals || '', 
-        doctorTime: selectedDoctor.time || '', // 🔥 ডাক্তারের সময়
-        bookingDate: selectedDate, 
-        bookingDay: selectedDayName, 
-        serialNo: serialNo, 
-        status: 'pending', 
+        doctorName: selectedDoctor.name,
+        doctorDept: selectedDoctor.deptName,
+        doctorQuals: selectedDoctor.quals || '',
+        doctorTime: selectedDoctor.time || '',
+        bookingDate: selectedDate,
+        bookingDay: selectedDayName,
+        serialNo: serialNo,
+        status: 'pending',
         timestamp: new Date().toISOString(),
         isNew: true,
         isRead: false
       };
-      
-      const docRef = await addDoc(collection(db, 'appointments'), appointmentData);
+
+      const docRef = await addDoc(collection(db, HOSPITAL_PATH, 'appointments'), appointmentData);
       setAppointmentId(docRef.id);
 
       const qrImage = await generateQRCode(docRef.id);
@@ -268,13 +324,13 @@ export default function BookingSystem({ departments, panels, onBack }) {
     } catch (error) {
       console.error("Booking error:", error);
       alert(error.message || "বুকিং সম্পন্ন হয়নি। আবার চেষ্টা করুন।");
-    } finally { 
-      setLoading(false); 
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleNewBooking = () => { resetForm(); setIsBooked(false); };
-  const handleBackToDoctors = () => { 
+  const handleBackToDoctors = () => {
     if (onBack) { onBack(); }
     else { resetForm(); setIsBooked(false); }
   };
@@ -297,22 +353,22 @@ export default function BookingSystem({ departments, panels, onBack }) {
             </div>
             <h3 className="success-title">বুকিং সফল হয়েছে!</h3>
             <p className="success-text">{successMsg}</p>
-            
+
             {qrCode && (
               <div style={{ marginBottom: '16px' }}>
                 <p style={{ fontSize: '14px', color: '#475569', marginBottom: '8px' }}>
                   📱 চেক-ইন করতে QR কোড স্ক্যান করুন
                 </p>
-                <img 
-                  src={qrCode} 
-                  alt="QR Code" 
-                  style={{ 
-                    width: '150px', 
-                    height: '150px', 
+                <img
+                  src={qrCode}
+                  alt="QR Code"
+                  style={{
+                    width: '150px',
+                    height: '150px',
                     borderRadius: '8px',
                     border: '1px solid #e2e8f0',
                     padding: '4px'
-                  }} 
+                  }}
                 />
                 {appointmentId && (
                   <>
@@ -320,12 +376,12 @@ export default function BookingSystem({ departments, panels, onBack }) {
                       অ্যাপয়েন্টমেন্ট আইডি: {appointmentId}
                     </p>
                     <p style={{ fontSize: '13px', marginTop: '8px' }}>
-                      <a 
+                      <a
                         href={`${window.location.origin}/checkin/${appointmentId}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        style={{ 
-                          color: '#1c5fa8', 
+                        style={{
+                          color: '#1c5fa8',
                           fontWeight: '600',
                           textDecoration: 'underline',
                           cursor: 'pointer'
@@ -338,7 +394,7 @@ export default function BookingSystem({ departments, panels, onBack }) {
                 )}
               </div>
             )}
-            
+
             <div className="success-buttons">
               <button className="success-btn success-btn-secondary" onClick={handleBackToDoctors}>
                 <ArrowLeft size={18} /> ফিরে যান হোমপেইজে
@@ -424,7 +480,7 @@ export default function BookingSystem({ departments, panels, onBack }) {
 
             <div className="form-section">
               <div className="section-title"><Stethoscope size={18} /> অ্যাপয়েন্টমেন্ট ডাক্তার নির্বাচন <span className="required-asterisk">*</span></div>
-              
+
               <div className="form-group">
                 <label>বিভাগ নির্বাচন করুন</label>
                 <select className="select" name="departmentId" value={formData.departmentId} onChange={handleChange}>
@@ -455,7 +511,7 @@ export default function BookingSystem({ departments, panels, onBack }) {
                     ))
                   )}
                 </div>
-                
+
                 {selectedDoctor && (
                   <button type="button" className="clear-doctor-btn" onClick={() => setSelectedDoctor(null)}>
                     ডাক্তার পরিবর্তন করুন (ডিসিলেক্ট)
@@ -484,7 +540,7 @@ export default function BookingSystem({ departments, panels, onBack }) {
             </div>
 
             <button type="submit" className="submit-btn" disabled={loading}>
-              {loading ? <Loader2 className="spin" size={18} /> : <Send size={18} />} 
+              {loading ? <Loader2 className="spin" size={18} /> : <Send size={18} />}
               সিরিয়াল নিশ্চিত করুন
             </button>
           </form>

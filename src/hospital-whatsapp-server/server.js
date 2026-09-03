@@ -28,6 +28,7 @@ const PORT = process.env.PORT || 3001;
 app.use(express.json());
 
 // ---------- কনস্ট্যান্ট ----------
+const HOSPITAL_ID = 'alafiyah_main'; // আপনার হসপিটাল ডকুমেন্টের আইডি
 const HOSPITAL_WHATSAPP = "8801886776512";
 let sock = null;
 let isConnected = false;
@@ -132,7 +133,6 @@ async function sendConfirmationMessage(data, appointmentId) {
   const baseUrl = process.env.BASE_URL || 'https://your-hospital.com';
   const checkinLink = `${baseUrl}/checkin/${appointmentId}`;
 
-  // হাসপাতালের সেবা সম্পর্কিত বার্তা (.env থেকে নেওয়া)
   const serviceMessage = process.env.HOSPITAL_SERVICES || 
     'আমাদের হাসপাতালে অভিজ্ঞ ডাক্তার, উন্নত চিকিৎসা সেবা ও ২৪/৭ জরুরি বিভাগ রয়েছে।';
 
@@ -210,10 +210,13 @@ ${serviceMessage}
   }
 }
 
-// ---------- 🔥 FIREBASE লিসেনার ----------
+// ---------- 🔥 FIREBASE লিসেনার (হসপিটাল-নির্দিষ্ট পাথে) ----------
 const previousStatuses = new Map();
 
-db.collection('appointments').onSnapshot((snapshot) => {
+// পাথ: hospitals/alafiyah_main/appointments
+const appointmentsPath = `hospitals/${HOSPITAL_ID}/appointments`;
+
+db.collection(appointmentsPath).onSnapshot((snapshot) => {
   snapshot.docChanges().forEach(async (change) => {
     const docId = change.doc.id;
     const data = change.doc.data();
@@ -252,6 +255,8 @@ db.collection('appointments').onSnapshot((snapshot) => {
 // ---------- সার্ভার চালু ----------
 app.listen(PORT, () => {
   console.log(`🚀 Backend Server চলছে: ${PORT}`);
+  console.log(`📁 হসপিটাল আইডি: ${HOSPITAL_ID}`);
+  console.log(`📁 অ্যাপয়েন্টমেন্ট পাথ: ${appointmentsPath}`);
 });
 
 connectToWhatsApp();

@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bell, BellRing, Check, Stethoscope } from 'lucide-react';
 import { db, collection, onSnapshot, query, where, doc, updateDoc } from '../firebase';
+import { useAuth } from '../context/AuthContext';
+
+const HOSPITAL_PATH = 'hospitals/alafiyah_main';
 
 const BellCSS = `
 .notification-bell-wrapper { position: relative; }
@@ -12,8 +15,6 @@ const BellCSS = `
 .notification-header h4 { margin: 0; font-size: 15px; color: #1e293b; }
 .notification-header button { background: transparent; border: none; color: #64748b; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
 .notification-list { max-height: 350px; overflow-y: auto; padding: 0; }
-
-/* নতুন (Unread) - হালকা সবুজ ব্যাকগ্রাউন্ড */
 .notification-item.unread { background: #f0fdf4; border-left: 4px solid #22c55e; }
 .notification-item { padding: 12px 15px; border-bottom: 1px solid #f1f5f9; display: flex; gap: 10px; align-items: center; transition: background 0.2s; }
 .notification-item:hover { background: #f8fafc; }
@@ -40,7 +41,8 @@ const timeAgo = (date) => {
   return `${days} দিন আগে`;
 };
 
-export default function NotificationBell({ user }) {
+export default function NotificationBell() {
+  const { user } = useAuth();
   const allowedRoles = ['admin', 'sub-admin', 'editor'];
   const canView = user && allowedRoles.includes(user.role);
 
@@ -49,7 +51,6 @@ export default function NotificationBell({ user }) {
   const [loading, setLoading] = useState(true);
   const prevIdsRef = useRef(new Set());
 
-  // ব্রাউজার নোটিফিকেশন পারমিশন
   useEffect(() => {
     if (!canView) return;
     if ("Notification" in window && Notification.permission === "default") {
@@ -57,21 +58,16 @@ export default function NotificationBell({ user }) {
     }
   }, [canView]);
 
-  // ফায়ারবেস থেকে শুধু আনরিড অ্যাপয়েন্টমেন্ট লোড
   useEffect(() => {
     if (!canView) return;
 
-    const q = query(collection(db, 'appointments'), where('isRead', '==', false));
+    const q = query(collection(db, HOSPITAL_PATH, 'appointments'), where('isRead', '==', false));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const items = [];
       const currentIds = new Set();
       
       snapshot.forEach((doc) => {
         const data = doc.data();
-        // আমরা শুধু 'isNew' true থাকলেও দেখাব, কিন্তু ফিল্টার isRead false ই যথেষ্ট
-        // তবে আমরা চাই নতুন অ্যাপয়েন্টমেন্টগুলো হাইলাইট থাকবে, isNew দিয়ে আমরা আলাদা করতে পারি
-        // কিন্তু isRead false মানেই আনরিড, তাই সব আনরিড দেখাব
-        // সময় পার্সিং
         let date = new Date();
         if (data.timestamp) {
           if (typeof data.timestamp === 'object' && data.timestamp.seconds) {
@@ -85,18 +81,16 @@ export default function NotificationBell({ user }) {
           name: data.name || 'অজানা রোগী',
           doctor: data.doctorName || 'অজানা ডাক্তার',
           time: date,
-          isNew: data.isNew || false // নতুন কিনা জানতে
+          isNew: data.isNew || false
         };
         items.push(notif);
         currentIds.add(doc.id);
       });
 
-      // সাজানো (নতুন -> পুরনো)
       items.sort((a, b) => b.time - a.time);
       setUnreadNotifications(items);
       setLoading(false);
 
-      // নতুন আইডি ডিটেক্ট করে ব্রাউজার নোটিফিকেশন পাঠানো
       const newIds = new Set([...currentIds].filter(id => !prevIdsRef.current.has(id)));
       if (newIds.size > 0 && !loading) {
         newIds.forEach(id => {
@@ -115,22 +109,19 @@ export default function NotificationBell({ user }) {
     return () => unsubscribe();
   }, [canView, loading]);
 
-  // মার্ক এজ রিড (টিক ক্লিক)
   const handleMarkAsRead = async (id) => {
     try {
-      await updateDoc(doc(db, 'appointments', id), { isRead: true });
-      // রিয়েল-টাইম আপডেটের কারণে লিস্ট অটো আপডেট হবে
+      await updateDoc(doc(db, HOSPITAL_PATH, 'appointments', id), { isRead: true });
     } catch (error) {
       console.error('Error marking as read:', error);
       alert('রিড করতে সমস্যা হয়েছে');
     }
   };
 
-  // মার্ক অল রিড
   const handleMarkAllRead = async () => {
     try {
       const promises = unreadNotifications.map(n => 
-        updateDoc(doc(db, 'appointments', n.id), { isRead: true })
+        updateDoc(doc(db, HOSPITAL_PATH, 'appointments', n.id), { isRead: true })
       );
       await Promise.all(promises);
     } catch (error) {
