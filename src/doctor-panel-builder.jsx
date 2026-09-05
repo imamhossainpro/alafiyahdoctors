@@ -1,3 +1,4 @@
+// src/components/doctor-panel-builder.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -200,7 +201,6 @@ const CSS = `
 .dpb .poster-page{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 18px rgba(15,23,42,0.08);border:1px solid #e2e6ee;}
 .dpb .poster-header{background:linear-gradient(120deg,#4fa3d1,#1c5fa8);padding:22px 20px;text-align:center;}
 .dpb .poster-header h1{color:#fff;font-size:26px;font-weight:800;letter-spacing:0.3px;}
-/* ✅ প্রিভিউ – ৩ কলাম, ব্লকগুলো নিজস্ব উচ্চতা নেবে */
 .dpb .poster-body {
   column-count: 3;
   column-gap: 26px;
@@ -219,11 +219,11 @@ const CSS = `
 }
 
 .dpb .dept-block {
-  break-inside: avoid;          /* ✅ বিভাগ ভেঙে যাবে না */
+  break-inside: avoid;
   -webkit-column-break-inside: avoid;
   page-break-inside: avoid;
-  margin-bottom: 0;             /* ✅ কোনো অতিরিক্ত মার্জিন নেই */
-  display: inline-block;        /* ✅ কলামের ভেতর সঠিকভাবে ফিট */
+  margin-bottom: 0;
+  display: inline-block;
   width: 100%;
   height: auto;
 }
@@ -331,11 +331,15 @@ function DoctorRow({ doc, index, total, checked, onToggleChecked, onEdit, onDele
         {doc.specialty ? <div className="doctor-row-specialty">{doc.specialty}</div> : null}
         {doc.timeSlots && doc.timeSlots.length > 0 && (
           <div className="doctor-row-time-slots">
-            {doc.timeSlots.map((slot, idx) => (
-              <span key={idx} className="doctor-row-time-slot-item">
-                ⏱ {slot.start} - {slot.end}
-              </span>
-            ))}
+              {doc.timeSlots && doc.timeSlots.length > 0 ? (
+                doc.timeSlots.map((slot, idx) => (
+                  <div key={idx} className="doctor-row-time-slot-item">
+                    ⏱ {slot.start} - {slot.end}
+                  </div>
+                ))
+              ) : (
+                <span className="text-gray-400 text-sm">সময় সেট করা নেই</span>
+              )}
           </div>
         )}
       </div>
@@ -736,6 +740,7 @@ export default function DoctorPanelBuilder() {
   const [activePanelId, setActivePanelId] = useState(null);
   const [footer, setFooter] = useState(DEFAULT_FOOTER);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [mode, setMode] = useState('edit');
   const [saveStatus, setSaveStatus] = useState('idle');
   const [checkedIds, setCheckedIds] = useState(new Set());
@@ -751,38 +756,52 @@ export default function DoctorPanelBuilder() {
     setTimeout(() => window.location.reload(), 100);
   };
 
-  // ডেটা লোড (লগইন ছাড়াই)
- // ডেটা লোড (লগইন ছাড়াই)
-useEffect(() => {
-  const loadData = async () => {
-    // hospitalId না থাকলেও ডিফল্ট ব্যবহার করুন
-    const hid = hospitalId || 'alafiyah_main';
-    console.log('🏥 হাসপাতাল আইডি:', hid);
-    
-    setLoading(true);
+  // ✅ সঠিক ডেটা ফেচ – ডিপার্টমেন্ট ডকুমেন্ট থেকে সরাসরি doctors অ্যারে পড়ে
+  const fetchDepartments = async () => {
     try {
-      // ডিপার্টমেন্ট লোড
-      const deptSnapshot = await getDocs(collection(db, 'hospitals', hid, 'departments'));
-      const depts = deptSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      console.log('📂 ডিপার্টমেন্ট পাওয়া গেছে:', depts.length);
-      setDepartments(depts);
+      console.log("🟢 Fetching departments for hospital:", hospitalId);
+      
+      const deptRef = collection(db, 'hospitals', hospitalId, 'departments');
+      const deptSnapshot = await getDocs(deptRef);
+      
+      const departmentsData = deptSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      console.log("📂 ডিপার্টমেন্ট সংখ্যা:", departmentsData.length);
+      
+      let totalDoctors = 0;
+      departmentsData.forEach(dept => {
+        if (dept.doctors && Array.isArray(dept.doctors)) {
+          totalDoctors += dept.doctors.length;
+        }
+      });
+      console.log("✅ মোট ডাক্তার পাওয়া গেছে:", totalDoctors);
+      
+      setDepartments(departmentsData);
+      setLoading(false);
+      
+    } catch (error) {
+      console.error("❌ ডেটা লোড ত্রুটি:", error);
+      setError(error.message);
+      setLoading(false);
+    }
+  };
 
-      // প্যানেল লোড
-      const panelSnapshot = await getDocs(collection(db, 'hospitals', hid, 'panels'));
+  // ✅ প্যানেল লোড
+  const fetchPanels = async () => {
+    try {
+      const panelSnapshot = await getDocs(collection(db, 'hospitals', hospitalId, 'panels'));
       let panelList = panelSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       if (panelList.length === 0) {
         const defaultPanel = { id: 'শনিবার', name: 'শনিবার', title: 'শনিবারের ডক্টরস প্যানেল', activeDoctorIds: [] };
-        await setDoc(doc(db, 'hospitals', hid, 'panels', 'শনিবার'), defaultPanel);
+        await setDoc(doc(db, 'hospitals', hospitalId, 'panels', 'শনিবার'), defaultPanel);
         panelList = [defaultPanel];
       }
       setPanels(panelList);
-
-      // ফুটার লোড
-      const footerRef = doc(db, 'hospitals', hid, 'footer', 'data');
-      const footerSnap = await getDoc(footerRef);
-      if (footerSnap.exists()) setFooter(footerSnap.data());
-
-      // অ্যাক্টিভ প্যানেল সেট (আজকের দিন)
+      
+      // অ্যাক্টিভ প্যানেল সেট
       const params = new URLSearchParams(window.location.search);
       let targetDay = params.get('day');
       if (!targetDay) {
@@ -794,28 +813,78 @@ useEffect(() => {
         setActivePanelId(activePanel.id);
         setCheckedIds(new Set(activePanel.activeDoctorIds || []));
       }
-
+      
     } catch (error) {
-      console.error('❌ ডেটা লোড ত্রুটি:', error);
-    } finally {
-      setLoading(false);
+      console.error("❌ প্যানেল লোড ত্রুটি:", error);
     }
   };
-  loadData();
-}, [hospitalId, reloadKey]); // ✅ hospitalId পরিবর্তন হলেও রিলোড হবে
 
-  // ইউজার লোড
+  // ✅ ফুটার লোড
+  const fetchFooter = async () => {
+    try {
+      const footerRef = doc(db, 'hospitals', hospitalId, 'footer', 'data');
+      const footerSnap = await getDoc(footerRef);
+      if (footerSnap.exists()) setFooter(footerSnap.data());
+    } catch (error) {
+      console.error("❌ ফুটার লোড ত্রুটি:", error);
+    }
+  };
+
+ // ইউজার লোড (অ্যাডমিন প্যানেলের জন্য) – সুপার অ্যাডমিন বাদ
+useEffect(() => {
+  if (!isAdmin || !hospitalId) {
+    setAllUsers([]);
+    return;
+  }
+
+  const loadUsers = async () => {
+    try {
+      console.log("🔄 অ্যাডমিন ইউজার লোড হচ্ছে, hospitalId:", hospitalId);
+      const usersRef = collection(db, 'hospitals', hospitalId, 'users');
+      const usersSnapshot = await getDocs(usersRef);
+      
+      // 🔥 সুপার অ্যাডমিন ফিল্টার করা হচ্ছে
+      const usersList = usersSnapshot.docs
+        .map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            name: data.name || data.displayName || 'নাম নেই',
+            designation: data.designation || data.role || '',
+          };
+        })
+        .filter(user => user.role !== 'super-admin'); // ← এই লাইনটি যোগ করুন
+
+      console.log("✅ ইউজার পাওয়া গেছে (সুপার অ্যাডমিন বাদ):", usersList.length);
+      setAllUsers(usersList);
+    } catch (error) {
+      console.error('❌ ইউজার লোড error:', error);
+      setAllUsers([]);
+    }
+  };
+
+  loadUsers();
+}, [isAdmin, hospitalId]);
+
+  // ✅ প্রধান ডেটা লোড – একসাথে সব
   useEffect(() => {
-    if (!isAdmin || !hospitalId) return;
-    const loadUsers = async () => {
-      try {
-        const usersSnapshot = await getDocs(collection(db, 'hospitals', hospitalId, 'users'));
-        const usersList = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setAllUsers(usersList);
-      } catch (e) { console.error('Users load error:', e); }
+    if (!hospitalId) {
+      setLoading(false);
+      return;
+    }
+
+    const loadAllData = async () => {
+      setLoading(true);
+      setError(null);
+      await fetchDepartments();
+      await fetchPanels();
+      await fetchFooter();
+      setLoading(false);
     };
-    loadUsers();
-  }, [isAdmin, hospitalId]);
+
+    loadAllData();
+  }, [hospitalId, reloadKey]);
 
   const saveDepartments = async (newDepts) => {
     if (!hospitalId) return;
@@ -1084,7 +1153,16 @@ useEffect(() => {
           <NotificationBell user={user} />
 
           {isGuest ? (
-            <button className="login-btn" onClick={() => setShowAuth(true)}>লগইন / রেজিস্ট্রেশন</button>
+            <button 
+              className="login-btn" 
+                onClick={() => {
+                  console.log("🔍 লগইন বাটনে ক্লিক হয়েছে");
+                  setShowAuth(true);
+                  console.log("🟢 showAuth:", showAuth);
+                }}
+              >
+                লগইন / রেজিস্ট্রেশন
+              </button>
           ) : (
             <button className="logout-btn" onClick={handleLogout}><LogOut size={14} /> লগআউট</button>
           )}

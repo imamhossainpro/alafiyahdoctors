@@ -15,19 +15,12 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 
-// ==========================================
-// রেফারেন্স হেল্পার
-// ==========================================
-
 const getPatientsRef = (hospitalId) => collection(db, 'hospitals', hospitalId, 'patients');
 
 // ==========================================
-// ১. পেশেন্ট ক্রিয়েট / আপডেট / ডিলিট
+// ১. পেশেন্ট ক্রিয়েট / আপডেট / ডিলিট / খোঁজ
 // ==========================================
 
-/**
- * নতুন পেশেন্ট তৈরি করুন (createPatient)
- */
 export const createPatient = async (hospitalId, patientData) => {
   try {
     if (!hospitalId) throw new Error('Hospital ID is required');
@@ -45,9 +38,6 @@ export const createPatient = async (hospitalId, patientData) => {
   }
 };
 
-/**
- * পেশেন্ট ভিজিট যোগ করুন (addPatientVisit)
- */
 export const addPatientVisit = async (hospitalId, visitData) => {
   try {
     if (!hospitalId) throw new Error('Hospital ID is required');
@@ -67,16 +57,10 @@ export const addPatientVisit = async (hospitalId, visitData) => {
   }
 };
 
-/**
- * মোবাইল নম্বর দিয়ে পেশেন্ট খুঁজুন (findPatientByMobile)
- */
 export const findPatientByMobile = async (hospitalId, mobileNumber) => {
   try {
     if (!hospitalId || !mobileNumber) return null;
-    const q = query(
-      getPatientsRef(hospitalId),
-      where('mobile', '==', mobileNumber)
-    );
+    const q = query(getPatientsRef(hospitalId), where('mobile', '==', mobileNumber));
     const snapshot = await getDocs(q);
     if (snapshot.empty) return null;
     const docSnap = snapshot.docs[0];
@@ -87,17 +71,11 @@ export const findPatientByMobile = async (hospitalId, mobileNumber) => {
   }
 };
 
-/**
- * পেশেন্ট আপডেট করুন
- */
 export const updatePatient = async (hospitalId, patientId, data) => {
   try {
     if (!hospitalId || !patientId) throw new Error('Hospital ID and Patient ID are required');
     const ref = doc(db, 'hospitals', hospitalId, 'patients', patientId);
-    await updateDoc(ref, {
-      ...data,
-      updatedAt: Timestamp.now(),
-    });
+    await updateDoc(ref, { ...data, updatedAt: Timestamp.now() });
     return { id: patientId, ...data };
   } catch (error) {
     console.error('❌ updatePatient error:', error);
@@ -105,9 +83,6 @@ export const updatePatient = async (hospitalId, patientId, data) => {
   }
 };
 
-/**
- * পেশেন্ট ডিলিট করুন
- */
 export const deletePatient = async (hospitalId, patientId) => {
   try {
     const ref = doc(db, 'hospitals', hospitalId, 'patients', patientId);
@@ -123,9 +98,6 @@ export const deletePatient = async (hospitalId, patientId) => {
 // ২. ডেটা ফেচ (One-time)
 // ==========================================
 
-/**
- * সব পেশেন্ট ফেচ করুন (fetchAllPatients)
- */
 export const fetchAllPatients = async (hospitalId) => {
   try {
     if (!hospitalId) return [];
@@ -138,21 +110,14 @@ export const fetchAllPatients = async (hospitalId) => {
   }
 };
 
-/**
- * সব পেশেন্ট ফেচ করুন – alias (getAllPatients) – Overview.jsx-এ ব্যবহৃত
- */
-export const getAllPatients = fetchAllPatients;  // ✅ Alias যোগ করা হলো
+// Alias for Overview.jsx
+export const getAllPatients = fetchAllPatients;
 
-/**
- * নির্দিষ্ট পেশেন্টের বিস্তারিত
- */
 export const getPatientById = async (hospitalId, patientId) => {
   try {
     const ref = doc(db, 'hospitals', hospitalId, 'patients', patientId);
     const snapshot = await getDoc(ref);
-    if (snapshot.exists()) {
-      return { id: snapshot.id, ...snapshot.data() };
-    }
+    if (snapshot.exists()) return { id: snapshot.id, ...snapshot.data() };
     return null;
   } catch (error) {
     console.error('❌ getPatientById error:', error);
@@ -164,15 +129,8 @@ export const getPatientById = async (hospitalId, patientId) => {
 // ৩. রিয়েল-টাইম লিসেনার
 // ==========================================
 
-/**
- * সব পেশেন্টের রিয়েল-টাইম লিসেনার
- */
 export const subscribeToPatients = (hospitalId, callback, errorCallback) => {
-  if (!hospitalId) {
-    console.warn('⚠️ subscribeToPatients: hospitalId missing');
-    return () => {};
-  }
-
+  if (!hospitalId) return () => {};
   try {
     const q = query(getPatientsRef(hospitalId), orderBy('createdAt', 'desc'));
     return onSnapshot(
@@ -194,12 +152,9 @@ export const subscribeToPatients = (hospitalId, callback, errorCallback) => {
 };
 
 // ==========================================
-// ৪. এক্সট্রা ইউটিলিটি
+// ৪. ইউটিলিটি
 // ==========================================
 
-/**
- * পেশেন্ট কাউন্ট
- */
 export const getPatientCount = async (hospitalId) => {
   try {
     const snapshot = await getDocs(getPatientsRef(hospitalId));
@@ -221,7 +176,7 @@ export default {
   updatePatient,
   deletePatient,
   fetchAllPatients,
-  getAllPatients,   // ✅ ডিফল্টেও যোগ করা হলো
+  getAllPatients,
   getPatientById,
   subscribeToPatients,
   getPatientCount,

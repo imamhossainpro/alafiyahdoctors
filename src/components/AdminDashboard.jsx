@@ -12,12 +12,33 @@ import MarketingTeamManager from './admin/MarketingTeamManager';
 import MarketingReport from './admin/MarketingReport';
 import DisplaySettings from './admin/DisplaySettings';
 import LocationManager from './admin/LocationManager';
+import { db } from '../firebase';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+
+// ছোট Error Boundary
+class SafeArea extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() {
+    if (this.state.hasError) {
+      return <div style={{ padding: '20px', color: '#dc2626' }}>⚠️ এই অংশ লোড করতে সমস্যা হয়েছে</div>;
+    }
+    return this.props.children;
+  }
+}
 
 export default function AdminDashboard({ user: propUser }) {
   const { currentHospital } = useHospital();
-  const hospitalId = currentHospital?.id;
+  // 🔥 হসপিটাল আইডি নিশ্চিত করা – undefined হলে ডিফল্ট বসানো
+  const hospitalId = currentHospital?.id || 'alafiyah_main';
   const { user: authUser } = useAuth();
   const user = propUser || authUser;
+
+  console.log("🏥 AdminDashboard -> hospitalId:", hospitalId);
+  console.log("👤 user:", user);
 
   const today = new Date().toISOString().split('T')[0];
   
@@ -35,37 +56,136 @@ export default function AdminDashboard({ user: propUser }) {
   const isAdmin = user?.role === 'admin';
   const isSubAdmin = user?.role === 'sub-admin';
 
-  // অ্যাপয়েন্টমেন্ট লিসেনার
+  // ===== ১. ওভারভিউর জন্য আলাদা ডেটা ফেচ (getDocs) =====
+  const [stats, setStats] = useState({ doctors: 0, patients: 0, appointments: 0, today: 0, users: 0 });
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        // ডাক্তার কাউন্ট (ডিপার্টমেন্ট থেকে)
+        const deptSnap = await getDocs(collection(db, 'hospitals', hospitalId, 'departments'));
+        let docCount = 0;
+        deptSnap.forEach(d => {
+          const data = d.data();
+          if (data.doctors && Array.isArray(data.doctors)) docCount += data.doctors.length;
+        });
+
+        // পেশেন্ট
+        let patientCount = 0;
+        try {
+          const pSnap = await getDocs(collection(db, 'hospitals', hospitalId, 'patients'));
+          patientCount = pSnap.size;
+        } catch (e) {}
+
+        // অ্যাপয়েন্টমেন্ট (সব)
+        let appCount = 0;
+        let todayCount = 0;
+        try {
+          const aSnap = await getDocs(collection(db, 'hospitals', hospitalId, 'appointments'));
+          appCount = aSnap.size;
+          // আজকের
+          const today = new Date();
+          today.setHours(0,0,0,0);
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate()+1);
+          const q = query(
+            collection(db, 'hospitals', hospitalId, 'appointments'),
+            where('appointmentDate', '>=', today),
+            where('appointmentDate', '<', tomorrow)
+          );
+          const tSnap = await getDocs(q);
+          todayCount = tSnap.size;
+        } catch (e) {}
+
+        // ইউজার
+        let userCount = 0;
+        try {
+          const uSnap = await getDocs(collection(db, 'hospitals', hospitalId, 'users'));
+          userCount = uSnap.size;
+        } catch (e) {}
+
+        setStats({
+          doctors: docCount,
+          patients: patientCount,
+          appointments: appCount,
+          today: todayCount,
+          users: userCount,
+        });
+      } catch (err) {
+        console.error('Stats load error:', err);
+      } finally {
+        setStatsLoading(false);
+      }
+    };
+    loadStats();
+  }, [hospitalId]);
+
+  // ===== ২. অ্যাপয়েন্টমেন্ট সাবস্ক্রিপশন (error হ্যান্ডেল সহ) =====
   useEffect(() => {
     if (!hospitalId) {
       setLoading(false);
       return;
     }
 
-    const unsubActive = subscribeToAppointments(hospitalId, (data) => {
-      setAppointments(data || []);
-      setLoading(false);
-    });
-
-    const unsubArchived = subscribeToArchivedAppointments(hospitalId, (data) => {
-      setArchivedAppointments(data || []);
-    });
-
+    let unsubActive = () => {};
+    let unsubArchived = () => {};
     let unsubLogs = () => {};
+
+    // অ্যাক্টিভ অ্যাপয়েন্টমেন্ট
+    unsubActive = subscribeToAppointments(
+      hospitalId,
+      (data) => {
+        setAppointments(data || []);
+        setLoading(false);
+      },
+      (error) => {
+        console.error('❌ Active appointments subscription error:', error);
+        setAppointments([]);
+        setLoading(false); // error হলেও লোডিং শেষ
+      }
+    );
+
+    // আর্কাইভ
+    unsubArchived = subscribeToArchivedAppointments(
+      hospitalId,
+      (data) => {
+        setArchivedAppointments(data || []);
+      },
+      (error) => {
+        console.error('❌ Archived appointments subscription error:', error);
+        setArchivedAppointments([]);
+      }
+    );
+
+    // অডিট লগ (শুধু অ্যাডমিন)
     if (isAdmin) {
-      unsubLogs = subscribeToAuditLogs(hospitalId, (data) => {
-        setAuditLogs(data || []);
-      });
+      unsubLogs = subscribeToAuditLogs(
+        hospitalId,
+        (data) => {
+          setAuditLogs(data || []);
+        },
+        (error) => {
+          console.error('❌ Audit logs subscription error:', error);
+          setAuditLogs([]);
+        }
+      );
     }
+
+    // 🔥 টাইমআউট: ৫ সেকেন্ড পরেও যদি লোডিং না যায়, তাহলে জোর করে শেষ করি
+    const timeout = setTimeout(() => {
+      setLoading(false);
+    }, 5000);
 
     return () => {
       unsubActive();
       unsubArchived();
       if (isAdmin) unsubLogs();
+      clearTimeout(timeout);
     };
   }, [hospitalId, isAdmin]);
 
-  // ফিল্টার প্রিসেট
+  // ফিল্টার প্রিসেট (আপনার মতো)
   const applyPreset = (preset) => {
     setFilterPreset(preset);
     const now = new Date();
@@ -118,7 +238,6 @@ export default function AdminDashboard({ user: propUser }) {
     setFilterPreset('custom');
   };
 
-  // ফিল্টারড ডেটা
   const filteredAppointments = useMemo(() => {
     if (!appointments || !Array.isArray(appointments)) return [];
     return appointments.filter(item => {
@@ -209,54 +328,40 @@ export default function AdminDashboard({ user: propUser }) {
     }
   };
 
-  if (loading) return <div style={{ color: '#333', background: '#f9fafb', padding: '20px' }}>লোড হচ্ছে...</div>;
+  // ===== রেন্ডার =====
+  // যদি লোডিং true থাকে, তবুও হেডার দেখানো যেতে পারে, কিন্তু আমি পুরো UI দেখাবো
+  // লোডিং হলে শুধু স্পিনার দেখাবো, কিন্তু ৫ সেকেন্ড পর টাইমআউটে false হয়ে যাবে
+  if (loading) {
+    return <div style={{ padding: '20px', color: '#333', background: '#f9fafb' }}>📊 ড্যাশবোর্ড লোড হচ্ছে...</div>;
+  }
 
+  // মূল UI
   return (
     <div style={{ padding: '20px', width: '100%', boxSizing: 'border-box', background: '#f9fafb', color: '#1f2937' }}>
       
+      {/* হেডার – সবসময় দৃশ্যমান */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
         <h2 style={{ color: '#1f2937' }}>অ্যাডমিন ড্যাশবোর্ড</h2>
-
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <button onClick={() => { setShowArchived(false); setTab('overview'); }} style={{ padding: '8px 16px', background: tab === 'overview' && !showArchived ? '#1c5fa8' : '#ffffff', color: tab === 'overview' && !showArchived ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>পরিসংখ্যান</button>
           <button onClick={() => { setShowArchived(false); setTab('appointments'); }} style={{ padding: '8px 16px', background: tab === 'appointments' && !showArchived ? '#1c5fa8' : '#ffffff', color: tab === 'appointments' && !showArchived ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>বুকিং লিস্ট</button>
-          
-          {/* ✅ মার্কেটিং রিপোর্ট – সবসময় দেখাবে (শুধু অ্যাডমিন/সাব-অ্যাডমিন) */}
           {(isAdmin || isSubAdmin) && (
             <button onClick={() => { setShowArchived(false); setTab('marketing'); }} style={{ padding: '8px 16px', background: tab === 'marketing' ? '#1c5fa8' : '#ffffff', color: tab === 'marketing' ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>মার্কেটিং রিপোর্ট</button>
           )}
-          
-          {/* ✅ ডিসপ্লে সেটিংস – শুধু অ্যাডমিন */}
           {isAdmin && (
             <button onClick={() => { setShowArchived(false); setTab('display'); }} style={{ padding: '8px 16px', background: tab === 'display' ? '#1c5fa8' : '#ffffff', color: tab === 'display' ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>📺 ডিসপ্লে সেটিংস</button>
           )}
-          
-          {/* ✅ লোকেশন ম্যানেজার – শুধু অ্যাডমিন */}
           {isAdmin && (
             <button onClick={() => { setShowArchived(false); setTab('locations'); }} style={{ padding: '8px 16px', background: tab === 'locations' ? '#1c5fa8' : '#ffffff', color: tab === 'locations' ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>📍 লোকেশন ম্যানেজার</button>
           )}
-          
-          {/* ✅ Activity Log – শুধু অ্যাডমিন */}
           {isAdmin && <button onClick={() => setTab('logs')} style={{ padding: '8px 16px', background: tab === 'logs' ? '#1c5fa8' : '#ffffff', color: tab === 'logs' ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>Activity Log</button>}
-          
-          {/* ✅ Archived বাটন – সবসময় দেখাবে */}
           <button onClick={() => { setShowArchived(!showArchived); setTab('appointments'); }} style={{ padding: '8px 16px', background: showArchived ? '#374151' : '#ffffff', color: showArchived ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>{showArchived ? 'Active List' : 'Archived'}</button>
         </div>
       </div>
 
       {/* ফিল্টার */}
       {(tab === 'overview' || tab === 'appointments') && (
-        <div style={{ 
-          background: '#ffffff', 
-          padding: '15px 20px', 
-          borderRadius: '10px', 
-          border: '1px solid #e2e8f0', 
-          marginBottom: '20px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          gap: '12px'
-        }}>
+        <div style={{ background: '#ffffff', padding: '15px 20px', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '20px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px' }}>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button onClick={() => applyPreset('all')} style={{ padding: '6px 14px', background: filterPreset === 'all' ? '#1c5fa8' : '#f1f5f9', color: filterPreset === 'all' ? '#fff' : '#334155', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' }}>সব</button>
             <button onClick={() => applyPreset('today')} style={{ padding: '6px 14px', background: filterPreset === 'today' ? '#1c5fa8' : '#f1f5f9', color: filterPreset === 'today' ? '#fff' : '#334155', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' }}>আজ</button>
@@ -265,7 +370,6 @@ export default function AdminDashboard({ user: propUser }) {
             <button onClick={() => applyPreset('year')} style={{ padding: '6px 14px', background: filterPreset === 'year' ? '#1c5fa8' : '#f1f5f9', color: filterPreset === 'year' ? '#fff' : '#334155', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' }}>গত ১ বছর</button>
             <button onClick={() => setFilterPreset('custom')} style={{ padding: '6px 14px', background: filterPreset === 'custom' ? '#1c5fa8' : '#f1f5f9', color: filterPreset === 'custom' ? '#fff' : '#334155', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' }}>কাস্টম</button>
           </div>
-
           {filterPreset === 'custom' && (
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
               <div>
@@ -278,72 +382,85 @@ export default function AdminDashboard({ user: propUser }) {
               </div>
             </div>
           )}
-
           <div style={{ fontSize: '13px', color: '#64748b', marginLeft: 'auto' }}>📅 {startDate} – {endDate}</div>
         </div>
       )}
 
-      {/* কন্টেন্ট */}
-      {tab === 'overview' && !showArchived && <Overview appointments={filteredAppointments} />}
-      
-      {tab === 'appointments' && (
-        <AppointmentsTable 
-          appointments={showArchived ? filteredArchived : filteredAppointments} 
-          onStatusChange={handleStatusChange}
-          onArchive={handleArchive}
-          onRestore={handleRestore}
-          isArchivedView={showArchived}
-          user={user}
-          marketingTeam={marketingTeam}
-          hospitalId={hospitalId}  // ✅ যোগ করুন
-        />
-      )}
+      {/* কন্টেন্ট – প্রতিটি ট্যাবের জন্য SafeArea */}
+      <SafeArea>
+        {tab === 'overview' && !showArchived && (
+          // ওভারভিউ – আমরা আমাদের নিজস্ব স্ট্যাট ব্যবহার করবো, কিন্তু Overview কম্পোনেন্টকেও পাস করতে পারি
+          // যদি Overview কম্পোনেন্ট না থাকে, তাহলে আমরা নিজেরা স্ট্যাট কার্ড দেখাবো
+          // ধরে নিচ্ছি Overview কম্পোনেন্ট আছে এবং এটি appointments প্রপস নেয়
+          <Overview appointments={filteredAppointments} />
+        )}
+      </SafeArea>
 
-      {tab === 'marketing' && (isAdmin || isSubAdmin) && (
-        <>
-          {isAdmin && <MarketingTeamManager user={user} onTeamUpdate={setMarketingTeam} />}
-          <MarketingReport 
-            appointments={filteredAppointments} 
-            marketingTeam={marketingTeam}
-            onTeamUpdate={setMarketingTeam}
+      <SafeArea>
+        {tab === 'appointments' && (
+          <AppointmentsTable 
+            appointments={showArchived ? filteredArchived : filteredAppointments} 
+            onStatusChange={handleStatusChange}
+            onArchive={handleArchive}
+            onRestore={handleRestore}
+            isArchivedView={showArchived}
             user={user}
+            marketingTeam={marketingTeam}
+            hospitalId={hospitalId}
           />
-        </>
-      )}
+        )}
+      </SafeArea>
 
-      {tab === 'display' && isAdmin && (
-        <DisplaySettings user={user} />
-      )}
+      <SafeArea>
+        {tab === 'marketing' && (isAdmin || isSubAdmin) && (
+          <>
+            {isAdmin && <MarketingTeamManager user={user} onTeamUpdate={setMarketingTeam} />}
+            <MarketingReport 
+              appointments={filteredAppointments} 
+              marketingTeam={marketingTeam}
+              onTeamUpdate={setMarketingTeam}
+              user={user}
+            />
+          </>
+        )}
+      </SafeArea>
 
-      {tab === 'locations' && isAdmin && (
-        <LocationManager appointments={filteredAppointments} user={user} />
-      )}
+      <SafeArea>
+        {tab === 'display' && isAdmin && <DisplaySettings user={user} />}
+      </SafeArea>
 
-      {tab === 'logs' && isAdmin && (
-        <div style={{ background: '#fff', padding: '20px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-          <h3 style={{ marginBottom: '20px' }}>সাম্প্রতিক কার্যকলাপ (Activity Log)</h3>
-          <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
-            {filteredAuditLogs.length === 0 ? (
-              <div style={{ textAlign: 'center', color: '#64748b', padding: '30px' }}>
-                {auditLogs.length === 0 ? 'কোনো লগ নেই' : 'এই তারিখে কোনো লগ নেই'}
-              </div>
-            ) : (
-              filteredAuditLogs.map((log, idx) => (
-                <div key={log.id || idx} style={{ borderBottom: '1px solid #f1f5f9', padding: '12px 0' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <strong style={{ color: log.action === 'deleted' ? '#dc2626' : log.action === 'archived' ? '#d97706' : '#1c5fa8', fontSize: '14px' }}>{log.details || 'Action'}</strong>
-                    <small style={{ color: '#64748b' }}>{new Date(log.timestamp?.seconds ? log.timestamp.seconds * 1000 : log.timestamp).toLocaleString('bn-BD')}</small>
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#475569', marginTop: '4px' }}>
-                    <span style={{ fontWeight: '700' }}>{log.performedBy}</span> ({log.role})
-                    {log.oldStatus && log.newStatus && <span> | পুরনো: {log.oldStatus} → নতুন: {log.newStatus}</span>}
-                  </div>
+      <SafeArea>
+        {tab === 'locations' && isAdmin && <LocationManager appointments={filteredAppointments} user={user} />}
+      </SafeArea>
+
+      <SafeArea>
+        {tab === 'logs' && isAdmin && (
+          <div style={{ background: '#fff', padding: '20px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+            <h3 style={{ marginBottom: '20px' }}>সাম্প্রতিক কার্যকলাপ (Activity Log)</h3>
+            <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
+              {filteredAuditLogs.length === 0 ? (
+                <div style={{ textAlign: 'center', color: '#64748b', padding: '30px' }}>
+                  {auditLogs.length === 0 ? 'কোনো লগ নেই' : 'এই তারিখে কোনো লগ নেই'}
                 </div>
-              ))
-            )}
+              ) : (
+                filteredAuditLogs.map((log, idx) => (
+                  <div key={log.id || idx} style={{ borderBottom: '1px solid #f1f5f9', padding: '12px 0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <strong style={{ color: log.action === 'deleted' ? '#dc2626' : log.action === 'archived' ? '#d97706' : '#1c5fa8', fontSize: '14px' }}>{log.details || 'Action'}</strong>
+                      <small style={{ color: '#64748b' }}>{new Date(log.timestamp?.seconds ? log.timestamp.seconds * 1000 : log.timestamp).toLocaleString('bn-BD')}</small>
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#475569', marginTop: '4px' }}>
+                      <span style={{ fontWeight: '700' }}>{log.performedBy}</span> ({log.role})
+                      {log.oldStatus && log.newStatus && <span> | পুরনো: {log.oldStatus} → নতুন: {log.newStatus}</span>}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </SafeArea>
+
     </div>
   );
 }

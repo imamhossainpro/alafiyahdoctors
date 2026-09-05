@@ -1,34 +1,24 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+// src/context/HospitalContext.jsx
+import React, { createContext, useContext } from 'react';
+import { useAuth } from './AuthContext';
 
 const HospitalContext = createContext();
 
-export function useHospital() {
-  const context = useContext(HospitalContext);
-  if (!context) {
-    throw new Error('useHospital must be used within a HospitalProvider');
-  }
-  return context;
-}
-
 export function HospitalProvider({ children }) {
-  // ✅ সবসময় ডিফল্ট হাসপাতাল সেট থাকবে (লগইন ছাড়াও)
-  const [currentHospital, setCurrentHospital] = useState({
-    id: 'alafiyah_main',
-    name: 'আল-আফিয়া হাসপাতাল'
-  });
-  const [loading, setLoading] = useState(false);
-
-  // ভবিষ্যতে হাসপাতাল পরিবর্তনের ফাংশন
-  const switchHospital = (hospitalId) => {
-    setCurrentHospital({
-      id: hospitalId,
-      name: 'আল-আফিয়া হাসপাতাল'
-    });
-  };
+  const { user } = useAuth();
+  // ইউজারের hospitalId ব্যবহার করুন, অথবা ডিফল্ট
+  const hospitalId = user?.hospitalId || 'alafiyah_main';
+  const currentHospital = { id: hospitalId, name: 'আল-আফিয়া হাসপাতাল' };
 
   return (
-    <HospitalContext.Provider value={{ currentHospital, loading, switchHospital }}>
+    <HospitalContext.Provider value={{ currentHospital }}>
       {children}
     </HospitalContext.Provider>
   );
+}
+
+export function useHospital() {
+  const context = useContext(HospitalContext);
+  if (!context) throw new Error('useHospital must be used within HospitalProvider');
+  return context;
 }

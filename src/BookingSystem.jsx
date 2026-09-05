@@ -2,11 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { db, doc, getDoc, setDoc, addDoc, collection } from './firebase';
 import { findPatientByMobile, createPatient, addPatientVisit } from './services/patientService';
 import { generateQRCode } from './services/qrService';
-import { Send, Loader2, User, Phone, MapPin, Stethoscope, CalendarDays, ArrowLeft, PlusCircle, CheckCircle2 } from 'lucide-react';
+import { Send, Loader2, User, Phone, MapPin, Stethoscope, CalendarDays, ArrowLeft, PlusCircle, CheckCircle2, Clock } from 'lucide-react';
 
 const HOSPITAL_PATH = 'hospitals/alafiyah_main';
 
-// আজকের তারিখ ফরম্যাট YYYY-MM-DD
 const getTodayString = () => {
   const date = new Date();
   const year = date.getFullYear();
@@ -21,12 +20,10 @@ const toEnglishDigits = (str) => {
   return str.replace(/[০-৯]/g, (char) => banglaDigits.indexOf(char) !== -1 ? englishDigits[banglaDigits.indexOf(char)] : char);
 };
 
-// ---------- ক্যালেন্ডার কম্পোনেন্ট (সরাসরি new Date() ব্যবহার) ----------
+// ---------- ক্যালেন্ডার ----------
 function CustomCalendar({ selectedDate, onDateChange }) {
   const today = new Date();
   const todayStr = getTodayString();
-  
-  // viewDate: selectedDate থেকে তৈরি, নাহলে আজকের তারিখ
   const [viewDate, setViewDate] = useState(() => {
     if (selectedDate) {
       const parts = selectedDate.split('-').map(Number);
@@ -35,12 +32,10 @@ function CustomCalendar({ selectedDate, onDateChange }) {
     return new Date(today.getFullYear(), today.getMonth(), today.getDate());
   });
 
-  // selectedDate পরিবর্তন হলে viewDate আপডেট
   useEffect(() => {
     if (selectedDate) {
       const parts = selectedDate.split('-').map(Number);
-      const newDate = new Date(parts[0], parts[1] - 1, parts[2]);
-      setViewDate(newDate);
+      setViewDate(new Date(parts[0], parts[1] - 1, parts[2]));
     }
   }, [selectedDate]);
 
@@ -48,52 +43,29 @@ function CustomCalendar({ selectedDate, onDateChange }) {
   const month = viewDate.getMonth();
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-
   const monthNames = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
   const dayNames = ['রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহঃ', 'শুক্র', 'শনি'];
-
-  const handlePrevMonth = () => {
-    setViewDate(new Date(year, month - 1, 1));
-  };
-
-  const handleNextMonth = () => {
-    setViewDate(new Date(year, month + 1, 1));
-  };
-
-  const handleDateClick = (day) => {
-    const formattedDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    onDateChange(formattedDate);
-  };
 
   return (
     <div className="custom-calendar">
       <div className="cal-header">
-        <button type="button" onClick={handlePrevMonth}>&lt;</button>
+        <button type="button" onClick={() => setViewDate(new Date(year, month - 1, 1))}>&lt;</button>
         <span>{monthNames[month]} {year}</span>
-        <button type="button" onClick={handleNextMonth}>&gt;</button>
+        <button type="button" onClick={() => setViewDate(new Date(year, month + 1, 1))}>&gt;</button>
       </div>
       <div className="cal-grid cal-weekdays">
         {dayNames.map(d => <div key={d} className="cal-day-name">{d}</div>)}
       </div>
       <div className="cal-grid cal-days">
-        {/* খালি ঘর */}
-        {Array.from({ length: firstDay }).map((_, i) => (
-          <div key={`empty-${i}`} className="cal-day empty"></div>
-        ))}
-        {/* দিনগুলো */}
+        {Array.from({ length: firstDay }).map((_, i) => <div key={`empty-${i}`} className="cal-day empty"></div>)}
         {Array.from({ length: daysInMonth }).map((_, i) => {
           const day = i + 1;
           const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           const isSelected = selectedDate === dateStr;
           const isPast = dateStr < todayStr;
           const isToday = dateStr === todayStr;
-
           return (
-            <div
-              key={day}
-              className={`cal-day ${isSelected ? 'selected' : ''} ${isPast ? 'disabled' : ''} ${isToday ? 'today' : ''}`}
-              onClick={() => !isPast && handleDateClick(day)}
-            >
+            <div key={day} className={`cal-day ${isSelected ? 'selected' : ''} ${isPast ? 'disabled' : ''} ${isToday ? 'today' : ''}`} onClick={() => !isPast && onDateChange(dateStr)}>
               {day}
             </div>
           );
@@ -103,7 +75,7 @@ function CustomCalendar({ selectedDate, onDateChange }) {
   );
 }
 
-// ---------- CSS ----------
+// ---------- CSS (স্লট বাটন বাদ, শুধু টেক্সট) ----------
 const BookingCSS = `
   .booking-wrapper { max-width: 650px; margin: 40px auto; padding: 20px; font-family: 'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif; background: #f4f7f6; border-radius: 20px; }
   .booking-card { background: #fff; border-radius: 16px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06); padding: 30px; border: 1px solid #e2e8f0; min-height: 500px; position: relative; }
@@ -125,13 +97,16 @@ const BookingCSS = `
   .doctor-option:hover, .doctor-option.selected { background: #f0fdfa; }
   .doctor-name { font-weight: 700; color: #1e293b; font-size: 15px; }
   .doctor-details { font-size: 12.5px; color: #64748b; margin-top: 2px; text-align: left; }
+  /* ✅ স্লট টেক্সট (কোনো বাটন নেই) */
+  .slot-display { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .slot-badge { background: #08eb9ff1; padding: 2px 12px; border-radius: 12px; font-size: 12px; color: #1e293b; border: 1px solid #e2e8f0; }
   .clear-doctor-btn { width: 100%; padding: 10px; margin-top: 10px; background: #f1f5f9; border: 1px dashed #cbd5e1; color: #475569; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.2s; }
   .clear-doctor-btn:hover { background: #e2e8f0; color: #1e293b; }
   .summary-box { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 15px; margin-bottom: 20px; }
   .summary-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
   .summary-label { color: #64748b; font-weight: 500; }
   .summary-value { color: #1e293b; font-weight: 700; text-align: right; }
-  .submit-btn { width: 100%; padding: 14px; background: linear-gradient(45deg, #0d9488, #14b8a6); border: none; border-radius: 12px; color: white; font-size: 16px; font-weight: 700; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 4px 6px -1px rgba(13, 148, 136, 0.2); position: relative; overflow: hidden; }
+  .submit-btn { width: 100%; padding: 14px; background: linear-gradient(45deg, #0d9488, #14b8a6); border: none; border-radius: 12px; color: white; font-size: 16px; font-weight: 700; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 4px 6px -1px rgba(13, 148, 136, 0.2); }
   .submit-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(13, 148, 136, 0.3); }
   .submit-btn:active { transform: scale(0.96); }
   .submit-btn:disabled { background: #94a3b8; cursor: not-allowed; }
@@ -159,7 +134,6 @@ const BookingCSS = `
   .animated-checkmark path { stroke: #ffffff; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; fill: none; stroke-dasharray: 48; stroke-dashoffset: 48; animation: stroke 0.4s ease forwards; }
   @keyframes stroke { 100% { stroke-dashoffset: 0; } }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-  
   .success-title { font-size: 30px; color: #166534; font-weight: 800; margin-bottom: 12px; }
   .success-text { font-size: 16px; color: #475569; margin-bottom: 30px; line-height: 1.8; max-width: 400px; }
   .success-buttons { display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; width: 100%; }
@@ -168,11 +142,10 @@ const BookingCSS = `
   .success-btn-primary:hover { background: #154a82; transform: translateY(-2px); }
   .success-btn-secondary { background: #f1f5f9; color: #1e293b; border: 1px solid #cbd5e1; }
   .success-btn-secondary:hover { background: #e2e8f0; transform: translateY(-2px); }
-
   @media (max-width: 600px) { .booking-wrapper { margin: 0; padding: 10px; } .booking-card { padding: 20px; } .summary-row { flex-direction: column; gap: 4px; } .summary-value { text-align: left; } .cal-day { width: 30px; height: 30px; font-size: 12px; } }
 `;
 
-// ---------- মূল BookingSystem কম্পোনেন্ট ----------
+// ---------- মূল BookingSystem ----------
 export default function BookingSystem({ departments, panels, onBack }) {
   const [formData, setFormData] = useState({
     name: '',
@@ -184,10 +157,8 @@ export default function BookingSystem({ departments, panels, onBack }) {
     referredDoctorName: '',
     otherReferralNote: '',
     departmentId: '',
-    doctorId: ''
   });
 
-  // ✅ শুরুতে আজকের তারিখ সেট করা
   const [selectedDate, setSelectedDate] = useState(getTodayString());
   const [selectedDayName, setSelectedDayName] = useState('');
   const [availableDoctors, setAvailableDoctors] = useState([]);
@@ -198,7 +169,7 @@ export default function BookingSystem({ departments, panels, onBack }) {
   const [qrCode, setQrCode] = useState(null);
   const [appointmentId, setAppointmentId] = useState(null);
 
-  // দিনের নাম ও ডাক্তার লিস্ট আপডেট
+  // দিনের নাম ও ডাক্তার লিস্ট
   useEffect(() => {
     if (!panels || panels.length === 0 || !departments || departments.length === 0) {
       setAvailableDoctors([]);
@@ -212,7 +183,6 @@ export default function BookingSystem({ departments, panels, onBack }) {
     setSelectedDayName(dayName);
 
     const dayPanel = panels.find(p => p.name === dayName);
-
     if (!dayPanel) {
       setAvailableDoctors([]);
       return;
@@ -238,7 +208,7 @@ export default function BookingSystem({ departments, panels, onBack }) {
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
-    if (name === 'departmentId' || name === 'doctorId') setSelectedDoctor(null);
+    if (name === 'departmentId') setSelectedDoctor(null);
     setSuccessMsg('');
   };
 
@@ -246,7 +216,7 @@ export default function BookingSystem({ departments, panels, onBack }) {
     setFormData({
       name: '', age: '', mobile: '', gender: 'পুরুষ', address: '',
       referralSource: 'Walk-in / নিজে এসেছেন', referredDoctorName: '',
-      otherReferralNote: '', departmentId: '', doctorId: ''
+      otherReferralNote: '', departmentId: ''
     });
     setSelectedDate(getTodayString());
     setAvailableDoctors([]);
@@ -297,14 +267,14 @@ export default function BookingSystem({ departments, panels, onBack }) {
 
       const appointmentData = {
         ...formData,
-        patientId: patientId,
+        patientId,
         doctorName: selectedDoctor.name,
         doctorDept: selectedDoctor.deptName,
         doctorQuals: selectedDoctor.quals || '',
-        doctorTime: selectedDoctor.time || '',
+        // timeSlot সংরক্ষণ করা হচ্ছে না
         bookingDate: selectedDate,
         bookingDay: selectedDayName,
-        serialNo: serialNo,
+        serialNo,
         status: 'pending',
         timestamp: new Date().toISOString(),
         isNew: true,
@@ -315,9 +285,7 @@ export default function BookingSystem({ departments, panels, onBack }) {
       setAppointmentId(docRef.id);
 
       const qrImage = await generateQRCode(docRef.id);
-      if (qrImage) {
-        setQrCode(qrImage);
-      }
+      if (qrImage) setQrCode(qrImage);
 
       setSuccessMsg('আপনার সিরিয়ালটি সফলভাবে কনফার্ম করা হয়েছে। চেক-ইন করতে QR কোড ব্যবহার করুন।');
       setIsBooked(true);
@@ -331,7 +299,7 @@ export default function BookingSystem({ departments, panels, onBack }) {
 
   const handleNewBooking = () => { resetForm(); setIsBooked(false); };
   const handleBackToDoctors = () => {
-    if (onBack) { onBack(); }
+    if (onBack) onBack();
     else { resetForm(); setIsBooked(false); }
   };
 
@@ -353,40 +321,15 @@ export default function BookingSystem({ departments, panels, onBack }) {
             </div>
             <h3 className="success-title">বুকিং সফল হয়েছে!</h3>
             <p className="success-text">{successMsg}</p>
-
             {qrCode && (
               <div style={{ marginBottom: '16px' }}>
-                <p style={{ fontSize: '14px', color: '#475569', marginBottom: '8px' }}>
-                  📱 চেক-ইন করতে QR কোড স্ক্যান করুন
-                </p>
-                <img
-                  src={qrCode}
-                  alt="QR Code"
-                  style={{
-                    width: '150px',
-                    height: '150px',
-                    borderRadius: '8px',
-                    border: '1px solid #e2e8f0',
-                    padding: '4px'
-                  }}
-                />
+                <p style={{ fontSize: '14px', color: '#475569', marginBottom: '8px' }}>📱 চেক-ইন করতে QR কোড স্ক্যান করুন</p>
+                <img src={qrCode} alt="QR Code" style={{ width: '150px', height: '150px', borderRadius: '8px', border: '1px solid #e2e8f0', padding: '4px' }} />
                 {appointmentId && (
                   <>
-                    <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px' }}>
-                      অ্যাপয়েন্টমেন্ট আইডি: {appointmentId}
-                    </p>
+                    <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px' }}>অ্যাপয়েন্টমেন্ট আইডি: {appointmentId}</p>
                     <p style={{ fontSize: '13px', marginTop: '8px' }}>
-                      <a
-                        href={`${window.location.origin}/checkin/${appointmentId}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          color: '#1c5fa8',
-                          fontWeight: '600',
-                          textDecoration: 'underline',
-                          cursor: 'pointer'
-                        }}
-                      >
+                      <a href={`${window.location.origin}/checkin/${appointmentId}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1c5fa8', fontWeight: '600', textDecoration: 'underline', cursor: 'pointer' }}>
                         🔗 চেক-ইন করতে এখানে ক্লিক করুন
                       </a>
                     </p>
@@ -394,14 +337,9 @@ export default function BookingSystem({ departments, panels, onBack }) {
                 )}
               </div>
             )}
-
             <div className="success-buttons">
-              <button className="success-btn success-btn-secondary" onClick={handleBackToDoctors}>
-                <ArrowLeft size={18} /> ফিরে যান হোমপেইজে
-              </button>
-              <button className="success-btn success-btn-primary" onClick={handleNewBooking}>
-                <PlusCircle size={18} /> আরো একটি সিরিয়াল দিন
-              </button>
+              <button className="success-btn success-btn-secondary" onClick={handleBackToDoctors}><ArrowLeft size={18} /> ফিরে যান হোমপেইজে</button>
+              <button className="success-btn success-btn-primary" onClick={handleNewBooking}><PlusCircle size={18} /> আরো একটি সিরিয়াল দিন</button>
             </div>
           </div>
         ) : (
@@ -433,9 +371,7 @@ export default function BookingSystem({ departments, panels, onBack }) {
               <div className="form-group">
                 <label>লিঙ্গ <span className="required-asterisk">*</span></label>
                 <select className="select" name="gender" value={formData.gender} onChange={handleChange} required>
-                  <option value="পুরুষ">পুরুষ</option>
-                  <option value="মহিলা">মহিলা</option>
-                  <option value="অন্যান্য">অন্যান্য</option>
+                  <option value="পুরুষ">পুরুষ</option><option value="মহিলা">মহিলা</option><option value="অন্যান্য">অন্যান্য</option>
                 </select>
               </div>
               <div className="form-group">
@@ -449,16 +385,10 @@ export default function BookingSystem({ departments, panels, onBack }) {
               <div className="form-group">
                 <label>রোগী কীভাবে/কার মাধ্যমে এসেছেন?</label>
                 <select className="select" name="referralSource" value={formData.referralSource} onChange={handleChange}>
-                  <option>Walk-in / নিজে এসেছেন</option>
-                  <option>Refer Doctor</option>
-                  <option>Facebook</option>
-                  <option>Google</option>
-                  <option>Campaign / Medical Camp</option>
-                  <option>আত্মীয়/বন্ধু</option>
-                  <option>অন্যান্য</option>
+                  <option>Walk-in / নিজে এসেছেন</option><option>Refer Doctor</option><option>Facebook</option><option>Google</option>
+                  <option>Campaign / Medical Camp</option><option>আত্মীয়/বন্ধু</option><option>অন্যান্য</option>
                 </select>
               </div>
-
               {formData.referralSource === 'Refer Doctor' && (
                 <div className="conditional-field">
                   <div className="form-group" style={{ marginBottom: 0 }}>
@@ -467,7 +397,6 @@ export default function BookingSystem({ departments, panels, onBack }) {
                   </div>
                 </div>
               )}
-
               {formData.referralSource === 'অন্যান্য' && (
                 <div className="conditional-field">
                   <div className="form-group" style={{ marginBottom: 0 }}>
@@ -485,9 +414,7 @@ export default function BookingSystem({ departments, panels, onBack }) {
                 <label>বিভাগ নির্বাচন করুন</label>
                 <select className="select" name="departmentId" value={formData.departmentId} onChange={handleChange}>
                   <option value="">সব বিভাগ</option>
-                  {departments.map(dept => (
-                    <option key={dept.id} value={dept.id}>{dept.name}</option>
-                  ))}
+                  {departments.map(dept => <option key={dept.id} value={dept.id}>{dept.name}</option>)}
                 </select>
               </div>
 
@@ -504,7 +431,14 @@ export default function BookingSystem({ departments, panels, onBack }) {
                         <div>
                           <div className="doctor-name">{doc.name}</div>
                           <div className="doctor-details">{doc.specialty || doc.quals || doc.deptName}</div>
-                          {doc.time && <div className="doctor-details" style={{ color: '#b45309' }}>⏱ {doc.time}</div>}
+                          {/* ✅ শুধু টাইম স্লট টেক্সট দেখানো হচ্ছে */}
+                          {doc.timeSlots && doc.timeSlots.length > 0 && (
+                            <div className="slot-display">
+                              {doc.timeSlots.map((slot, idx) => (
+                                <span key={idx} className="slot-badge">⏱ {slot.start} - {slot.end}</span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         {selectedDoctor?.id === doc.id && <CheckCircle2 size={18} color="#0d9488" />}
                       </div>
@@ -527,9 +461,6 @@ export default function BookingSystem({ departments, panels, onBack }) {
               <div className="summary-row"><span className="summary-label">মোবাইল:</span><span className="summary-value">{formData.mobile || '-'}</span></div>
               <div className="summary-row"><span className="summary-label">ঠিকানা:</span><span className="summary-value">{formData.address || '-'}</span></div>
               <div className="summary-row"><span className="summary-label">নির্বাচিত ডাক্তার:</span><span className="summary-value">{selectedDoctor?.name || '-'}</span></div>
-              {selectedDoctor?.time && (
-                <div className="summary-row"><span className="summary-label">ডাক্তারের সময়:</span><span className="summary-value">{selectedDoctor.time}</span></div>
-              )}
               <div className="summary-row"><span className="summary-label">রেফারেল সোর্স:</span><span className="summary-value">{formData.referralSource || '-'}</span></div>
               {formData.referredDoctorName && (
                 <div className="summary-row"><span className="summary-label">রেফারিং ডাক্তার:</span><span className="summary-value">{formData.referredDoctorName}</span></div>
