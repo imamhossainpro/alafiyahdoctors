@@ -5,11 +5,12 @@ import {
   BarChart, Bar, PieChart, Pie, Cell, Legend, LabelList,
   LineChart, Line
 } from 'recharts';
-import { X, Users, MapPin, TrendingUp, Calendar, ChevronDown, XCircle } from 'lucide-react';
+import { X, MapPin, TrendingUp } from 'lucide-react';
 import { getAllPatients } from '../../services/patientService';
+import { getAllLocations } from '../../services/locationService';
 import { useHospital } from '../../context/HospitalContext';
 
-// ✅ কালার সাইকোলজি অনুযায়ী রং
+// ---------- কালার কনস্ট্যান্ট ----------
 const STATUS_COLORS = {
   pending: '#f59e0b',
   confirmed: '#3b82f6',
@@ -200,29 +201,38 @@ export default function Overview({ appointments }) {
   const hospitalId = currentHospital?.id;
 
   const [patients, setPatients] = useState([]);
+  const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [drillLocation, setDrillLocation] = useState(null);
   const [drillPatients, setDrillPatients] = useState([]);
   const [trendDays, setTrendDays] = useState(7);
 
-  // রোগী ডেটা লোড
+  // রোগী ও লোকেশন ডেটা লোড
   useEffect(() => {
-    const loadPatients = async () => {
+    const loadData = async () => {
       if (!hospitalId) {
         setLoading(false);
         return;
       }
+      setLoading(true);
       try {
-        const data = await getAllPatients(hospitalId);
-        setPatients(data || []);
+        const [patientsData, locationsData] = await Promise.all([
+          getAllPatients(hospitalId),
+          getAllLocations(hospitalId) // শুধু active locations
+        ]);
+        setPatients(patientsData || []);
+        setLocations(locationsData || []);
+        console.log('✅ Locations loaded:', locationsData.length);
+        console.log('✅ Patients loaded:', patientsData.length);
       } catch (error) {
-        console.error('❌ রোগী লোড করতে সমস্যা:', error);
+        console.error('❌ ডেটা লোড করতে সমস্যা:', error);
         setPatients([]);
+        setLocations([]);
       } finally {
         setLoading(false);
       }
     };
-    loadPatients();
+    loadData();
   }, [hospitalId]);
 
   // ---------- রোগীর ক্যাটাগরি নির্ধারণ ----------
@@ -272,11 +282,26 @@ export default function Overview({ appointments }) {
     return { new: newCount, report: reportCount, followup: followupCount, total: appointments.length };
   }, [appointments, patients]);
 
-  // ---------- লোকেশন ডেটা (address ফিল্ড ব্যবহার) ----------
+  // ---------- লোকেশন ডেটা (শুধু Active Locations) ----------
   const locationData = useMemo(() => {
+    // active location names এর সেট
+    const activeLocationNames = new Set(locations.map(loc => loc.name));
     const map = {};
+    
     appointments.forEach(appt => {
-      const locKey = appt.address || appt.locationName || appt.locationId || 'অজানা';
+      // লোকেশন কী: locationName বা address বা locationId
+      let locKey = appt.locationName || appt.address || appt.locationId || 'অজানা';
+      
+      // যদি locKey 'অজানা' হয় বা locationId হয় (যা string হতে পারে), তাহলে locationName খুঁজে বের করার চেষ্টা
+      if (locKey === 'অজানা' || locKey === appt.locationId) {
+        const matchedLoc = locations.find(l => l.id === appt.locationId);
+        if (matchedLoc) locKey = matchedLoc.name;
+        else return; // skip if no location
+      }
+      
+      // যদি location active না হয়, skip
+      if (locKey !== 'অজানা' && !activeLocationNames.has(locKey)) return;
+      
       if (!map[locKey]) {
         map[locKey] = { 
           name: locKey, 
@@ -287,64 +312,61 @@ export default function Overview({ appointments }) {
       map[locKey].count += 1;
       map[locKey].patients.push(appt);
     });
-    return Object.values(map)
+    
+    const result = Object.values(map)
       .filter(loc => loc.count > 0)
       .sort((a, b) => b.count - a.count);
-  }, [appointments]);
+    
+    console.log('📍 locationData:', result.length, result.map(l => l.name));
+    return result;
+  }, [appointments, locations]);
 
-  // ---------- ট্রেন্ড ডেটা ----------
+  // ---------- ট্রেন্ড ডেটা (ডায়নামিক ডেট জেনারেশন, শুধু Active Locations) ----------
   const trendData = useMemo(() => {
-    if (appointments.length === 0) return [];
+    if (appointments.length === 0 || locationData.length === 0) return [];
 
     const today = new Date();
-    const cutoffDate = new Date(today);
-    cutoffDate.setDate(today.getDate() - trendDays);
-    const cutoffStr = cutoffDate.toISOString().split('T')[0];
+    const dateArray = [];
+    for (let i = trendDays - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      dateArray.push(dateStr);
+    }
 
-    const dateSet = new Set();
-    appointments.forEach(a => {
-      if (a.bookingDate) {
-        const dateStr = a.bookingDate.split('T')[0];
-        if (dateStr >= cutoffStr) {
-          dateSet.add(dateStr);
-        }
-      }
-    });
+    const locationNames = locationData.map(loc => loc.name);
 
-    if (dateSet.size === 0) return [];
-
-    const sortedDates = Array.from(dateSet).sort();
-    const banglaDays = ['রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহঃ', 'শুক্র', 'শনি'];
-    const result = [];
-
-    sortedDates.forEach(dateStr => {
-      const d = new Date(dateStr + 'T00:00:00');
-      const dayName = banglaDays[d.getDay() === 0 ? 6 : d.getDay() - 1];
-      
-      const dayData = { name: dayName, date: dateStr };
+    const result = dateArray.map(dateStr => {
+      const dayData = { date: dateStr };
       let totalCount = 0;
-      
-      locationData.forEach(loc => {
+      locationNames.forEach(locName => {
         const count = appointments.filter(a => {
           const apptDate = a.bookingDate ? a.bookingDate.split('T')[0] : '';
-          const locKey = a.address || a.locationName || a.locationId || 'অজানা';
-          return locKey === loc.name && apptDate === dateStr;
+          const locKey = a.locationName || a.address || a.locationId || 'অজানা';
+          // if locKey is id, match by id, else by name
+          let match = false;
+          if (locKey === a.locationId) {
+            const loc = locations.find(l => l.id === a.locationId);
+            match = loc && loc.name === locName;
+          } else {
+            match = locKey === locName;
+          }
+          return match && apptDate === dateStr;
         }).length;
-        dayData[loc.name] = count;
+        dayData[locName] = count;
         totalCount += count;
       });
-      
       dayData.total = totalCount;
-      result.push(dayData);
+      return dayData;
     });
 
+    console.log('📈 trendData:', result.length, result);
     return result;
-  }, [appointments, locationData, trendDays]);
+  }, [appointments, locationData, trendDays, locations]);
 
-  // ---------- বাকি ডেটা প্রসেসিং ----------
-  const total = appointments.length; // মোট অ্যাপয়েন্টমেন্ট
+  // ---------- বাকি ডেটা প্রসেসিং (ইতিমধ্যে আছে) ----------
+  const total = appointments.length;
 
-  // স্ট্যাটাস কাউন্ট
   const pending = appointments.filter(a => a.status === 'pending').length;
   const confirmed = appointments.filter(a => a.status === 'confirmed').length;
   const checkedIn = appointments.filter(a => a.status === 'checked-in').length;
@@ -357,17 +379,14 @@ export default function Overview({ appointments }) {
   const noShowRate = total > 0 ? (noShow / total) * 100 : 0;
   const cancellationRate = total > 0 ? (cancelled / total) * 100 : 0;
 
-  // ডাক্তার ডেটা
   const doctorCounts = {};
   appointments.forEach(a => { doctorCounts[a.doctorName] = (doctorCounts[a.doctorName] || 0) + 1; });
   const doctorData = Object.entries(doctorCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
 
-  // বিভাগ ডেটা
   const departmentCounts = {};
   appointments.forEach(a => { departmentCounts[a.doctorDept || 'Unknown'] = (departmentCounts[a.doctorDept || 'Unknown'] || 0) + 1; });
   const departmentData = Object.entries(departmentCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
 
-  // বয়স পরিসীমা
   const ageGroups = { '০-১২': 0, '১৩-২০': 0, '২১-৩০': 0, '৩১-৪০': 0, '৪১-৫০': 0, '৫০+': 0 };
   appointments.forEach(a => {
     if (a.age) {
@@ -382,12 +401,10 @@ export default function Overview({ appointments }) {
   });
   const ageData = Object.entries(ageGroups).map(([name, count]) => ({ name, count }));
 
-  // রেফারেল সোর্স
   const referralCounts = {};
   appointments.forEach(a => { const src = a.referralSource || 'Unknown'; referralCounts[src] = (referralCounts[src] || 0) + 1; });
   const referralData = Object.entries(referralCounts).map(([name, value]) => ({ name, value }));
 
-  // ---------- লোকেশন ড্রিল ----------
   const handleLocationClick = (locationName) => {
     const locEntry = locationData.find(l => l.name === locationName);
     if (locEntry) {
@@ -396,7 +413,6 @@ export default function Overview({ appointments }) {
     }
   };
 
-  // ✅ স্ট্যাটাস ডেটা
   const statusData = [
     { name: 'Pending', value: pending },
     { name: 'Confirmed', value: confirmed },
@@ -451,7 +467,6 @@ export default function Overview({ appointments }) {
     );
   };
 
-  // ✅ KPI - সঠিক ক্যাটাগরি ব্যবহার
   const kpis = [
     { label: 'Total Bookings', value: total, color: '#1c5fa8', bg: 'rgba(28, 95, 168, 0.1)' },
     { label: 'Pending', value: pending, color: STATUS_COLORS.pending, bg: 'rgba(245, 158, 11, 0.1)' },
@@ -460,7 +475,6 @@ export default function Overview({ appointments }) {
     { label: 'Completed', value: completed, color: STATUS_COLORS.completed, bg: 'rgba(34, 197, 94, 0.1)' },
     { label: 'Cancelled', value: cancelled, color: STATUS_COLORS.cancelled, bg: 'rgba(239, 68, 68, 0.1)' },
     { label: 'No-show', value: noShow, color: STATUS_COLORS['no-show'], bg: 'rgba(107, 114, 128, 0.1)' },
-    // ✅ নতুন ক্যাটাগরি
     { label: 'নতুন রোগী', value: categorizedCounts.new, color: '#22c55e', bg: 'rgba(34, 197, 94, 0.1)' },
     { label: 'রিপোর্ট (৭ দিন)', value: categorizedCounts.report, color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' },
     { label: 'ফলোআপ (>৭ দিন)', value: categorizedCounts.followup, color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.1)' },
@@ -542,10 +556,7 @@ export default function Overview({ appointments }) {
             <PieChart>
               <Pie data={statusData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={5}>
                 {statusData.map((entry, index) => (
-                  <Cell 
-                    key={`cell-${index}`} 
-                    fill={CHART_COLORS[index % CHART_COLORS.length]} 
-                  />
+                  <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                 ))}
               </Pie>
               <Tooltip />
@@ -623,9 +634,43 @@ export default function Overview({ appointments }) {
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={trendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 12 }} interval={0} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
+              <XAxis 
+                dataKey="date" 
+                tick={{ fontSize: 12 }} 
+                interval={0} 
+                tickFormatter={(value) => {
+                  const d = new Date(value + 'T00:00:00');
+                  return `${d.getDate().toString().padStart(2, '0')} ${d.toLocaleString('default', { month: 'short' })}`;
+                }}
+              />
+              <YAxis 
+                tick={{ fontSize: 12 }} 
+                domain={[0, 'auto']} 
+                tickCount={6} 
+                allowDecimals={false}
+                tickFormatter={(value) => Math.round(value).toString()}
+                label={{ value: 'রোগীর সংখ্যা', angle: -90, position: 'insideLeft', style: { fontSize: 13, fill: '#475569' } }}
+              />
+              <Tooltip 
+                content={({ active, payload, label }) => {
+                  if (active && payload && payload.length) {
+                    const dateObj = new Date(label + 'T00:00:00');
+                    const dateStr = `${dateObj.getDate().toString().padStart(2, '0')} ${dateObj.toLocaleString('default', { month: 'short' })} ${dateObj.getFullYear()}`;
+                    return (
+                      <div style={{ background: '#fff', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                        <div style={{ fontWeight: '700', marginBottom: '8px', color: '#1e293b' }}>{dateStr}</div>
+                        {payload.map((entry, idx) => (
+                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', gap: '20px', fontSize: '13px', color: '#475569' }}>
+                            <span><span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', background: entry.color, marginRight: '6px' }} />{entry.name}:</span>
+                            <span style={{ fontWeight: '600', color: '#1e293b' }}>{Math.round(entry.value)} জন</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+              />
               <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '12px' }} />
               {locationData.slice(0, 5).map((loc, idx) => (
                 <Line 

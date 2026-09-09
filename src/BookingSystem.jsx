@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { db, doc, getDoc, setDoc, addDoc, collection } from './firebase';
 import { findPatientByMobile, createPatient, addPatientVisit } from './services/patientService';
 import { generateQRCode } from './services/qrService';
+import { addLocationFromBooking } from './services/locationService';
 import { useHospital } from './context/HospitalContext';
 import { useAuth } from './context/AuthContext';
 import { Send, Loader2, User, Phone, MapPin, Stethoscope, CalendarDays, ArrowLeft, PlusCircle, CheckCircle2, Clock } from 'lucide-react';
@@ -291,7 +292,7 @@ export default function BookingSystem({ departments, panels, onBack }) {
 
       let patient = await findPatientByMobile(hospitalId, formData.mobile);
       let patientId;
-      let isNewPatient = true; // ডিফল্ট নতুন
+      let isNewPatient = true;
 
       if (patient) {
         patientId = patient.id;
@@ -310,7 +311,7 @@ export default function BookingSystem({ departments, panels, onBack }) {
           address: formData.address
         });
         patientId = newPatient.id;
-        isNewPatient = true; // নতুন রোগী
+        isNewPatient = true;
         await addPatientVisit(hospitalId, {
           patientId,
           doctorName: selectedDoctor.name,
@@ -339,8 +340,7 @@ export default function BookingSystem({ departments, panels, onBack }) {
         serialNo,
         status: 'pending',
         timestamp: new Date().toISOString(),
-         isNew: isNewPatient, // ✅ সঠিক মান
-        isNew: true,
+        isNew: isNewPatient,
         isRead: false,
         hospitalId,
       };
@@ -348,6 +348,11 @@ export default function BookingSystem({ departments, panels, onBack }) {
       const docRef = await addDoc(collection(db, 'hospitals', hospitalId, 'appointments'), appointmentData);
       setAppointmentId(docRef.id);
       console.log('✅ Appointment created with ID:', docRef.id);
+
+      // ✅ লোকেশন যোগ করুন (address থেকে)
+      if (formData.address && formData.address.trim()) {
+        await addLocationFromBooking(hospitalId, formData.address, docRef.id);
+      }
 
       const qrImage = await generateQRCode(docRef.id);
       if (qrImage) setQrCode(qrImage);

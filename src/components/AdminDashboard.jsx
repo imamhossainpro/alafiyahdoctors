@@ -302,7 +302,7 @@ export default function AdminDashboard({ user: propUser }) {
 
       {tab === 'locations' && isAdmin && (
         <SafeArea>
-          <LocationManager appointments={filteredAppointments} user={user} />
+          <LocationManager appointments={filteredAppointments} user={user} onAppointmentsChange={refreshData}/>
         </SafeArea>
       )}
 

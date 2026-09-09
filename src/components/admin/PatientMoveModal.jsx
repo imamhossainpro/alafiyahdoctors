@@ -9,17 +9,16 @@ const PatientMoveModal = ({ isOpen, onClose, currentLocation, onSuccess }) => {
   const { currentHospital } = useHospital();
   const hospitalId = currentHospital?.id;
 
-  const [patients, setPatients] = useState([]);
-  const [allPatients, setAllPatients] = useState([]);
+  const [appointments, setAppointments] = useState([]);
+  const [allAppointments, setAllAppointments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [moving, setMoving] = useState(false);
   const [error, setError] = useState(null);
   const [destLocations, setDestLocations] = useState([]);
-  const [selectedPatients, setSelectedPatients] = useState([]);
+  const [selectedAppointments, setSelectedAppointments] = useState([]);
   const [selectedDest, setSelectedDest] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // লোকেশন লোড (গন্তব্যের জন্য)
   useEffect(() => {
     if (!isOpen || !hospitalId) return;
     const loadDestinations = async () => {
@@ -27,7 +26,6 @@ const PatientMoveModal = ({ isOpen, onClose, currentLocation, onSuccess }) => {
         const locRef = collection(db, 'hospitals', hospitalId, 'locations');
         const snapshot = await getDocs(locRef);
         const locs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        // বাদ দিন বর্তমান লোকেশনটি
         const filtered = locs.filter(l => l.id !== currentLocation?.id);
         setDestLocations(filtered);
       } catch (err) {
@@ -38,71 +36,98 @@ const PatientMoveModal = ({ isOpen, onClose, currentLocation, onSuccess }) => {
     loadDestinations();
   }, [isOpen, hospitalId, currentLocation]);
 
-  // রোগী লোড (বর্তমান লোকেশন অনুযায়ী)
   useEffect(() => {
     if (!isOpen || !hospitalId || !currentLocation) return;
-    const loadPatients = async () => {
+    const loadAppointments = async () => {
       setLoading(true);
+      setError(null);
       try {
-        // ধরে নিচ্ছি রোগীদের ডকুমেন্টে `location` ফিল্ড আছে (লোকেশন ID বা নাম)
-        const patientsRef = collection(db, 'hospitals', hospitalId, 'patients');
-        // ফিল্টার: যাদের location === currentLocation.id অথবা currentLocation.name
-        const q = query(patientsRef, where('location', '==', currentLocation.id));
-        const snapshot = await getDocs(q);
-        let patientsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        // যদি location ফিল্ডে নামও থাকে, সেটাও চেক করুন
-        if (patientsList.length === 0) {
-          const q2 = query(patientsRef, where('location', '==', currentLocation.name));
-          const snap2 = await getDocs(q2);
-          patientsList = snap2.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        let apptList = [];
+        const locationId = currentLocation.id;
+        const locationName = currentLocation.name;
+
+        // ১. locationId দিয়ে খোঁজ
+        let q = query(
+          collection(db, 'hospitals', hospitalId, 'appointments'),
+          where('locationId', '==', locationId)
+        );
+        let snapshot = await getDocs(q);
+        apptList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // ২. locationName দিয়ে খোঁজ
+        if (apptList.length === 0 && locationName) {
+          q = query(
+            collection(db, 'hospitals', hospitalId, 'appointments'),
+            where('locationName', '==', locationName)
+          );
+          snapshot = await getDocs(q);
+          apptList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         }
-        setAllPatients(patientsList);
-        setPatients(patientsList);
-        setSelectedPatients([]);
-        setError(null);
+
+        // ৩. address দিয়ে খোঁজ
+        if (apptList.length === 0 && locationName) {
+          q = query(
+            collection(db, 'hospitals', hospitalId, 'appointments'),
+            where('address', '==', locationName)
+          );
+          snapshot = await getDocs(q);
+          apptList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        }
+
+        // ৪. partial match
+        if (apptList.length === 0 && locationName) {
+          const allSnapshot = await getDocs(collection(db, 'hospitals', hospitalId, 'appointments'));
+          const allData = allSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          apptList = allData.filter(a => 
+            a.address && a.address.toLowerCase().includes(locationName.toLowerCase())
+          );
+        }
+
+        setAllAppointments(apptList);
+        setAppointments(apptList);
+        setSelectedAppointments([]);
       } catch (err) {
-        console.error('❌ রোগী লোড error:', err);
-        setError('রোগী ডেটা লোড করতে সমস্যা হয়েছে');
+        console.error('❌ অ্যাপয়েন্টমেন্ট লোড error:', err);
+        setError('অ্যাপয়েন্টমেন্ট ডেটা লোড করতে সমস্যা হয়েছে');
+        setAllAppointments([]);
+        setAppointments([]);
       } finally {
         setLoading(false);
       }
     };
-    loadPatients();
+    loadAppointments();
   }, [isOpen, hospitalId, currentLocation]);
 
-  // সার্চ ফিল্টার
   useEffect(() => {
     if (!searchTerm.trim()) {
-      setPatients(allPatients);
+      setAppointments(allAppointments);
     } else {
       const term = searchTerm.toLowerCase();
-      const filtered = allPatients.filter(p =>
-        (p.name && p.name.toLowerCase().includes(term)) ||
-        (p.mobile && p.mobile.includes(term))
+      const filtered = allAppointments.filter(a =>
+        (a.name && a.name.toLowerCase().includes(term)) ||
+        (a.mobile && a.mobile.includes(term)) ||
+        (a.doctorName && a.doctorName.toLowerCase().includes(term))
       );
-      setPatients(filtered);
+      setAppointments(filtered);
     }
-  }, [searchTerm, allPatients]);
+  }, [searchTerm, allAppointments]);
 
-  // চেকবক্স টগল
-  const togglePatient = (id) => {
-    setSelectedPatients(prev =>
+  const toggleAppointment = (id) => {
+    setSelectedAppointments(prev =>
       prev.includes(id) ? prev.filter(pid => pid !== id) : [...prev, id]
     );
   };
 
-  // সব সিলেক্ট/ডিসিলেক্ট
   const toggleAll = () => {
-    if (selectedPatients.length === patients.length) {
-      setSelectedPatients([]);
+    if (selectedAppointments.length === appointments.length) {
+      setSelectedAppointments([]);
     } else {
-      setSelectedPatients(patients.map(p => p.id));
+      setSelectedAppointments(appointments.map(a => a.id));
     }
   };
 
-  // মুভ হ্যান্ডলার
   const handleMove = async () => {
-    if (selectedPatients.length === 0) {
+    if (selectedAppointments.length === 0) {
       alert('কমপক্ষে একজন রোগী নির্বাচন করুন');
       return;
     }
@@ -110,23 +135,25 @@ const PatientMoveModal = ({ isOpen, onClose, currentLocation, onSuccess }) => {
       alert('গন্তব্য লোকেশন নির্বাচন করুন');
       return;
     }
-    if (!confirm(`${selectedPatients.length} জন রোগীকে "${selectedDest}"-এ সরাতে চান?`)) return;
+    const destName = destLocations.find(l => l.id === selectedDest)?.name || '';
+    if (!confirm(`${selectedAppointments.length} জন রোগীকে "${destName}"-এ সরাতে চান?`)) return;
 
     setMoving(true);
     setError(null);
     try {
       const batch = writeBatch(db);
-      const patientsRef = collection(db, 'hospitals', hospitalId, 'patients');
-      const updates = selectedPatients.map(id => {
-        const ref = doc(patientsRef, id);
-        batch.update(ref, { location: selectedDest, updatedAt: new Date().toISOString() });
+      const apptRef = collection(db, 'hospitals', hospitalId, 'appointments');
+      selectedAppointments.forEach(id => {
+        const ref = doc(apptRef, id);
+        batch.update(ref, { 
+          locationId: selectedDest,
+          locationName: destName,
+          updatedAt: new Date().toISOString()
+        });
       });
       await batch.commit();
-
-      // সাফল্য
-      setSelectedPatients([]);
+      setSelectedAppointments([]);
       if (onSuccess) onSuccess();
-      // মোডাল বন্ধ করবেন না – ইউজার নিজে বন্ধ করতে পারে
     } catch (err) {
       console.error('❌ মুভ error:', err);
       setError('রোগী স্থানান্তর করতে সমস্যা হয়েছে: ' + err.message);
@@ -156,7 +183,6 @@ const PatientMoveModal = ({ isOpen, onClose, currentLocation, onSuccess }) => {
         overflow: 'hidden',
         boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
       }}>
-        {/* হেডার */}
         <div style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           padding: '16px 20px',
@@ -172,7 +198,6 @@ const PatientMoveModal = ({ isOpen, onClose, currentLocation, onSuccess }) => {
           </button>
         </div>
 
-        {/* কন্টেন্ট */}
         <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
           {error && (
             <div style={{
@@ -187,10 +212,18 @@ const PatientMoveModal = ({ isOpen, onClose, currentLocation, onSuccess }) => {
 
           <div style={{ marginBottom: '16px' }}>
             <p><strong>বর্তমান লোকেশন:</strong> {currentLocation?.name || '—'}</p>
-            <p><strong>মোট রোগী:</strong> {allPatients.length} জন</p>
+            <p>
+              <strong>মোট রোগী:</strong> 
+              <span style={{ 
+                marginLeft: '8px', 
+                fontWeight: '700', 
+                color: allAppointments.length > 0 ? '#1e40af' : '#64748b'
+              }}>
+                {allAppointments.length} জন
+              </span>
+            </p>
           </div>
 
-          {/* গন্তব্য নির্বাচন */}
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', fontWeight: '600', marginBottom: '4px' }}>
               গন্তব্য লোকেশন <span style={{ color: '#dc2626' }}>*</span>
@@ -214,13 +247,12 @@ const PatientMoveModal = ({ isOpen, onClose, currentLocation, onSuccess }) => {
             </select>
           </div>
 
-          {/* সার্চ */}
           <div style={{ marginBottom: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', background: '#f1f5f9', borderRadius: '6px', padding: '4px 12px' }}>
               <Search size={16} color="#64748b" />
               <input
                 type="text"
-                placeholder="রোগী খুঁজুন (নাম বা মোবাইল)..."
+                placeholder="রোগী খুঁজুন (নাম, মোবাইল বা ডাক্তার)..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 style={{
@@ -231,17 +263,16 @@ const PatientMoveModal = ({ isOpen, onClose, currentLocation, onSuccess }) => {
             </div>
           </div>
 
-          {/* রোগী তালিকা */}
           {loading ? (
             <div style={{ textAlign: 'center', padding: '30px' }}>
               <Loader2 size={24} style={{ animation: 'spin 1s linear infinite' }} />
-              <p>রোগী লোড হচ্ছে...</p>
+              <p>অ্যাপয়েন্টমেন্ট লোড হচ্ছে...</p>
             </div>
-          ) : patients.length === 0 ? (
+          ) : appointments.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
-              {allPatients.length === 0
-                ? 'এই লোকেশনে কোনো রোগী নেই।'
-                : 'সার্চে কোনো রোগী পাওয়া যায়নি।'}
+              {allAppointments.length === 0
+                ? 'এই লোকেশনে কোনো অ্যাপয়েন্টমেন্ট নেই।'
+                : 'সার্চে কোনো অ্যাপয়েন্টমেন্ট পাওয়া যায়নি।'}
             </div>
           ) : (
             <div style={{ maxHeight: '250px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
@@ -249,33 +280,41 @@ const PatientMoveModal = ({ isOpen, onClose, currentLocation, onSuccess }) => {
                 <thead style={{ background: '#f1f5f9', position: 'sticky', top: 0, zIndex: 2 }}>
                   <tr>
                     <th style={{ padding: '8px 12px', textAlign: 'left', width: '40px' }}>
-                      <input type="checkbox" checked={selectedPatients.length === patients.length && patients.length > 0} onChange={toggleAll} />
+                      <input 
+                        type="checkbox" 
+                        checked={selectedAppointments.length === appointments.length && appointments.length > 0} 
+                        onChange={toggleAll} 
+                      />
                     </th>
-                    <th style={{ padding: '8px 12px', textAlign: 'left' }}>নাম</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'left' }}>রোগীর নাম</th>
                     <th style={{ padding: '8px 12px', textAlign: 'left' }}>মোবাইল</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'left' }}>ডাক্তার</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {patients.map(p => (
-                    <tr key={p.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                  {appointments.map(a => (
+                    <tr key={a.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
                       <td style={{ padding: '8px 12px' }}>
                         <input
                           type="checkbox"
-                          checked={selectedPatients.includes(p.id)}
-                          onChange={() => togglePatient(p.id)}
+                          checked={selectedAppointments.includes(a.id)}
+                          onChange={() => toggleAppointment(a.id)}
                         />
                       </td>
-                      <td style={{ padding: '8px 12px' }}>{p.name || '—'}</td>
-                      <td style={{ padding: '8px 12px' }}>{p.mobile || '—'}</td>
+                      <td style={{ padding: '8px 12px' }}>{a.name || '—'}</td>
+                      <td style={{ padding: '8px 12px' }}>{a.mobile || '—'}</td>
+                      <td style={{ padding: '8px 12px' }}>{a.doctorName || '—'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
+          <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '8px', textAlign: 'center' }}>
+            মোট {appointments.length} টি অ্যাপয়েন্টমেন্ট দেখাচ্ছে
+          </div>
         </div>
 
-        {/* ফুটার */}
         <div style={{
           padding: '16px 20px',
           borderTop: '1px solid #e2e8f0',
@@ -299,26 +338,26 @@ const PatientMoveModal = ({ isOpen, onClose, currentLocation, onSuccess }) => {
           </button>
           <button
             onClick={handleMove}
-            disabled={moving || selectedPatients.length === 0 || !selectedDest}
+            disabled={moving || selectedAppointments.length === 0 || !selectedDest}
             style={{
               padding: '8px 20px',
-              background: '#0d9488',
+              background: moving ? '#94a3b8' : '#0d9488',
               color: '#fff',
               border: 'none',
               borderRadius: '6px',
-              cursor: moving ? 'not-allowed' : 'pointer',
+              cursor: moving || selectedAppointments.length === 0 || !selectedDest ? 'not-allowed' : 'pointer',
               fontSize: '14px',
               fontWeight: '600',
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              opacity: moving || selectedPatients.length === 0 || !selectedDest ? 0.6 : 1
+              opacity: moving || selectedAppointments.length === 0 || !selectedDest ? 0.6 : 1
             }}
           >
             {moving ? (
               <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> স্থানান্তর হচ্ছে...</>
             ) : (
-              <><ArrowRight size={16} /> {selectedPatients.length} জন মুভ করুন</>
+              <><ArrowRight size={16} /> {selectedAppointments.length} জন মুভ করুন</>
             )}
           </button>
         </div>
