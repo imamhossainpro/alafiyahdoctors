@@ -1,9 +1,11 @@
+// src/components/admin/MarketingReport.jsx
 import React, { useState, useMemo, useEffect } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { FileText, Trash2 } from 'lucide-react';
 import { db, doc, setDoc, collection, query, where, getDocs, updateDoc } from '../../firebase';
 import { getAllPatients } from '../../services/patientService';
+import { useHospital } from '../../context/HospitalContext';
 
 // ✅ অফিসারভিত্তিক PDF এক্সপোর্ট – কেস-ইনসেনসিটিভ ও ট্রিম
 const exportOfficerPDF = async (officerName, appointments) => {
@@ -11,8 +13,8 @@ const exportOfficerPDF = async (officerName, appointments) => {
   const normalizedOfficer = officerName.trim().toLowerCase();
 
   const officerAppointments = appointments.filter(a => {
-    const apptOfficer = a.marketingOfficer?.trim().toLowerCase() || '';
-    const status = a.status?.toLowerCase() || '';
+    const apptOfficer = (a.marketingOfficer || '').trim().toLowerCase();
+    const status = (a.status || '').toLowerCase();
     return apptOfficer === normalizedOfficer && status === 'completed';
   });
 
@@ -124,6 +126,9 @@ export default function MarketingReport({
   onTeamUpdate, 
   user           
 }) {
+  const { currentHospital } = useHospital();
+  const hospitalId = currentHospital?.id || 'alafiyah_main';
+
   const today = new Date().toISOString().split('T')[0];
   const [selectedOfficer, setSelectedOfficer] = useState('all');
   const [startDate, setStartDate] = useState(today);
@@ -136,20 +141,21 @@ export default function MarketingReport({
 
   useEffect(() => {
     const loadPatients = async () => {
-      const patients = await getAllPatients();
+      const patients = await getAllPatients(hospitalId);
       setAllPatients(patients);
       const map = {};
       patients.forEach(p => { map[p.id] = p; });
       setPatientMap(map);
     };
     loadPatients();
-  }, []);
+  }, [hospitalId]);
 
   const filtered = useMemo(() => {
     return appointments.filter(a => {
       if (!a.bookingDate) return false;
       const dateMatch = a.bookingDate >= startDate && a.bookingDate <= endDate;
-      const officerMatch = selectedOfficer === 'all' || a.marketingOfficer === selectedOfficer;
+      const officerMatch = selectedOfficer === 'all' || 
+        (a.marketingOfficer || '').trim().toLowerCase() === selectedOfficer.trim().toLowerCase();
       return dateMatch && officerMatch;
     });
   }, [appointments, startDate, endDate, selectedOfficer]);
@@ -170,7 +176,7 @@ export default function MarketingReport({
     });
 
     filtered.forEach(a => {
-      const officer = a.marketingOfficer || 'Unassigned';
+      const officer = (a.marketingOfficer || 'Unassigned').trim();
       if (!officerMap[officer]) {
         officerMap[officer] = {
           name: officer,
@@ -324,7 +330,7 @@ export default function MarketingReport({
                       <span>{row.name}</span>
                       {row.name !== 'Unassigned' && (
                         <button 
-                          onClick={() => exportOfficerPDF(row.name, filtered)}
+                          onClick={() => exportOfficerPDF(row.name, appointments)}  // ✅ পুরো appointments পাস করুন
                           title={`${row.name} এর সম্পন্ন রোগীদের রিপোর্ট ডাউনলোড`}
                           style={{ 
                             background: '#dc2626', 

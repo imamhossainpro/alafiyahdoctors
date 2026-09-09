@@ -16,13 +16,24 @@ import {
 import { db } from '../firebase';
 
 // ==========================================
-// রেফারেন্স হেল্পার
+// ১. রেফারেন্স হেল্পার (নিরাপদ)
 // ==========================================
 
-const getPatientsRef = (hospitalId) => collection(db, 'hospitals', hospitalId, 'patients');
+/**
+ * পেশেন্ট কালেকশনের রেফারেন্স তৈরি করে
+ * @param {string} hospitalId - হাসপিটালের আইডি (string হতে হবে)
+ * @returns {CollectionReference}
+ */
+const getPatientsRef = (hospitalId) => {
+  // ✅ hospitalId যাচাই
+  if (!hospitalId || typeof hospitalId !== 'string') {
+    throw new Error('getPatientsRef: hospitalId অবশ্যই একটি স্ট্রিং হতে হবে।');
+  }
+  return collection(db, 'hospitals', hospitalId, 'patients');
+};
 
 // ==========================================
-// ১. পেশেন্ট ক্রিয়েট / আপডেট / ডিলিট
+// ২. পেশেন্ট ক্রিয়েট / আপডেট / ডিলিট
 // ==========================================
 
 /**
@@ -30,7 +41,10 @@ const getPatientsRef = (hospitalId) => collection(db, 'hospitals', hospitalId, '
  */
 export const createPatient = async (hospitalId, patientData) => {
   try {
-    if (!hospitalId) throw new Error('Hospital ID is required');
+    // ✅ hospitalId যাচাই
+    if (!hospitalId || typeof hospitalId !== 'string') {
+      throw new Error('createPatient: hospitalId অবশ্যই একটি স্ট্রিং হতে হবে।');
+    }
     const ref = getPatientsRef(hospitalId);
     const docRef = await addDoc(ref, {
       ...patientData,
@@ -50,7 +64,9 @@ export const createPatient = async (hospitalId, patientData) => {
  */
 export const addPatientVisit = async (hospitalId, visitData) => {
   try {
-    if (!hospitalId) throw new Error('Hospital ID is required');
+    if (!hospitalId || typeof hospitalId !== 'string') {
+      throw new Error('addPatientVisit: hospitalId অবশ্যই একটি স্ট্রিং হতে হবে।');
+    }
     const ref = getPatientsRef(hospitalId);
     const docRef = await addDoc(ref, {
       ...visitData,
@@ -72,11 +88,12 @@ export const addPatientVisit = async (hospitalId, visitData) => {
  */
 export const findPatientByMobile = async (hospitalId, mobileNumber) => {
   try {
-    if (!hospitalId || !mobileNumber) return null;
-    const q = query(
-      getPatientsRef(hospitalId),
-      where('mobile', '==', mobileNumber)
-    );
+    if (!hospitalId || typeof hospitalId !== 'string') {
+      throw new Error('findPatientByMobile: hospitalId অবশ্যই একটি স্ট্রিং হতে হবে।');
+    }
+    if (!mobileNumber) return null;
+    const ref = getPatientsRef(hospitalId);
+    const q = query(ref, where('mobile', '==', mobileNumber));
     const snapshot = await getDocs(q);
     if (snapshot.empty) return null;
     const docSnap = snapshot.docs[0];
@@ -92,7 +109,10 @@ export const findPatientByMobile = async (hospitalId, mobileNumber) => {
  */
 export const updatePatient = async (hospitalId, patientId, data) => {
   try {
-    if (!hospitalId || !patientId) throw new Error('Hospital ID and Patient ID are required');
+    if (!hospitalId || typeof hospitalId !== 'string') {
+      throw new Error('updatePatient: hospitalId অবশ্যই একটি স্ট্রিং হতে হবে।');
+    }
+    if (!patientId) throw new Error('Patient ID required');
     const ref = doc(db, 'hospitals', hospitalId, 'patients', patientId);
     await updateDoc(ref, {
       ...data,
@@ -110,6 +130,9 @@ export const updatePatient = async (hospitalId, patientId, data) => {
  */
 export const deletePatient = async (hospitalId, patientId) => {
   try {
+    if (!hospitalId || typeof hospitalId !== 'string') {
+      throw new Error('deletePatient: hospitalId অবশ্যই একটি স্ট্রিং হতে হবে।');
+    }
     const ref = doc(db, 'hospitals', hospitalId, 'patients', patientId);
     await deleteDoc(ref);
     return { success: true };
@@ -120,7 +143,7 @@ export const deletePatient = async (hospitalId, patientId) => {
 };
 
 // ==========================================
-// ২. ডেটা ফেচ (One-time)
+// ৩. ডেটা ফেচ (One-time)
 // ==========================================
 
 /**
@@ -128,8 +151,11 @@ export const deletePatient = async (hospitalId, patientId) => {
  */
 export const fetchAllPatients = async (hospitalId) => {
   try {
-    if (!hospitalId) return [];
-    const q = query(getPatientsRef(hospitalId));
+    if (!hospitalId || typeof hospitalId !== 'string') {
+      throw new Error('fetchAllPatients: hospitalId অবশ্যই একটি স্ট্রিং হতে হবে।');
+    }
+    const ref = getPatientsRef(hospitalId);
+    const q = query(ref);
     const snapshot = await getDocs(q);
     return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
@@ -138,21 +164,20 @@ export const fetchAllPatients = async (hospitalId) => {
   }
 };
 
-/**
- * সব পেশেন্ট ফেচ করুন – alias (getAllPatients) – Overview.jsx-এ ব্যবহৃত
- */
-export const getAllPatients = fetchAllPatients;  // ✅ Alias যোগ করা হলো
+// Alias for Overview.jsx
+export const getAllPatients = (hospitalId) => fetchAllPatients(hospitalId);
 
 /**
  * নির্দিষ্ট পেশেন্টের বিস্তারিত
  */
 export const getPatientById = async (hospitalId, patientId) => {
   try {
+    if (!hospitalId || typeof hospitalId !== 'string') {
+      throw new Error('getPatientById: hospitalId অবশ্যই একটি স্ট্রিং হতে হবে।');
+    }
     const ref = doc(db, 'hospitals', hospitalId, 'patients', patientId);
     const snapshot = await getDoc(ref);
-    if (snapshot.exists()) {
-      return { id: snapshot.id, ...snapshot.data() };
-    }
+    if (snapshot.exists()) return { id: snapshot.id, ...snapshot.data() };
     return null;
   } catch (error) {
     console.error('❌ getPatientById error:', error);
@@ -161,20 +186,20 @@ export const getPatientById = async (hospitalId, patientId) => {
 };
 
 // ==========================================
-// ৩. রিয়েল-টাইম লিসেনার
+// ৪. রিয়েল-টাইম লিসেনার
 // ==========================================
 
 /**
  * সব পেশেন্টের রিয়েল-টাইম লিসেনার
  */
 export const subscribeToPatients = (hospitalId, callback, errorCallback) => {
-  if (!hospitalId) {
-    console.warn('⚠️ subscribeToPatients: hospitalId missing');
+  if (!hospitalId || typeof hospitalId !== 'string') {
+    console.warn('⚠️ subscribeToPatients: invalid hospitalId');
     return () => {};
   }
-
   try {
-    const q = query(getPatientsRef(hospitalId), orderBy('createdAt', 'desc'));
+    const ref = getPatientsRef(hospitalId);
+    const q = query(ref, orderBy('createdAt', 'desc'));
     return onSnapshot(
       q,
       (snapshot) => {
@@ -194,7 +219,7 @@ export const subscribeToPatients = (hospitalId, callback, errorCallback) => {
 };
 
 // ==========================================
-// ৪. এক্সট্রা ইউটিলিটি
+// ৫. ইউটিলিটি
 // ==========================================
 
 /**
@@ -202,7 +227,11 @@ export const subscribeToPatients = (hospitalId, callback, errorCallback) => {
  */
 export const getPatientCount = async (hospitalId) => {
   try {
-    const snapshot = await getDocs(getPatientsRef(hospitalId));
+    if (!hospitalId || typeof hospitalId !== 'string') {
+      throw new Error('getPatientCount: hospitalId অবশ্যই একটি স্ট্রিং হতে হবে।');
+    }
+    const ref = getPatientsRef(hospitalId);
+    const snapshot = await getDocs(ref);
     return snapshot.size;
   } catch (error) {
     console.error('❌ getPatientCount error:', error);
@@ -221,7 +250,7 @@ export default {
   updatePatient,
   deletePatient,
   fetchAllPatients,
-  getAllPatients,   // ✅ ডিফল্টেও যোগ করা হলো
+  getAllPatients,
   getPatientById,
   subscribeToPatients,
   getPatientCount,

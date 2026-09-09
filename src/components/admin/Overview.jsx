@@ -1,24 +1,24 @@
+// src/components/admin/Overview.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, PieChart, Pie, Cell, Legend, LabelList,
   LineChart, Line
 } from 'recharts';
-import { X, Users, MapPin, TrendingUp, Calendar, ChevronDown } from 'lucide-react';
+import { X, Users, MapPin, TrendingUp, Calendar, ChevronDown, XCircle } from 'lucide-react';
 import { getAllPatients } from '../../services/patientService';
 import { useHospital } from '../../context/HospitalContext';
 
 // ✅ কালার সাইকোলজি অনুযায়ী রং
 const STATUS_COLORS = {
-  pending: '#f59e0b',      // হলুদ – অপেক্ষা
-  confirmed: '#3b82f6',    // নীল – নিশ্চয়তা
-  'checked-in': '#8b5cf6', // বেগুনি – সক্রিয়
-  completed: '#22c55e',    // সবুজ – সাফল্য
-  cancelled: '#ef4444',    // লাল – বাতিল
-  'no-show': '#6b7280'     // ধূসর – অনুপস্থিত
+  pending: '#f59e0b',
+  confirmed: '#3b82f6',
+  'checked-in': '#8b5cf6',
+  completed: '#22c55e',
+  cancelled: '#ef4444',
+  'no-show': '#6b7280'
 };
 
-// পাই চার্টের জন্য রং অ্যারে (অর্ডার ঠিক রাখতে)
 const CHART_COLORS = [
   STATUS_COLORS.pending,
   STATUS_COLORS.confirmed,
@@ -205,7 +205,7 @@ export default function Overview({ appointments }) {
   const [drillPatients, setDrillPatients] = useState([]);
   const [trendDays, setTrendDays] = useState(7);
 
-  // হাসপাতাল-নির্দিষ্ট রোগী লোড
+  // রোগী ডেটা লোড
   useEffect(() => {
     const loadPatients = async () => {
       if (!hospitalId) {
@@ -225,23 +225,67 @@ export default function Overview({ appointments }) {
     loadPatients();
   }, [hospitalId]);
 
-  // ---------- লোকেশন ডেটা ----------
+  // ---------- রোগীর ক্যাটাগরি নির্ধারণ ----------
+  const categorizedCounts = useMemo(() => {
+    if (!appointments.length || !patients.length) {
+      return { new: 0, report: 0, followup: 0, total: appointments.length };
+    }
+
+    const patientMap = {};
+    patients.forEach(p => { patientMap[p.id] = p; });
+
+    let newCount = 0;
+    let reportCount = 0;
+    let followupCount = 0;
+
+    appointments.forEach(appt => {
+      const patientId = appt.patientId;
+      if (!patientId) return;
+      const patient = patientMap[patientId];
+      if (!patient) return;
+      const doctorName = appt.doctorName;
+      if (!doctorName) return;
+
+      const visits = patient.visits || [];
+      const doctorVisits = visits.filter(v => 
+        v.doctorName === doctorName && 
+        v.date && 
+        v.date < appt.bookingDate
+      );
+
+      if (doctorVisits.length === 0) {
+        newCount++;
+      } else {
+        const sorted = [...doctorVisits].sort((a, b) => new Date(b.date) - new Date(a.date));
+        const lastVisit = sorted[0];
+        const diffDays = Math.ceil(
+          Math.abs(new Date(lastVisit.date) - new Date(appt.bookingDate)) / (1000 * 60 * 60 * 24)
+        );
+        if (diffDays <= 7) {
+          reportCount++;
+        } else {
+          followupCount++;
+        }
+      }
+    });
+
+    return { new: newCount, report: reportCount, followup: followupCount, total: appointments.length };
+  }, [appointments, patients]);
+
+  // ---------- লোকেশন ডেটা (address ফিল্ড ব্যবহার) ----------
   const locationData = useMemo(() => {
     const map = {};
     appointments.forEach(appt => {
-      if (appt.locationId) {
-        const locName = appt.locationName || 'অজানা লোকেশন';
-        if (!map[appt.locationId]) {
-          map[appt.locationId] = { 
-            id: appt.locationId, 
-            name: locName, 
-            count: 0,
-            patients: []
-          };
-        }
-        map[appt.locationId].count += 1;
-        map[appt.locationId].patients.push(appt);
+      const locKey = appt.address || appt.locationName || appt.locationId || 'অজানা';
+      if (!map[locKey]) {
+        map[locKey] = { 
+          name: locKey, 
+          count: 0,
+          patients: []
+        };
       }
+      map[locKey].count += 1;
+      map[locKey].patients.push(appt);
     });
     return Object.values(map)
       .filter(loc => loc.count > 0)
@@ -271,7 +315,6 @@ export default function Overview({ appointments }) {
 
     const sortedDates = Array.from(dateSet).sort();
     const banglaDays = ['রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহঃ', 'শুক্র', 'শনি'];
-    const activeLocationIds = locationData.map(l => l.id);
     const result = [];
 
     sortedDates.forEach(dateStr => {
@@ -284,7 +327,8 @@ export default function Overview({ appointments }) {
       locationData.forEach(loc => {
         const count = appointments.filter(a => {
           const apptDate = a.bookingDate ? a.bookingDate.split('T')[0] : '';
-          return a.locationId === loc.id && apptDate === dateStr;
+          const locKey = a.address || a.locationName || a.locationId || 'অজানা';
+          return locKey === loc.name && apptDate === dateStr;
         }).length;
         dayData[loc.name] = count;
         totalCount += count;
@@ -298,7 +342,9 @@ export default function Overview({ appointments }) {
   }, [appointments, locationData, trendDays]);
 
   // ---------- বাকি ডেটা প্রসেসিং ----------
-  const total = appointments.length;
+  const total = appointments.length; // মোট অ্যাপয়েন্টমেন্ট
+
+  // স্ট্যাটাস কাউন্ট
   const pending = appointments.filter(a => a.status === 'pending').length;
   const confirmed = appointments.filter(a => a.status === 'confirmed').length;
   const checkedIn = appointments.filter(a => a.status === 'checked-in').length;
@@ -311,19 +357,17 @@ export default function Overview({ appointments }) {
   const noShowRate = total > 0 ? (noShow / total) * 100 : 0;
   const cancellationRate = total > 0 ? (cancelled / total) * 100 : 0;
 
-  const totalPatients = patients.length;
-  const newPatients = patients.filter(p => p.totalVisits === 1).length;
-  const repeatPatients = patients.filter(p => p.totalVisits > 1).length;
-  const repeatRate = totalPatients > 0 ? (repeatPatients / totalPatients) * 100 : 0;
-
+  // ডাক্তার ডেটা
   const doctorCounts = {};
   appointments.forEach(a => { doctorCounts[a.doctorName] = (doctorCounts[a.doctorName] || 0) + 1; });
   const doctorData = Object.entries(doctorCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
 
+  // বিভাগ ডেটা
   const departmentCounts = {};
   appointments.forEach(a => { departmentCounts[a.doctorDept || 'Unknown'] = (departmentCounts[a.doctorDept || 'Unknown'] || 0) + 1; });
   const departmentData = Object.entries(departmentCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
 
+  // বয়স পরিসীমা
   const ageGroups = { '০-১২': 0, '১৩-২০': 0, '২১-৩০': 0, '৩১-৪০': 0, '৪১-৫০': 0, '৫০+': 0 };
   appointments.forEach(a => {
     if (a.age) {
@@ -338,6 +382,7 @@ export default function Overview({ appointments }) {
   });
   const ageData = Object.entries(ageGroups).map(([name, count]) => ({ name, count }));
 
+  // রেফারেল সোর্স
   const referralCounts = {};
   appointments.forEach(a => { const src = a.referralSource || 'Unknown'; referralCounts[src] = (referralCounts[src] || 0) + 1; });
   const referralData = Object.entries(referralCounts).map(([name, value]) => ({ name, value }));
@@ -351,7 +396,7 @@ export default function Overview({ appointments }) {
     }
   };
 
-  // ✅ স্ট্যাটাস ডেটা – অর্ডার ঠিক রাখা (পাই চার্টের রং ম্যাপিংয়ের জন্য)
+  // ✅ স্ট্যাটাস ডেটা
   const statusData = [
     { name: 'Pending', value: pending },
     { name: 'Confirmed', value: confirmed },
@@ -397,7 +442,6 @@ export default function Overview({ appointments }) {
   const renderLegend = (value, entry) => {
     const totalValue = entry.payload.value;
     const percentage = total > 0 ? ((totalValue / total) * 100).toFixed(0) : 0;
-    // ✅ রং দিয়ে ডট দেখানো
     const color = entry.payload.fill || STATUS_COLORS[entry.payload.name?.toLowerCase()] || '#64748b';
     return (
       <span style={{ color: '#475569', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -407,6 +451,7 @@ export default function Overview({ appointments }) {
     );
   };
 
+  // ✅ KPI - সঠিক ক্যাটাগরি ব্যবহার
   const kpis = [
     { label: 'Total Bookings', value: total, color: '#1c5fa8', bg: 'rgba(28, 95, 168, 0.1)' },
     { label: 'Pending', value: pending, color: STATUS_COLORS.pending, bg: 'rgba(245, 158, 11, 0.1)' },
@@ -415,10 +460,18 @@ export default function Overview({ appointments }) {
     { label: 'Completed', value: completed, color: STATUS_COLORS.completed, bg: 'rgba(34, 197, 94, 0.1)' },
     { label: 'Cancelled', value: cancelled, color: STATUS_COLORS.cancelled, bg: 'rgba(239, 68, 68, 0.1)' },
     { label: 'No-show', value: noShow, color: STATUS_COLORS['no-show'], bg: 'rgba(107, 114, 128, 0.1)' },
-    { label: 'মোট রোগী', value: totalPatients, color: '#1c5fa8', bg: 'rgba(28, 95, 168, 0.1)' },
-    { label: 'নতুন রোগী', value: newPatients, color: '#22c55e', bg: 'rgba(34, 197, 94, 0.1)' },
-    { label: 'ফলোআপ রোগী', value: repeatPatients, color: '#d97706', bg: 'rgba(217, 119, 6, 0.1)' },
-    { label: 'রিপিট রেট', value: repeatRate.toFixed(1) + '%', color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.1)' }
+    // ✅ নতুন ক্যাটাগরি
+    { label: 'নতুন রোগী', value: categorizedCounts.new, color: '#22c55e', bg: 'rgba(34, 197, 94, 0.1)' },
+    { label: 'রিপোর্ট (৭ দিন)', value: categorizedCounts.report, color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' },
+    { label: 'ফলোআপ (>৭ দিন)', value: categorizedCounts.followup, color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.1)' },
+    { 
+      label: 'রিপিট রেট', 
+      value: total > 0 
+        ? (((categorizedCounts.report + categorizedCounts.followup) / total) * 100).toFixed(1) + '%' 
+        : '0%', 
+      color: '#8b5cf6', 
+      bg: 'rgba(139, 92, 246, 0.1)' 
+    }
   ];
 
   const conversions = [
@@ -549,7 +602,7 @@ export default function Overview({ appointments }) {
       <div style={styles.chartCard}>
         <h4 style={styles.chartTitle}>
           <TrendingUp size={18} color="#1c5fa8" />
-          লোকেশন ট্রেন্ড অ্যানালাইসিস
+          লোকেশন ট্রেন্ড অ্যানালাইসিস (গত {trendDays} দিন)
         </h4>
         <div className="location-trend-selector">
           <button className={trendDays === 7 ? 'active' : ''} onClick={() => setTrendDays(7)}>
@@ -568,15 +621,15 @@ export default function Overview({ appointments }) {
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={trendData}>
+            <LineChart data={trendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+              <XAxis dataKey="name" tick={{ fontSize: 12 }} interval={0} />
               <YAxis tick={{ fontSize: 12 }} />
               <Tooltip />
-              <Legend />
+              <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '12px' }} />
               {locationData.slice(0, 5).map((loc, idx) => (
                 <Line 
-                  key={loc.id} 
+                  key={idx} 
                   type="monotone" 
                   dataKey={loc.name} 
                   stroke={OTHER_COLORS[idx % OTHER_COLORS.length]} 

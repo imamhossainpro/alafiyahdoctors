@@ -1,7 +1,8 @@
+// src/components/admin/LocationManager.jsx
 import React, { useState, useEffect } from 'react';
 import { 
   MapPin, Edit2, Trash2, Merge, Search, RefreshCw, 
-  AlertCircle, CheckCircle, X, Loader2, Move 
+  AlertCircle, CheckCircle, X, Loader2, Move, Calculator
 } from 'lucide-react';
 import { useHospital } from '../../context/HospitalContext';
 import { 
@@ -15,6 +16,8 @@ import {
 import LocationEditModal from './LocationEditModal';
 import LocationMergeModal from './LocationMergeModal';
 import PatientMoveModal from './PatientMoveModal';
+import { db } from '../../firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 const LocationManager = ({ appointments, user }) => {
   const { currentHospital } = useHospital();
@@ -32,6 +35,7 @@ const LocationManager = ({ appointments, user }) => {
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [recalculating, setRecalculating] = useState(false);
 
   const isAdmin = user?.role === 'admin';
 
@@ -45,11 +49,15 @@ const LocationManager = ({ appointments, user }) => {
       setLoading(true);
       try {
         const locs = await getAllLocations(hospitalId);
-        console.log('📋 লোকেশন লোড:', locs);
-        setLocations(locs);
+        const safeLocs = (locs || []).map(loc => ({
+          ...loc,
+          patientCount: typeof loc.patientCount === 'number' ? loc.patientCount : 0,
+        }));
+        setLocations(safeLocs);
       } catch (error) {
         console.error('❌ লোকেশন লোড এরর:', error);
         showMessage('error', 'লোকেশন লোড করতে সমস্যা হয়েছে');
+        setLocations([]);
       } finally {
         setLoading(false);
       }
@@ -57,15 +65,109 @@ const LocationManager = ({ appointments, user }) => {
     loadLocations();
   }, [hospitalId, refreshKey]);
 
-  // ডুপ্লিকেট খোঁজ
+  // 🔥 প্রকৃত রোগী কাউন্ট চেক (একটি লোকেশনের জন্য)
+  const getActualPatientCount = async (locationId, locationName) => {
+    try {
+      // ধরে নিচ্ছি রোগীদের ডকুমেন্টে `locationId` বা `location` ফিল্ড আছে
+      // প্রথমে locationId দিয়ে চেক করুন
+      let q = query(
+        collection(db, 'hospitals', hospitalId, 'patients'),
+        where('locationId', '==', locationId)
+      );
+      let snapshot = await getDocs(q);
+      if (snapshot.size > 0) return snapshot.size;
+
+      // যদি না পায়, তাহলে location নাম দিয়ে চেক করুন
+      q = query(
+        collection(db, 'hospitals', hospitalId, 'patients'),
+        where('location', '==', locationName)
+      );
+      snapshot = await getDocs(q);
+      return snapshot.size;
+    } catch (error) {
+      console.error('❌ রোগী কাউন্ট চেক error:', error);
+      return -1; // error নির্দেশ করে
+    }
+  };
+
+  const handleDelete = async (id) => {
+  if (!hospitalId) return;
+  const loc = (locations || []).find(l => l.id === id);
+  if (!loc) {
+    showMessage('error', 'লোকেশন খুঁজে পাওয়া যায়নি!');
+    return;
+  }
+
+  // ✅ প্রকৃত রোগী সংখ্যা যাচাই করুন (UI-তে চেক)
+  const actualCount = await getActualPatientCount(loc.id, loc.name);
+  if (actualCount === -1) {
+    showMessage('error', 'রোগী কাউন্ট চেক করতে সমস্যা হয়েছে, আবার চেষ্টা করুন।');
+    return;
+  }
+  if (actualCount > 0) {
+    showMessage('error', `এই লোকেশনে ${actualCount} জন রোগী আছে, আগে রোগী মুভ করুন!`);
+    return;
+  }
+
+  if (!confirm(`"${loc.name}" লোকেশনটি ডিলিট করতে চান? এটি স্থায়ীভাবে মুছে যাবে।`)) return;
+  try {
+    // ✅ force: true পাস করুন – কারণ UI-তে চেক করে নেওয়া হয়েছে
+    await deleteLocation(hospitalId, id, true);
+    showMessage('success', `"${loc.name}" ডিলিট করা হয়েছে!`);
+    setRefreshKey(prev => prev + 1);
+  } catch (error) {
+    console.error('❌ ডিলিট error:', error);
+    showMessage('error', 'ডিলিট করতে সমস্যা হয়েছে: ' + error.message);
+  }
+};
+
+  // 🔥 সব লোকেশনের কাউন্ট রিক্যালকুলেট
+  const handleRecalculateCounts = async () => {
+    if (!hospitalId) return;
+    if (!confirm('সব লোকেশনের রোগী সংখ্যা পুনঃগণনা করতে চান? এটি বিদ্যমান কাউন্ট আপডেট করবে।')) return;
+    setRecalculating(true);
+    try {
+      const result = await recalculateAllCounts(hospitalId);
+      if (result && result.success) {
+        showMessage('success', 'সব লোকেশনের কাউন্ট আপডেট করা হয়েছে!');
+        setRefreshKey(prev => prev + 1);
+      } else {
+        showMessage('error', 'কাউন্ট রিক্যালকুলেট ব্যর্থ হয়েছে!');
+      }
+    } catch (error) {
+      console.error('❌ রিক্যালকুলেট error:', error);
+      showMessage('error', 'রিক্যালকুলেট করতে সমস্যা হয়েছে: ' + error.message);
+    } finally {
+      setRecalculating(false);
+    }
+  };
+
+  // অন্যান্য ফাংশন (এডিট, মার্জ, মুভ) আগের মতোই থাকবে
+  // ...
+
+  const handleEdit = (location) => {
+    setSelectedLocation(location);
+    setShowEditModal(true);
+  };
+
+  const handleOpenMoveModal = (location) => {
+    setSelectedLocation(location);
+    setShowMoveModal(true);
+  };
+
+  const handleMoveSuccess = async () => {
+    setRefreshKey(prev => prev + 1);
+    showMessage('success', 'রোগী স্থানান্তরিত হয়েছে!');
+  };
+
   const handleFindDuplicates = async () => {
     if (!hospitalId) return;
     setLoading(true);
     try {
       const dupes = await detectDuplicateLocations(hospitalId);
-      setDuplicates(dupes);
+      setDuplicates(dupes || []);
       setShowDuplicates(true);
-      if (dupes.length === 0) {
+      if (!dupes || dupes.length === 0) {
         showMessage('success', 'কোনো ডুপ্লিকেট লোকেশন পাওয়া যায়নি!');
       } else {
         showMessage('info', `${dupes.length} টি ডুপ্লিকেট গ্রুপ পাওয়া গেছে।`);
@@ -78,7 +180,6 @@ const LocationManager = ({ appointments, user }) => {
     }
   };
 
-  // সরাসরি মার্জ
   const handleDirectMerge = async (master, slaves) => {
     if (!hospitalId) return;
     if (!master || !master.id) {
@@ -122,47 +223,14 @@ const LocationManager = ({ appointments, user }) => {
     setDuplicates([]);
   };
 
-  const handleOpenMoveModal = (location) => {
-    setSelectedLocation(location);
-    setShowMoveModal(true);
-  };
-
-  const handleMoveSuccess = async () => {
-    setRefreshKey(prev => prev + 1);
-    showMessage('success', 'রোগী স্থানান্তরিত হয়েছে!');
-  };
-
   const showMessage = (type, text) => {
     setMessage({ type, text });
     setTimeout(() => setMessage({ type: '', text: '' }), 5000);
   };
 
-  const filteredLocations = locations.filter(loc =>
-    loc.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredLocations = (locations || []).filter(loc =>
+    loc.name && loc.name.toLowerCase().includes((searchTerm || '').toLowerCase())
   );
-
-  const handleDelete = async (id) => {
-    if (!hospitalId) return;
-    const loc = locations.find(l => l.id === id);
-    if (!loc) return;
-    if (loc.patientCount > 0) {
-      showMessage('error', 'এই লোকেশনে রোগী আছে, আগে রোগী মুভ করুন!');
-      return;
-    }
-    if (!confirm(`"${loc.name}" লোকেশনটি ডিলিট করতে চান?`)) return;
-    try {
-      await deleteLocation(hospitalId, id);
-      showMessage('success', `"${loc.name}" ডিলিট করা হয়েছে!`);
-      setRefreshKey(prev => prev + 1);
-    } catch (error) {
-      showMessage('error', 'ডিলিট করতে সমস্যা হয়েছে: ' + error.message);
-    }
-  };
-
-  const handleEdit = (location) => {
-    setSelectedLocation(location);
-    setShowEditModal(true);
-  };
 
   if (!isAdmin) {
     return (
@@ -189,11 +257,31 @@ const LocationManager = ({ appointments, user }) => {
             <MapPin size={20} color="#1c5fa8" /> 📍 লোকেশন ম্যানেজার
           </h3>
           <p style={{ margin: '5px 0 0 0', fontSize: '13px', color: '#64748b' }}>
-            মোট {locations.length} টি লোকেশন · {locations.reduce((sum, l) => sum + l.patientCount, 0)} জন রোগী
+            মোট {locations.length} টি লোকেশন · {locations.reduce((sum, l) => sum + (l.patientCount || 0), 0)} জন রোগী
           </p>
         </div>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          {/* ✅ মাইগ্রেশন বাটন সরানো হয়েছে */}
+          {/* ✅ রিক্যালকুলেট বাটন */}
+          <button 
+            onClick={handleRecalculateCounts}
+            disabled={recalculating || loading}
+            style={{
+              padding: '8px 16px',
+              background: '#0d9488',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: (recalculating || loading) ? 'not-allowed' : 'pointer',
+              fontSize: '13px',
+              fontWeight: '600',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              opacity: (recalculating || loading) ? 0.6 : 1
+            }}
+          >
+            <Calculator size={16} /> {recalculating ? 'গণনা হচ্ছে...' : 'কাউন্ট রিক্যালকুলেট'}
+          </button>
 
           <button 
             onClick={handleFindDuplicates}
@@ -267,7 +355,7 @@ const LocationManager = ({ appointments, user }) => {
           alignItems: 'center',
           gap: '8px'
         }}>
-          {message.type === 'success' ? <CheckCircle size={16} /> : message.type === 'info' ? <AlertCircle size={16} /> : <AlertCircle size={16} />}
+          {message.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
           {message.text}
         </div>
       )}
@@ -368,7 +456,7 @@ const LocationManager = ({ appointments, user }) => {
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: '40px' }}>
-          <Loader2 className="spin" size={24} color="#64748b" />
+          <Loader2 className="spin" size={24} color="#64748b" style={{ animation: 'spin 1s linear infinite' }} />
           <p style={{ color: '#64748b', marginTop: '10px' }}>লোড হচ্ছে...</p>
         </div>
       ) : (
@@ -393,72 +481,75 @@ const LocationManager = ({ appointments, user }) => {
                   ) : 'কোনো লোকেশন পাওয়া যায়নি'}
                 </td></tr>
               ) : (
-                filteredLocations.map(loc => (
-                  <tr key={loc.id} style={{ borderBottom: '1px solid #eee' }}>
-                    <td style={{ padding: '12px', fontWeight: '600' }}>{loc.name}</td>
-                    <td style={{ padding: '12px', textAlign: 'center' }}>
-                      <span style={{
-                        background: loc.patientCount > 0 ? '#dbeafe' : '#f1f5f9',
-                        color: loc.patientCount > 0 ? '#1e40af' : '#64748b',
-                        padding: '2px 10px',
-                        borderRadius: '20px',
-                        fontSize: '13px',
-                        fontWeight: '600'
-                      }}>
-                        {loc.patientCount}
-                      </span>
-                    </td>
-                    <td style={{ padding: '12px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
-                      {loc.updatedAt ? new Date(loc.updatedAt).toLocaleDateString('bn-BD') : '-'}
-                    </td>
-                    <td style={{ padding: '12px', textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
-                        <button
-                          onClick={() => handleEdit(loc)}
-                          title="এডিট"
-                          style={{
-                            background: '#dbeafe',
-                            color: '#1e40af',
-                            border: 'none',
-                            borderRadius: '4px',
-                            padding: '4px 8px',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleOpenMoveModal(loc)}
-                          title="রোগী মুভ"
-                          style={{
-                            background: '#fef3c7',
-                            color: '#92400e',
-                            border: 'none',
-                            borderRadius: '4px',
-                            padding: '4px 8px',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          <Move size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(loc.id)}
-                          title="ডিলিট"
-                          style={{
-                            background: '#fee2e2',
-                            color: '#dc2626',
-                            border: 'none',
-                            borderRadius: '4px',
-                            padding: '4px 8px',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                filteredLocations.map(loc => {
+                  const patientCount = loc.patientCount || 0;
+                  return (
+                    <tr key={loc.id} style={{ borderBottom: '1px solid #eee' }}>
+                      <td style={{ padding: '12px', fontWeight: '600' }}>{loc.name || '(নাম নেই)'}</td>
+                      <td style={{ padding: '12px', textAlign: 'center' }}>
+                        <span style={{
+                          background: patientCount > 0 ? '#dbeafe' : '#f1f5f9',
+                          color: patientCount > 0 ? '#1e40af' : '#64748b',
+                          padding: '2px 10px',
+                          borderRadius: '20px',
+                          fontSize: '13px',
+                          fontWeight: '600'
+                        }}>
+                          {patientCount}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
+                        {loc.updatedAt ? new Date(loc.updatedAt).toLocaleDateString('bn-BD') : '-'}
+                      </td>
+                      <td style={{ padding: '12px', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                          <button
+                            onClick={() => handleEdit(loc)}
+                            title="এডিট"
+                            style={{
+                              background: '#dbeafe',
+                              color: '#1e40af',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '4px 8px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleOpenMoveModal(loc)}
+                            title="রোগী মুভ"
+                            style={{
+                              background: '#fef3c7',
+                              color: '#92400e',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '4px 8px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <Move size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(loc.id)}
+                            title="ডিলিট"
+                            style={{
+                              background: '#fee2e2',
+                              color: '#dc2626',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '4px 8px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

@@ -28,12 +28,9 @@ const getArchivedDocRef = (hospitalId, archivedId) => doc(db, 'hospitals', hospi
 const getAuditLogsRef = (hospitalId) => collection(db, 'hospitals', hospitalId, 'audit_logs');
 
 // ==========================================
-// ১. অ্যাপয়েন্টমেন্ট ক্রিয়েট / আপডেট / স্ট্যাটাস আপডেট / ডিলিট / আর্কাইভ / রিস্টোর
+// ১. অ্যাপয়েন্টমেন্ট ক্রিয়েট / আপডেট / ডিলিট / আর্কাইভ / রিস্টোর
 // ==========================================
 
-/**
- * নতুন অ্যাপয়েন্টমেন্ট তৈরি করুন
- */
 export const createAppointment = async (hospitalId, data) => {
   try {
     if (!hospitalId) throw new Error('Hospital ID is required');
@@ -57,9 +54,6 @@ export const createAppointment = async (hospitalId, data) => {
   }
 };
 
-/**
- * অ্যাপয়েন্টমেন্ট আপডেট করুন
- */
 export const updateAppointment = async (hospitalId, appointmentId, data) => {
   try {
     if (!hospitalId || !appointmentId) throw new Error('Hospital ID and Appointment ID are required');
@@ -80,9 +74,95 @@ export const updateAppointment = async (hospitalId, appointmentId, data) => {
   }
 };
 
-/**
- * অ্যাপয়েন্টমেন্টের স্ট্যাটাস আপডেট করুন (updateAppointmentStatus) – AppointmentsTable-এ ব্যবহৃত
- */
+export const deleteAppointment = async (hospitalId, appointmentId) => {
+  try {
+    const ref = getAppointmentDocRef(hospitalId, appointmentId);
+    await deleteDoc(ref);
+    await addAuditLog(hospitalId, {
+      action: 'appointment_deleted',
+      message: `অ্যাপয়েন্টমেন্ট ডিলিট: ${appointmentId}`,
+      appointmentId,
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('❌ deleteAppointment error:', error);
+    throw error;
+  }
+};
+
+export const archiveAppointment = async (hospitalId, appointmentId) => {
+  try {
+    if (!hospitalId || !appointmentId) throw new Error('Hospital ID and Appointment ID are required');
+    const sourceRef = getAppointmentDocRef(hospitalId, appointmentId);
+    const docSnap = await getDoc(sourceRef);
+    if (!docSnap.exists()) throw new Error('Appointment not found');
+    const data = docSnap.data();
+    const archivedRef = getArchivedRef(hospitalId);
+    await addDoc(archivedRef, {
+      ...data,
+      archivedAt: Timestamp.now(),
+      originalId: appointmentId,
+    });
+    await deleteDoc(sourceRef);
+    await addAuditLog(hospitalId, {
+      action: 'appointment_archived',
+      message: `অ্যাপয়েন্টমেন্ট আর্কাইভ: ${appointmentId}`,
+      appointmentId,
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('❌ archiveAppointment error:', error);
+    throw error;
+  }
+};
+
+export const restoreAppointment = async (hospitalId, archivedId) => {
+  try {
+    if (!hospitalId || !archivedId) throw new Error('Hospital ID and Archived ID are required');
+    const archivedRef = getArchivedDocRef(hospitalId, archivedId);
+    const archivedSnap = await getDoc(archivedRef);
+    if (!archivedSnap.exists()) throw new Error('Archived appointment not found');
+    const data = archivedSnap.data();
+    const appointmentsRef = getAppointmentsRef(hospitalId);
+    await addDoc(appointmentsRef, {
+      ...data,
+      restoredAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+    await deleteDoc(archivedRef);
+    await addAuditLog(hospitalId, {
+      action: 'appointment_restored',
+      message: `অ্যাপয়েন্টমেন্ট পুনরুদ্ধার: ${archivedId}`,
+      archivedId,
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('❌ restoreAppointment error:', error);
+    throw error;
+  }
+};
+
+export const cancelAppointment = async (hospitalId, appointmentId, reason = '') => {
+  try {
+    const ref = getAppointmentDocRef(hospitalId, appointmentId);
+    await updateDoc(ref, {
+      status: 'cancelled',
+      cancellationReason: reason,
+      updatedAt: Timestamp.now(),
+    });
+    await addAuditLog(hospitalId, {
+      action: 'appointment_cancelled',
+      message: `অ্যাপয়েন্টমেন্ট বাতিল: ${appointmentId}`,
+      appointmentId,
+      reason,
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('❌ cancelAppointment error:', error);
+    throw error;
+  }
+};
+
 export const updateAppointmentStatus = async (hospitalId, appointmentId, status, note = '') => {
   try {
     if (!hospitalId || !appointmentId) throw new Error('Hospital ID and Appointment ID are required');
@@ -106,120 +186,7 @@ export const updateAppointmentStatus = async (hospitalId, appointmentId, status,
   }
 };
 
-/**
- * অ্যাপয়েন্টমেন্ট ডিলিট করুন (স্থায়ীভাবে)
- */
-export const deleteAppointment = async (hospitalId, appointmentId) => {
-  try {
-    const ref = getAppointmentDocRef(hospitalId, appointmentId);
-    await deleteDoc(ref);
-    await addAuditLog(hospitalId, {
-      action: 'appointment_deleted',
-      message: `অ্যাপয়েন্টমেন্ট ডিলিট: ${appointmentId}`,
-      appointmentId,
-    });
-    return { success: true };
-  } catch (error) {
-    console.error('❌ deleteAppointment error:', error);
-    throw error;
-  }
-};
-
-/**
- * অ্যাপয়েন্টমেন্ট আর্কাইভ করুন (archiveAppointment)
- */
-export const archiveAppointment = async (hospitalId, appointmentId) => {
-  try {
-    if (!hospitalId || !appointmentId) throw new Error('Hospital ID and Appointment ID are required');
-    
-    const sourceRef = getAppointmentDocRef(hospitalId, appointmentId);
-    const docSnap = await getDoc(sourceRef);
-    if (!docSnap.exists()) throw new Error('Appointment not found');
-    const data = docSnap.data();
-    
-    const archivedRef = getArchivedRef(hospitalId);
-    await addDoc(archivedRef, {
-      ...data,
-      archivedAt: Timestamp.now(),
-      originalId: appointmentId,
-    });
-    
-    await deleteDoc(sourceRef);
-    
-    await addAuditLog(hospitalId, {
-      action: 'appointment_archived',
-      message: `অ্যাপয়েন্টমেন্ট আর্কাইভ: ${appointmentId}`,
-      appointmentId,
-    });
-    
-    return { success: true };
-  } catch (error) {
-    console.error('❌ archiveAppointment error:', error);
-    throw error;
-  }
-};
-
-/**
- * আর্কাইভ থেকে অ্যাপয়েন্টমেন্ট পুনরুদ্ধার করুন (restoreAppointment)
- */
-export const restoreAppointment = async (hospitalId, archivedId) => {
-  try {
-    if (!hospitalId || !archivedId) throw new Error('Hospital ID and Archived ID are required');
-    
-    const archivedRef = getArchivedDocRef(hospitalId, archivedId);
-    const archivedSnap = await getDoc(archivedRef);
-    if (!archivedSnap.exists()) throw new Error('Archived appointment not found');
-    const data = archivedSnap.data();
-    
-    const appointmentsRef = getAppointmentsRef(hospitalId);
-    await addDoc(appointmentsRef, {
-      ...data,
-      restoredAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
-    });
-    
-    await deleteDoc(archivedRef);
-    
-    await addAuditLog(hospitalId, {
-      action: 'appointment_restored',
-      message: `অ্যাপয়েন্টমেন্ট পুনরুদ্ধার: ${archivedId}`,
-      archivedId,
-    });
-    
-    return { success: true };
-  } catch (error) {
-    console.error('❌ restoreAppointment error:', error);
-    throw error;
-  }
-};
-
-/**
- * অ্যাপয়েন্টমেন্ট বাতিল করুন (status change)
- */
-export const cancelAppointment = async (hospitalId, appointmentId, reason = '') => {
-  try {
-    const ref = getAppointmentDocRef(hospitalId, appointmentId);
-    await updateDoc(ref, {
-      status: 'cancelled',
-      cancellationReason: reason,
-      updatedAt: Timestamp.now(),
-    });
-    await addAuditLog(hospitalId, {
-      action: 'appointment_cancelled',
-      message: `অ্যাপয়েন্টমেন্ট বাতিল: ${appointmentId}`,
-      appointmentId,
-      reason,
-    });
-    return { success: true };
-  } catch (error) {
-    console.error('❌ cancelAppointment error:', error);
-    throw error;
-  }
-};
-
-// ==========================================
-// ২. অডিট লগ (addAuditLog)
-// ==========================================
+// ===== ২. অডিট লগ =====
 
 export const addAuditLog = async (hospitalId, logData) => {
   try {
@@ -235,20 +202,14 @@ export const addAuditLog = async (hospitalId, logData) => {
   }
 };
 
-// ==========================================
-// ৩. ডেটা ফেচ (One-time)
-// ==========================================
+// ===== ৩. ডেটা ফেচ (একবার) =====
 
 export const getAppointments = async (hospitalId, filters = {}) => {
   try {
     if (!hospitalId) return [];
     let q = query(getAppointmentsRef(hospitalId));
-    if (filters.status) {
-      q = query(q, where('status', '==', filters.status));
-    }
-    if (filters.doctorId) {
-      q = query(q, where('doctorId', '==', filters.doctorId));
-    }
+    if (filters.status) q = query(q, where('status', '==', filters.status));
+    if (filters.doctorId) q = query(q, where('doctorId', '==', filters.doctorId));
     if (filters.date) {
       const start = new Date(filters.date);
       start.setHours(0, 0, 0, 0);
@@ -297,18 +258,24 @@ export const getArchivedAppointments = async (hospitalId) => {
   }
 };
 
-// ==========================================
-// ৪. রিয়েল-টাইম লিসেনার
-// ==========================================
+// ===== ৪. রিয়েল-টাইম লিসেনার (সবচেয়ে গুরুত্বপূর্ণ) =====
 
 export const subscribeToAppointments = (hospitalId, callback, errorCallback) => {
-  if (!hospitalId) return () => {};
+  if (!hospitalId) {
+    console.warn('⚠️ subscribeToAppointments: hospitalId missing');
+    return () => {};
+  }
   try {
-    const q = query(getAppointmentsRef(hospitalId), orderBy('createdAt', 'desc'));
+    // ✅ সঠিক পাথ: hospitals/{hospitalId}/appointments
+    const ref = getAppointmentsRef(hospitalId);
+    // createdAt ফিল্ডে অর্ডার করুন (যদি না থাকে, তাহলে timestamp ব্যবহার করুন)
+    const q = query(ref, orderBy('createdAt', 'desc'));
+    console.log('🔍 Subscribing to appointments at:', ref.path);
     return onSnapshot(
       q,
       (snapshot) => {
         const appointments = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        console.log(`📊 Appointments from snapshot: ${appointments.length} টি`);
         if (callback) callback(appointments);
       },
       (error) => {
@@ -367,16 +334,10 @@ export const subscribeToArchivedAppointments = (hospitalId, callback, errorCallb
   }
 };
 
-// ==========================================
-// ৫. ইউটিলিটি
-// ==========================================
-
 export const getAppointmentCount = async (hospitalId, status = null) => {
   try {
     let q = query(getAppointmentsRef(hospitalId));
-    if (status) {
-      q = query(q, where('status', '==', status));
-    }
+    if (status) q = query(q, where('status', '==', status));
     const snapshot = await getDocs(q);
     return snapshot.size;
   } catch (error) {
@@ -384,10 +345,6 @@ export const getAppointmentCount = async (hospitalId, status = null) => {
     return 0;
   }
 };
-
-// ==========================================
-// ডিফল্ট এক্সপোর্ট
-// ==========================================
 
 export default {
   createAppointment,

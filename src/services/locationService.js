@@ -111,14 +111,16 @@ export const updateLocation = async (hospitalId, id, newName) => {
   }
 };
 
-// ---------- লোকেশন ডিলিট ----------
-export const deleteLocation = async (hospitalId, id) => {
+// ---------- লোকেশন ডিলিট (force প্যারামিটার সহ) ----------
+export const deleteLocation = async (hospitalId, id, force = false) => {
   if (!hospitalId || !id) return;
   try {
     const docRef = doc(db, 'hospitals', hospitalId, 'locations', id);
     const docSnap = await getDoc(docRef);
     if (!docSnap.exists()) throw new Error('Location not found');
-    if (docSnap.data().patientCount > 0) {
+    
+    // force = false হলে রোগী চেক করবে, true দিলে UI-তে চেক করা হয়েছে ধরে ডিলিট করবে
+    if (!force && docSnap.data().patientCount > 0) {
       throw new Error('Location has patients, cannot delete');
     }
     await deleteDoc(docRef);

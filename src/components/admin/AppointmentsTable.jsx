@@ -1,19 +1,14 @@
+// src/components/admin/AppointmentsTable.jsx
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   CheckCircle, XCircle, UserCheck, Archive, Trash2, Clock, 
   Stethoscope, LayoutList, Undo2, Eye, Search, Edit2, Save, X, 
   ArrowUpDown, Printer, XCircle as XCircleIcon, QrCode
 } from 'lucide-react';
-import { db, doc, updateDoc } from '../../firebase';
+import { db,  doc, getDoc, updateDoc } from '../../firebase';
 import { useHospital } from '../../context/HospitalContext';
-import { getPatientById, getAllPatients } from '../../services/patientService';
-import { 
-  updateAppointmentStatus, 
-  archiveAppointment, 
-  restoreAppointment, 
-  deleteAppointment,
-  addAuditLog 
-} from '../../services/appointmentService';
+import { getAllPatients } from '../../services/patientService';
+import { updateAppointmentStatus, addAuditLog } from '../../services/appointmentService';
 
 const StatusBadge = ({ status }) => {
   const styles = {
@@ -40,7 +35,9 @@ const validTransitions = {
 };
 
 const ActionButton = ({ onClick, title, bg, icon }) => (
-  <button onClick={onClick} title={title} style={{ background: bg, color: '#fff', border: 'none', borderRadius: '5px', padding: '5px 8px', cursor: 'pointer', marginRight: '4px' }}>{icon}</button>
+  <button onClick={onClick} title={title} style={{ background: bg, color: '#fff', border: 'none', borderRadius: '5px', padding: '5px 8px', cursor: 'pointer', marginRight: '4px' }}>
+    {icon}
+  </button>
 );
 
 const REFERRAL_SOURCES = [
@@ -116,8 +113,8 @@ export default function AppointmentsTable({
     }
     
     filtered = [...filtered].sort((a, b) => {
-      const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-      const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+      const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : a.timestamp ? new Date(a.timestamp).getTime() : 0;
+      const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : b.timestamp ? new Date(b.timestamp).getTime() : 0;
       return sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
     });
     
@@ -126,37 +123,41 @@ export default function AppointmentsTable({
 
   useEffect(() => {
     const loadPatientTypes = async () => {
-      const allPatients = await getAllPatients();
-      const patientMap = {};
-      allPatients.forEach(p => { patientMap[p.id] = p; });
+      if (!hospitalId) return;
+      try {
+        const allPatients = await getAllPatients(hospitalId);
+        const patientMap = {};
+        allPatients.forEach(p => { patientMap[p.id] = p; });
 
-      const types = {};
-      for (const appt of filteredAppointments) {
-        if (appt.patientId && !types[appt.id]) {
-          const patient = patientMap[appt.patientId];
-          if (patient) {
-            const visits = patient.visits || [];
-            const doctorVisits = visits.filter(v => v.doctorName === appt.doctorName && v.date < appt.bookingDate);
-            if (doctorVisits.length === 0) types[appt.id] = 'নতুন';
-            else {
-              const sorted = [...doctorVisits].sort((a, b) => new Date(b.date) - new Date(a.date));
-              const last = sorted[0];
-              const diffDays = Math.ceil(Math.abs(new Date(last.date) - new Date(appt.bookingDate)) / (1000 * 60 * 60 * 24));
-              types[appt.id] = diffDays <= 7 ? 'রিপোর্ট' : 'ফলোআপ';
+        const types = {};
+        for (const appt of filteredAppointments) {
+          if (appt.patientId && !types[appt.id]) {
+            const patient = patientMap[appt.patientId];
+            if (patient) {
+              const visits = patient.visits || [];
+              const doctorVisits = visits.filter(v => v.doctorName === appt.doctorName && v.date < appt.bookingDate);
+              if (doctorVisits.length === 0) types[appt.id] = 'নতুন';
+              else {
+                const sorted = [...doctorVisits].sort((a, b) => new Date(b.date) - new Date(a.date));
+                const last = sorted[0];
+                const diffDays = Math.ceil(Math.abs(new Date(last.date) - new Date(appt.bookingDate)) / (1000 * 60 * 60 * 24));
+                types[appt.id] = diffDays <= 7 ? 'রিপোর্ট' : 'ফলোআপ';
+              }
+            } else {
+              types[appt.id] = 'অজানা';
             }
-          } else {
-            types[appt.id] = 'অজানা';
           }
         }
+        setPatientTypes(types);
+      } catch (error) {
+        console.error('Patient types load error:', error);
       }
-      setPatientTypes(types);
     };
     if (filteredAppointments.length > 0) {
       loadPatientTypes();
     }
-  }, [filteredAppointments]);
+  }, [filteredAppointments, hospitalId]);
 
-  // ✅ হাইলাইট রিমুভ – hospitalId ব্যবহার করে
   const handleRowClick = async (apptId) => {
     if (!hospitalId) return;
     const appt = appointments.find(a => a.id === apptId);
@@ -166,7 +167,6 @@ export default function AppointmentsTable({
       await updateDoc(doc(db, 'hospitals', hospitalId, 'appointments', apptId), { isNew: false });
     } catch (error) {
       console.error('Error removing highlight:', error);
-      alert('হাইলাইট সরাতে সমস্যা হয়েছে!');
     } finally {
       setUpdatingHighlight(null);
     }
@@ -185,8 +185,8 @@ export default function AppointmentsTable({
     try {
       setUpdatingPatient(appointmentId);
       
-      const patientRef = doc(db, 'patients', patientId);
-      const patientSnap = await getDoc(patientRef);
+     const patientRef = doc(db, 'hospitals', hospitalId, 'patients', patientId);
+    const patientSnap = await getDoc(patientRef);
       if (!patientSnap.exists()) {
         alert('রোগী পাওয়া যায়নি।');
         return;
@@ -194,7 +194,6 @@ export default function AppointmentsTable({
       
       const patient = patientSnap.data();
       let visits = patient.visits || [];
-      
       const appointment = appointments.find(a => a.id === appointmentId);
       if (!appointment) {
         alert('অ্যাপয়েন্টমেন্ট পাওয়া যায়নি।');
@@ -271,7 +270,6 @@ export default function AppointmentsTable({
     setFilterDoctor('all');
   };
 
-  // ✅ রিমার্কস আপডেট – hospitalId ব্যবহার করে
   const startEdit = (appt) => {
     setEditingId(appt.id);
     setEditData({
@@ -330,38 +328,16 @@ export default function AppointmentsTable({
           <title>${doctorName} - রোগীর তালিকা</title>
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { 
-              font-family: 'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif;
-              padding: 30px;
-              background: #fff;
-              color: #1e293b;
-            }
-            .print-header {
-              text-align: center;
-              margin-bottom: 25px;
-              border-bottom: 2px solid #1c5fa8;
-              padding-bottom: 15px;
-            }
+            body { font-family: 'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif; padding: 30px; background: #fff; color: #1e293b; }
+            .print-header { text-align: center; margin-bottom: 25px; border-bottom: 2px solid #1c5fa8; padding-bottom: 15px; }
             .print-header h1 { color: #1c5fa8; font-size: 24px; margin-bottom: 5px; }
             .print-header .sub { color: #475569; font-size: 14px; }
             .print-date { text-align: right; font-size: 13px; color: #64748b; margin-bottom: 15px; }
             table { width: 100%; border-collapse: collapse; font-size: 14px; }
-            th { 
-              background: #1c5fa8; 
-              color: #fff; 
-              padding: 10px 12px; 
-              text-align: left;
-              font-weight: 700;
-            }
+            th { background: #1c5fa8; color: #fff; padding: 10px 12px; text-align: left; font-weight: 700; }
             td { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; }
             tr:nth-child(even) { background: #f8fafc; }
-            .status-badge {
-              display: inline-block;
-              padding: 2px 10px;
-              border-radius: 20px;
-              font-size: 12px;
-              font-weight: 700;
-            }
+            .status-badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; }
             .status-pending { background: #fef3c7; color: #92400e; }
             .status-confirmed { background: #dbeafe; color: #1e40af; }
             .status-checked-in { background: #ede9fe; color: #6d28d9; }
@@ -369,28 +345,12 @@ export default function AppointmentsTable({
             .status-cancelled { background: #fee2e2; color: #991b1b; }
             .status-no-show { background: #f3f4f6; color: #4b5563; }
             .status-archived { background: #e5e7eb; color: #374151; }
-            .footer { 
-              margin-top: 20px; 
-              text-align: center; 
-              font-size: 12px; 
-              color: #94a3b8;
-              border-top: 1px solid #e2e8f0;
-              padding-top: 15px;
-            }
-            .patient-type {
-              display: inline-block;
-              padding: 2px 10px;
-              border-radius: 20px;
-              font-size: 12px;
-              font-weight: 600;
-            }
+            .footer { margin-top: 20px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 15px; }
+            .patient-type { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
             .type-new { background: #dcfce7; color: #166534; }
             .type-report { background: #fef3c7; color: #92400e; }
             .type-followup { background: #dbeafe; color: #1e40af; }
-            @media print {
-              body { padding: 15px; }
-              .no-print { display: none; }
-            }
+            @media print { body { padding: 15px; } .no-print { display: none; } }
           </style>
         </head>
         <body>
@@ -398,24 +358,13 @@ export default function AppointmentsTable({
             <button onclick="window.print()" style="padding:8px 20px;background:#1c5fa8;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;">🖨️ প্রিন্ট করুন</button>
             <button onclick="window.close()" style="padding:8px 20px;background:#e2e8f0;color:#1e293b;border:none;border-radius:6px;cursor:pointer;font-size:14px;margin-left:10px;">বন্ধ করুন</button>
           </div>
-
           <div class="print-header">
             <h1>${doctorName}</h1>
             <div class="sub">রোগীর বুকিং তালিকা</div>
           </div>
           <div class="print-date">প্রিন্ট তারিখ: ${new Date().toLocaleString('bn-BD')}</div>
-
           <table>
-            <thead>
-              <tr>
-                <th>সিরিয়াল</th>
-                <th>রোগীর নাম</th>
-                <th>মোবাইল</th>
-                <th>বুকিং তারিখ</th>
-                <th>রোগীর টাইপ</th>
-                <th>স্ট্যাটাস</th>
-              </tr>
-            </thead>
+            <thead><tr><th>সিরিয়াল</th><th>রোগীর নাম</th><th>মোবাইল</th><th>বুকিং তারিখ</th><th>রোগীর টাইপ</th><th>স্ট্যাটাস</th></tr></thead>
             <tbody>
               ${sortedPatients.map(appt => `
                 <tr>
@@ -423,20 +372,13 @@ export default function AppointmentsTable({
                   <td>${appt.name || '-'}</td>
                   <td>${appt.mobile || '-'}</td>
                   <td>${appt.bookingDate || '-'}</td>
-                  <td>
-                    <span class="patient-type type-${patientTypes[appt.id] === 'নতুন' ? 'new' : patientTypes[appt.id] === 'রিপোর্ট' ? 'report' : 'followup'}">
-                      ${patientTypes[appt.id] || 'অজানা'}
-                    </span>
-                  </td>
+                  <td><span class="patient-type type-${patientTypes[appt.id] === 'নতুন' ? 'new' : patientTypes[appt.id] === 'রিপোর্ট' ? 'report' : 'followup'}">${patientTypes[appt.id] || 'অজানা'}</span></td>
                   <td><span class="status-badge status-${appt.status || 'pending'}">${appt.status || 'pending'}</span></td>
                 </tr>
               `).join('')}
             </tbody>
           </table>
-
-          <div class="footer">
-            মোট রোগী: ${sortedPatients.length} জন
-          </div>
+          <div class="footer">মোট রোগী: ${sortedPatients.length} জন</div>
         </body>
       </html>
     `;
@@ -572,185 +514,192 @@ export default function AppointmentsTable({
         </div>
       )}
 
-      {viewMode === 'list' && (
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1400px' }}>
-          <thead>
-            <tr style={{ background: '#eef1f7', textAlign: 'left', color: '#1f2937' }}>
-              <th style={{ padding: '12px' }}>সিরিয়াল</th>
-              <th style={{ padding: '12px' }}>রোগীর নাম</th>
-              <th style={{ padding: '12px' }}>বয়স</th>
-              <th style={{ padding: '12px' }}>মোবাইল</th>
-              <th style={{ padding: '12px' }}>বুকিং তারিখ</th>
-              <th style={{ padding: '12px' }}>ডাক্তার</th>
-              <th style={{ padding: '12px' }}>রেফারেল</th>
-              <th style={{ padding: '12px' }}>মার্কেটিং অফিসার</th>
-              <th style={{ padding: '12px' }}>রোগীর টাইপ</th>
-              <th style={{ padding: '12px' }}>রিমার্কস</th>
-              <th style={{ padding: '12px' }}>স্ট্যাটাস</th>
-              <th style={{ padding: '12px' }}>অ্যাকশন</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredAppointments.length === 0 && <tr><td colSpan="12" style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>কোনো বুকিং পাওয়া যায়নি</td></tr>}
-            {filteredAppointments.map((appt) => {
-              const isEditing = editingId === appt.id;
-              const patientType = patientTypes[appt.id] || 'লোড হচ্ছে...';
-              const isUpdating = updatingPatient === appt.id;
-              const isNew = appt.isNew === true;
+      {appointments.length === 0 ? (
+        <div style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>
+          <p>📭 এখনো কোনো অ্যাপয়েন্টমেন্ট নেই।</p>
+          <p style={{ fontSize: '12px', marginTop: '5px' }}>নতুন বুকিং করলে এখানে দেখা যাবে।</p>
+        </div>
+      ) : viewMode === 'list' ? (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1400px' }}>
+            <thead>
+              <tr style={{ background: '#eef1f7', textAlign: 'left', color: '#1f2937' }}>
+                <th style={{ padding: '12px' }}>সিরিয়াল</th>
+                <th style={{ padding: '12px' }}>রোগীর নাম</th>
+                <th style={{ padding: '12px' }}>বয়স</th>
+                <th style={{ padding: '12px' }}>মোবাইল</th>
+                <th style={{ padding: '12px' }}>বুকিং তারিখ</th>
+                <th style={{ padding: '12px' }}>ডাক্তার</th>
+                <th style={{ padding: '12px' }}>রেফারেল</th>
+                <th style={{ padding: '12px' }}>মার্কেটিং অফিসার</th>
+                <th style={{ padding: '12px' }}>রোগীর টাইপ</th>
+                <th style={{ padding: '12px' }}>রিমার্কস</th>
+                <th style={{ padding: '12px' }}>স্ট্যাটাস</th>
+                <th style={{ padding: '12px' }}>অ্যাকশন</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredAppointments.length === 0 && <tr><td colSpan="12" style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>কোনো বুকিং পাওয়া যায়নি</td></tr>}
+              {filteredAppointments.map((appt) => {
+                const isEditing = editingId === appt.id;
+                const patientType = patientTypes[appt.id] || 'লোড হচ্ছে...';
+                const isUpdating = updatingPatient === appt.id;
+                const isNew = appt.isNew === true;
 
-              return (
-                <tr 
-                  key={appt.id} 
-                  style={{ 
-                    borderBottom: '1px solid #eee', 
-                    color: '#334155',
-                    background: isNew ? '#f0fdf4' : 'transparent',
-                    transition: 'background 0.3s ease',
-                    cursor: isNew ? 'pointer' : 'default'
-                  }}
-                  onClick={() => isNew && handleRowClick(appt.id)}
-                  title={isNew ? 'হাইলাইট সরাতে ক্লিক করুন' : ''}
-                >
-                  <td style={{ padding: '12px', fontWeight: 'bold' }}>
-                    {appt.serialNo}
-                    {isNew && <span style={{ marginLeft: '8px', fontSize: '10px', color: '#16a34a', fontWeight: 'normal' }}>● নতুন</span>}
-                  </td>
-                  <td style={{ padding: '12px' }}>{appt.name}</td>
-                  <td style={{ padding: '12px' }}>{appt.age || '-'}</td>
-                  <td style={{ padding: '12px' }}>{appt.mobile}</td>
-                  <td style={{ padding: '12px' }}>{appt.bookingDate} ({appt.bookingDay})</td>
-                  <td style={{ padding: '12px' }}>
-                    {appt.doctorName}
-                    <br/>
-                    <small style={{ color: '#64748b' }}>{appt.doctorDept}</small>
-                    {appt.doctorTime && (
-                      <>
-                        <br/>
-                        <small style={{ color: '#b45309', fontWeight: '500' }}>⏱ {appt.doctorTime}</small>
-                      </>
-                    )}
-                  </td>
-                  <td style={{ padding: '12px' }}>
-                    {isEditing ? (
-                      <select 
-                        value={editData.referralSource} 
-                        onChange={(e) => setEditData({...editData, referralSource: e.target.value})}
-                        style={{ padding: '4px', border: '1px solid #cbd5e1', borderRadius: '4px', width: '100%' }}
-                      >
-                        {REFERRAL_SOURCES.map(src => <option key={src} value={src}>{src}</option>)}
-                      </select>
-                    ) : (
-                      appt.referralSource || '-'
-                    )}
-                  </td>
+                return (
+                  <tr 
+                    key={appt.id} 
+                    style={{ 
+                      borderBottom: '1px solid #eee', 
+                      color: '#334155',
+                      background: isNew ? '#f0fdf4' : 'transparent',
+                      transition: 'background 0.3s ease',
+                      cursor: isNew ? 'pointer' : 'default'
+                    }}
+                    onClick={() => isNew && handleRowClick(appt.id)}
+                    title={isNew ? 'হাইলাইট সরাতে ক্লিক করুন' : ''}
+                  >
+                    <td style={{ padding: '12px', fontWeight: 'bold' }}>
+                      {appt.serialNo}
+                      {isNew && <span style={{ marginLeft: '8px', fontSize: '10px', color: '#16a34a', fontWeight: 'normal' }}>● নতুন</span>}
+                    </td>
+                    <td style={{ padding: '12px' }}>{appt.name}</td>
+                    <td style={{ padding: '12px' }}>{appt.age || '-'}</td>
+                    <td style={{ padding: '12px' }}>{appt.mobile}</td>
+                    <td style={{ padding: '12px' }}>{appt.bookingDate} ({appt.bookingDay})</td>
+                    <td style={{ padding: '12px' }}>
+                      {appt.doctorName}
+                      <br/>
+                      <small style={{ color: '#64748b' }}>{appt.doctorDept}</small>
+                      {appt.doctorTime && (
+                        <>
+                          <br/>
+                          <small style={{ color: '#b45309', fontWeight: '500' }}>⏱ {appt.doctorTime}</small>
+                        </>
+                      )}
+                    </td>
+                    <td style={{ padding: '12px' }}>
+                      {isEditing ? (
+                        <select 
+                          value={editData.referralSource} 
+                          onChange={(e) => setEditData({...editData, referralSource: e.target.value})}
+                          style={{ padding: '4px', border: '1px solid #cbd5e1', borderRadius: '4px', width: '100%' }}
+                        >
+                          {REFERRAL_SOURCES.map(src => <option key={src} value={src}>{src}</option>)}
+                        </select>
+                      ) : (
+                        appt.referralSource || '-'
+                      )}
+                    </td>
 
-                  <td style={{ padding: '12px' }}>
-                    {isEditing ? (
-                      <select 
-                        value={editData.marketingOfficer} 
-                        onChange={(e) => setEditData({...editData, marketingOfficer: e.target.value})}
-                        style={{ padding: '4px', border: '1px solid #cbd5e1', borderRadius: '4px', width: '100%' }}
-                      >
-                        <option value="">নির্বাচন করুন</option>
-                        {marketingTeam.map((m, idx) => {
-                          const name = typeof m === 'string' ? m : m.name;
-                          const key = typeof m === 'string' ? idx : m.id || idx;
-                          return <option key={key} value={name}>{name}</option>;
-                        })}
-                      </select>
-                    ) : (
-                      <span style={{ fontWeight: '500' }}>{appt.marketingOfficer || <span style={{ color: '#94a3b8' }}>-</span>}</span>
-                    )}
-                  </td>
+                    <td style={{ padding: '12px' }}>
+                      {isEditing ? (
+                        <select 
+                          value={editData.marketingOfficer} 
+                          onChange={(e) => setEditData({...editData, marketingOfficer: e.target.value})}
+                          style={{ padding: '4px', border: '1px solid #cbd5e1', borderRadius: '4px', width: '100%' }}
+                        >
+                          <option value="">নির্বাচন করুন</option>
+                          {marketingTeam.map((m, idx) => {
+                            const name = typeof m === 'string' ? m : m.name;
+                            const key = typeof m === 'string' ? idx : m.id || idx;
+                            return <option key={key} value={name}>{name}</option>;
+                          })}
+                        </select>
+                      ) : (
+                        <span style={{ fontWeight: '500' }}>{appt.marketingOfficer || <span style={{ color: '#94a3b8' }}>-</span>}</span>
+                      )}
+                    </td>
 
-                  <td style={{ padding: '12px' }}>
-                    {isAdmin && appt.patientId ? (
-                      <select
-                        value={patientType}
-                        onChange={(e) => handleManualCategoryChange(appt.id, appt.patientId, e.target.value)}
-                        disabled={isUpdating}
-                        style={{
-                          padding: '8px 18px 8px 16px',
-                          borderRadius: '24px',
-                          fontSize: '13px',
-                          fontWeight: '600',
-                          border: '1px solid #e2e8f0',
+                    <td style={{ padding: '12px' }}>
+                      {isAdmin && appt.patientId ? (
+                        <select
+                          value={patientType}
+                          onChange={(e) => handleManualCategoryChange(appt.id, appt.patientId, e.target.value)}
+                          disabled={isUpdating}
+                          style={{
+                            padding: '8px 18px 8px 16px',
+                            borderRadius: '24px',
+                            fontSize: '13px',
+                            fontWeight: '600',
+                            border: '1px solid #e2e8f0',
+                            background: patientType === 'নতুন' ? '#dcfce7' : 
+                                      patientType === 'রিপোর্ট' ? '#fef3c7' : 
+                                      patientType === 'ফলোআপ' ? '#dbeafe' : '#f1f5f9',
+                            color: patientType === 'নতুন' ? '#166534' : 
+                                   patientType === 'রিপোর্ট' ? '#92400e' : 
+                                   patientType === 'ফলোআপ' ? '#1e40af' : '#64748b',
+                            cursor: isUpdating ? 'not-allowed' : 'pointer',
+                            minWidth: '130px',
+                            outline: 'none',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                            transition: 'all 0.2s ease',
+                            appearance: 'auto'
+                          }}
+                          onFocus={(e) => {
+                            e.target.style.boxShadow = '0 0 0 3px rgba(13, 148, 136, 0.2)';
+                          }}
+                          onBlur={(e) => {
+                            e.target.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06)';
+                          }}
+                        >
+                          <option value="নতুন">নতুন</option>
+                          <option value="রিপোর্ট">রিপোর্ট</option>
+                          <option value="ফলোআপ">ফলোআপ</option>
+                        </select>
+                      ) : (
+                        <span style={{ 
                           background: patientType === 'নতুন' ? '#dcfce7' : 
                                     patientType === 'রিপোর্ট' ? '#fef3c7' : 
                                     patientType === 'ফলোআপ' ? '#dbeafe' : '#f1f5f9',
                           color: patientType === 'নতুন' ? '#166534' : 
                                  patientType === 'রিপোর্ট' ? '#92400e' : 
                                  patientType === 'ফলোআপ' ? '#1e40af' : '#64748b',
-                          cursor: isUpdating ? 'not-allowed' : 'pointer',
-                          minWidth: '130px',
-                          outline: 'none',
-                          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-                          transition: 'all 0.2s ease',
-                          appearance: 'auto'
-                        }}
-                        onFocus={(e) => {
-                          e.target.style.boxShadow = '0 0 0 3px rgba(13, 148, 136, 0.2)';
-                        }}
-                        onBlur={(e) => {
-                          e.target.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06)';
-                        }}
-                      >
-                        <option value="নতুন">নতুন</option>
-                        <option value="রিপোর্ট">রিপোর্ট</option>
-                        <option value="ফলোআপ">ফলোআপ</option>
-                      </select>
-                    ) : (
-                      <span style={{ 
-                        background: patientType === 'নতুন' ? '#dcfce7' : 
-                                  patientType === 'রিপোর্ট' ? '#fef3c7' : 
-                                  patientType === 'ফলোআপ' ? '#dbeafe' : '#f1f5f9',
-                        color: patientType === 'নতুন' ? '#166534' : 
-                               patientType === 'রিপোর্ট' ? '#92400e' : 
-                               patientType === 'ফলোআপ' ? '#1e40af' : '#64748b',
-                        padding: '6px 16px',
-                        borderRadius: '24px',
-                        fontSize: '13px',
-                        fontWeight: '600',
-                        whiteSpace: 'nowrap',
-                        display: 'inline-block'
-                      }}>
-                        {patientType}
-                      </span>
-                    )}
-                    {isUpdating && <span style={{ fontSize: '11px', color: '#64748b', marginLeft: '6px' }}>⏳</span>}
-                  </td>
+                          padding: '6px 16px',
+                          borderRadius: '24px',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          whiteSpace: 'nowrap',
+                          display: 'inline-block'
+                        }}>
+                          {patientType}
+                        </span>
+                      )}
+                      {isUpdating && <span style={{ fontSize: '11px', color: '#64748b', marginLeft: '6px' }}>⏳</span>}
+                    </td>
 
-                  <td style={{ padding: '12px', minWidth: '150px' }}>
-                    {isEditing ? (
-                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                        <input type="text" value={editData.remarks || ''} onChange={(e) => setEditData({...editData, remarks: e.target.value})} placeholder="রিমার্কস লিখুন" style={{ padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', flex: '1', fontSize: '13px' }} />
-                        <button onClick={() => saveEdit(appt.id)} style={{ background: '#22c55e', color: '#fff', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer' }}><Save size={14} /></button>
-                        <button onClick={cancelEdit} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer' }}><X size={14} /></button>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '13px' }}>{appt.remarks || '-'}</span>
-                        {canEdit && !isArchivedView && (
-                          <button onClick={() => startEdit(appt)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b' }}>
-                            <Edit2 size={14} />
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </td>
+                    <td style={{ padding: '12px', minWidth: '150px' }}>
+                      {isEditing ? (
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                          <input type="text" value={editData.remarks || ''} onChange={(e) => setEditData({...editData, remarks: e.target.value})} placeholder="রিমার্কস লিখুন" style={{ padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', flex: '1', fontSize: '13px' }} />
+                          <button onClick={() => saveEdit(appt.id)} style={{ background: '#22c55e', color: '#fff', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer' }}><Save size={14} /></button>
+                          <button onClick={cancelEdit} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer' }}><X size={14} /></button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontSize: '13px' }}>{appt.remarks || '-'}</span>
+                          {canEdit && !isArchivedView && (
+                            <button onClick={() => startEdit(appt)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+                              <Edit2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
 
-                  <td style={{ padding: '12px' }}><StatusBadge status={appt.status || 'pending'} /></td>
-                  <td style={{ padding: '12px', display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>{renderActions(appt)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
-
-      {viewMode === 'doctor' && (
+                    <td style={{ padding: '12px' }}><StatusBadge status={appt.status || 'pending'} /></td>
+                    <td style={{ padding: '12px', display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>{renderActions(appt)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
         <div>
-          {Object.keys(doctorWiseData).length === 0 ? <div style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>কোনো বুকিং পাওয়া যায়নি</div> : (
+          {Object.keys(doctorWiseData).length === 0 ? (
+            <div style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>কোনো বুকিং পাওয়া যায়নি</div>
+          ) : (
             Object.entries(doctorWiseData).map(([doctorName, info]) => (
               <div key={doctorName} style={{ marginBottom: '20px', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
                 <div style={{ background: '#f8fafc', padding: '12px 15px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

@@ -1,10 +1,15 @@
+// src/components/BookingSystem.jsx
 import React, { useState, useEffect } from 'react';
 import { db, doc, getDoc, setDoc, addDoc, collection } from './firebase';
 import { findPatientByMobile, createPatient, addPatientVisit } from './services/patientService';
 import { generateQRCode } from './services/qrService';
+import { useHospital } from './context/HospitalContext';
+import { useAuth } from './context/AuthContext';
 import { Send, Loader2, User, Phone, MapPin, Stethoscope, CalendarDays, ArrowLeft, PlusCircle, CheckCircle2, Clock } from 'lucide-react';
 
-const HOSPITAL_PATH = 'hospitals/alafiyah_main';
+const DEFAULT_HOSPITAL_ID = 'alafiyah_main';
+const BANGLA_DAYS = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
+const MAX_DAYS_AHEAD = 7;
 
 const getTodayString = () => {
   const date = new Date();
@@ -20,10 +25,16 @@ const toEnglishDigits = (str) => {
   return str.replace(/[০-৯]/g, (char) => banglaDigits.indexOf(char) !== -1 ? englishDigits[banglaDigits.indexOf(char)] : char);
 };
 
-// ---------- ক্যালেন্ডার ----------
+// ---------- ক্যালেন্ডার (৭ দিনের সীমা সহ) ----------
 function CustomCalendar({ selectedDate, onDateChange }) {
   const today = new Date();
   const todayStr = getTodayString();
+
+  // সর্বোচ্চ অনুমোদিত তারিখ (আজ + ৭ দিন)
+  const maxDate = new Date(today);
+  maxDate.setDate(maxDate.getDate() + MAX_DAYS_AHEAD);
+  const maxDateStr = maxDate.toISOString().split('T')[0];
+
   const [viewDate, setViewDate] = useState(() => {
     if (selectedDate) {
       const parts = selectedDate.split('-').map(Number);
@@ -63,9 +74,16 @@ function CustomCalendar({ selectedDate, onDateChange }) {
           const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           const isSelected = selectedDate === dateStr;
           const isPast = dateStr < todayStr;
+          const isFutureBeyondMax = dateStr > maxDateStr;
+          const isDisabled = isPast || isFutureBeyondMax;
           const isToday = dateStr === todayStr;
+
           return (
-            <div key={day} className={`cal-day ${isSelected ? 'selected' : ''} ${isPast ? 'disabled' : ''} ${isToday ? 'today' : ''}`} onClick={() => !isPast && onDateChange(dateStr)}>
+            <div
+              key={day}
+              className={`cal-day ${isSelected ? 'selected' : ''} ${isDisabled ? 'disabled' : ''} ${isToday ? 'today' : ''}`}
+              onClick={() => !isDisabled && onDateChange(dateStr)}
+            >
               {day}
             </div>
           );
@@ -75,7 +93,7 @@ function CustomCalendar({ selectedDate, onDateChange }) {
   );
 }
 
-// ---------- CSS (স্লট বাটন বাদ, শুধু টেক্সট) ----------
+// ---------- CSS ----------
 const BookingCSS = `
   .booking-wrapper { max-width: 650px; margin: 40px auto; padding: 20px; font-family: 'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif; background: #f4f7f6; border-radius: 20px; }
   .booking-card { background: #fff; border-radius: 16px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06); padding: 30px; border: 1px solid #e2e8f0; min-height: 500px; position: relative; }
@@ -97,7 +115,6 @@ const BookingCSS = `
   .doctor-option:hover, .doctor-option.selected { background: #f0fdfa; }
   .doctor-name { font-weight: 700; color: #1e293b; font-size: 15px; }
   .doctor-details { font-size: 12.5px; color: #64748b; margin-top: 2px; text-align: left; }
-  /* ✅ স্লট টেক্সট (কোনো বাটন নেই) */
   .slot-display { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; }
   .slot-badge { background: #08eb9ff1; padding: 2px 12px; border-radius: 12px; font-size: 12px; color: #1e293b; border: 1px solid #e2e8f0; }
   .clear-doctor-btn { width: 100%; padding: 10px; margin-top: 10px; background: #f1f5f9; border: 1px dashed #cbd5e1; color: #475569; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.2s; }
@@ -106,7 +123,7 @@ const BookingCSS = `
   .summary-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
   .summary-label { color: #64748b; font-weight: 500; }
   .summary-value { color: #1e293b; font-weight: 700; text-align: right; }
-  .submit-btn { width: 100%; padding: 14px; background: linear-gradient(45deg, #0d9488, #14b8a6); border: none; border-radius: 12px; color: white; font-size: 16px; font-weight: 700; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 4px 6px -1px rgba(13, 148, 136, 0.2); }
+  .submit-btn { width: 100%; padding: 14px; background: linear-gradient(45deg, #0d9488, #14b8a6); border: none; border-radius: 12px; color: white; font-size: 16px; font-weight: 700; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; transition: all 0.3s; box-shadow: 0 4px 6px -1px rgba(13, 148, 136, 0.2); }
   .submit-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(13, 148, 136, 0.3); }
   .submit-btn:active { transform: scale(0.96); }
   .submit-btn:disabled { background: #94a3b8; cursor: not-allowed; }
@@ -147,6 +164,14 @@ const BookingCSS = `
 
 // ---------- মূল BookingSystem ----------
 export default function BookingSystem({ departments, panels, onBack }) {
+  const { currentHospital } = useHospital();
+  const hospitalId = currentHospital?.id || DEFAULT_HOSPITAL_ID;
+  const { user } = useAuth();
+
+  console.log('🏥 BookingSystem -> hospitalId:', hospitalId);
+  console.log('📂 Departments:', departments?.length || 0);
+  console.log('📂 Panels:', panels?.length || 0);
+
   const [formData, setFormData] = useState({
     name: '',
     age: '',
@@ -169,34 +194,57 @@ export default function BookingSystem({ departments, panels, onBack }) {
   const [qrCode, setQrCode] = useState(null);
   const [appointmentId, setAppointmentId] = useState(null);
 
-  // দিনের নাম ও ডাক্তার লিস্ট
   useEffect(() => {
-    if (!panels || panels.length === 0 || !departments || departments.length === 0) {
+    console.log('🔄 useEffect চলছে... selectedDate:', selectedDate);
+    console.log('📦 panels:', panels);
+    console.log('📦 departments:', departments);
+
+    if (!panels || panels.length === 0) {
+      console.warn('⚠️ Panels খালি বা undefined');
+      setAvailableDoctors([]);
+      return;
+    }
+    if (!departments || departments.length === 0) {
+      console.warn('⚠️ Departments খালি বা undefined');
       setAvailableDoctors([]);
       return;
     }
 
     const dateObj = new Date(selectedDate);
     const englishDay = dateObj.getDay();
-    const banglaDays = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
-    const dayName = banglaDays[englishDay];
+    const dayName = BANGLA_DAYS[englishDay];
     setSelectedDayName(dayName);
+    console.log(`📅 দিন: ${dayName} (${selectedDate})`);
 
     const dayPanel = panels.find(p => p.name === dayName);
+    console.log(`🔍 প্যানেল পাওয়া গেছে?`, dayPanel ? '✅' : '❌', dayPanel);
+
     if (!dayPanel) {
+      console.warn(`⚠️ "${dayName}" এর জন্য কোনো প্যানেল নেই`);
       setAvailableDoctors([]);
       return;
     }
 
     const activeIds = dayPanel.activeDoctorIds || [];
+    console.log(`👨‍⚕️ activeDoctorIds:`, activeIds);
+
+    if (activeIds.length === 0) {
+      console.warn(`⚠️ "${dayName}" প্যানেলে কোনো ডাক্তার আইডি নেই`);
+      setAvailableDoctors([]);
+      return;
+    }
+
     const filteredDocs = [];
     departments.forEach(dept => {
-      dept.doctors.forEach(doc => {
+      const deptDoctors = dept.doctors || [];
+      deptDoctors.forEach(doc => {
         if (activeIds.includes(doc.id)) {
           filteredDocs.push({ ...doc, deptName: dept.name, deptId: dept.id });
         }
       });
     });
+
+    console.log(`✅ পাওয়া গেছে ${filteredDocs.length} জন ডাক্তার`);
     setAvailableDoctors(filteredDocs);
     setSelectedDoctor(null);
   }, [selectedDate, panels, departments]);
@@ -237,14 +285,24 @@ export default function BookingSystem({ departments, panels, onBack }) {
       if (!selectedDoctor) throw new Error('ডাক্তার নির্বাচন করুন');
       if (!selectedDate) throw new Error('তারিখ নির্বাচন করুন');
 
-      let patient = await findPatientByMobile(formData.mobile);
+      if (typeof hospitalId !== 'string') {
+        throw new Error('hospitalId অবশ্যই একটি স্ট্রিং হতে হবে।');
+      }
+
+      let patient = await findPatientByMobile(hospitalId, formData.mobile);
       let patientId;
+      let isNewPatient = true; // ডিফল্ট নতুন
 
       if (patient) {
         patientId = patient.id;
-        await addPatientVisit(patientId, selectedDoctor.name, selectedDate);
+        isNewPatient = false;
+        await addPatientVisit(hospitalId, {
+          patientId,
+          doctorName: selectedDoctor.name,
+          visitDate: selectedDate,
+        });
       } else {
-        const newPatient = await createPatient({
+        const newPatient = await createPatient(hospitalId, {
           name: formData.name,
           mobile: formData.mobile,
           age: formData.age,
@@ -252,10 +310,15 @@ export default function BookingSystem({ departments, panels, onBack }) {
           address: formData.address
         });
         patientId = newPatient.id;
-        await addPatientVisit(patientId, selectedDoctor.name, selectedDate);
+        isNewPatient = true; // নতুন রোগী
+        await addPatientVisit(hospitalId, {
+          patientId,
+          doctorName: selectedDoctor.name,
+          visitDate: selectedDate,
+        });
       }
 
-      const counterRef = doc(db, HOSPITAL_PATH, 'counters', selectedDoctor.id);
+      const counterRef = doc(db, 'hospitals', hospitalId, 'counters', selectedDoctor.id);
       let serialNo = 1;
       const counterDoc = await getDoc(counterRef);
       if (counterDoc.exists()) {
@@ -271,18 +334,20 @@ export default function BookingSystem({ departments, panels, onBack }) {
         doctorName: selectedDoctor.name,
         doctorDept: selectedDoctor.deptName,
         doctorQuals: selectedDoctor.quals || '',
-        // timeSlot সংরক্ষণ করা হচ্ছে না
         bookingDate: selectedDate,
         bookingDay: selectedDayName,
         serialNo,
         status: 'pending',
         timestamp: new Date().toISOString(),
+         isNew: isNewPatient, // ✅ সঠিক মান
         isNew: true,
-        isRead: false
+        isRead: false,
+        hospitalId,
       };
 
-      const docRef = await addDoc(collection(db, HOSPITAL_PATH, 'appointments'), appointmentData);
+      const docRef = await addDoc(collection(db, 'hospitals', hospitalId, 'appointments'), appointmentData);
       setAppointmentId(docRef.id);
+      console.log('✅ Appointment created with ID:', docRef.id);
 
       const qrImage = await generateQRCode(docRef.id);
       if (qrImage) setQrCode(qrImage);
@@ -423,7 +488,19 @@ export default function BookingSystem({ departments, panels, onBack }) {
                 <div className="doctor-options">
                   {filteredDoctors.length === 0 ? (
                     <div style={{ padding: '15px', textAlign: 'center', color: '#64748b', fontSize: '14px' }}>
-                      দুঃখিত, এই বিভাগে বা এই দিনে কোনো ডাক্তারের সিরিয়াল নেই।
+                      {availableDoctors.length === 0 ? (
+                        <div>
+                          <p>⚠️ এই দিনে ({selectedDayName}) কোনো ডাক্তারের সিরিয়াল নেই।</p>
+                          <p style={{ fontSize: '12px', marginTop: '5px', color: '#94a3b8' }}>
+                            {panels?.length === 0 ? 'প্যানেল ডেটা পাওয়া যায়নি।' : 'অন্য কোনো দিন নির্বাচন করুন।'}
+                          </p>
+                        </div>
+                      ) : (
+                        <div>
+                          <p>⚠️ নির্বাচিত বিভাগে ডাক্তার নেই।</p>
+                          <p style={{ fontSize: '12px', marginTop: '5px', color: '#94a3b8' }}>অন্য বিভাগ নির্বাচন করুন।</p>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     filteredDoctors.map(doc => (
@@ -431,7 +508,6 @@ export default function BookingSystem({ departments, panels, onBack }) {
                         <div>
                           <div className="doctor-name">{doc.name}</div>
                           <div className="doctor-details">{doc.specialty || doc.quals || doc.deptName}</div>
-                          {/* ✅ শুধু টাইম স্লট টেক্সট দেখানো হচ্ছে */}
                           {doc.timeSlots && doc.timeSlots.length > 0 && (
                             <div className="slot-display">
                               {doc.timeSlots.map((slot, idx) => (
