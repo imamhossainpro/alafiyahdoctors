@@ -1,129 +1,362 @@
-// server/server.js
-import express from 'express';
-import cors from 'cors';
-import admin from 'firebase-admin';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+require('dotenv').config();
+const express = require('express');
+const makeWASocket = require('@whiskeysockets/baileys').default;
+const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const pino = require('pino');
+const qrcode = require('qrcode-terminal');
+const nodemailer = require('nodemailer');
+const axios = require('axios');
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// ---------- Firebase Admin ----------
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getFirestore } = require('firebase-admin/firestore');
 
-// Service Account Key লোড করুন (আপনার রুট থেকে)
-const serviceAccount = JSON.parse(
-  readFileSync(join(__dirname, 'serviceAccountKey.json'), 'utf8')
-);
+let serviceAccount;
+try {
+  serviceAccount = require('./serviceAccountKey.json');
+  console.log('✅ serviceAccountKey.json সফলভাবে লোড হয়েছে');
+} catch (err) {
+  console.error('❌ serviceAccountKey.json ফাইলটি পাওয়া যায়নি!');
+  process.exit(1);
+}
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
-});
+initializeApp({ credential: cert(serviceAccount) });
+const db = getFirestore();
 
 const app = express();
-app.use(cors());
+const PORT = process.env.PORT || 3001;
 app.use(express.json());
 
-// ✅ অনবোর্ডিং এন্ডপয়েন্ট
-app.post('/api/onboard-hospital', async (req, res) => {
-  try {
-    const { superAdminToken, hospitalName, adminEmail, adminPassword, address, phone } = req.body;
+// ---------- কনস্ট্যান্ট ----------
+const HOSPITAL_ID = 'alafiyah_main';
+const HOSPITAL_WHATSAPP = '8801889885094';
+let sock = null;
+let isConnected = false;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
 
-    // ১. সুপার অ্যাডমিন টোকেন ভেরিফাই করুন (আপনার ফ্রন্টএন্ড থেকে পাঠাতে হবে)
-    if (!superAdminToken) {
-      return res.status(401).json({ error: 'অননুমোদিত! সুপার অ্যাডমিন টোকেন দিন।' });
-    }
-
-    let claims;
-    try {
-      const decoded = await admin.auth().verifyIdToken(superAdminToken);
-      claims = decoded;
-    } catch (e) {
-      return res.status(401).json({ error: 'টোকেন সঠিক নয় বা মেয়াদ শেষ!' });
-    }
-
-    if (claims.role !== 'super_admin') {
-      return res.status(403).json({ error: 'শুধুমাত্র সুপার অ্যাডমিন হাসপাতাল তৈরি করতে পারেন!' });
-    }
-
-    // ২. ইনপুট যাচাই
-    if (!hospitalName || !adminEmail || !adminPassword) {
-      return res.status(400).json({ error: 'নাম, ইমেইল ও পাসওয়ার্ড আবশ্যক!' });
-    }
-
-    // ৩. হাসপাতাল ডকুমেন্ট তৈরি
-    const hospitalRef = admin.firestore().collection('hospitals').doc();
-    const hospitalId = hospitalRef.id;
-    await hospitalRef.set({
-      name: hospitalName,
-      address: address || '',
-      phone: phone || '',
-      isActive: true,
-      subscription: 'active',
-      createdAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-
-    // ৪. ইউজার তৈরি
-    const userRecord = await admin.auth().createUser({
-      email: adminEmail,
-      password: adminPassword,
-      displayName: 'অ্যাডমিন'
-    });
-
-    // ৫. কাস্টম ক্লেইম সেট
-    await admin.auth().setCustomUserClaims(userRecord.uid, {
-      hospitalId: hospitalId,
-      role: 'admin',
-      approved: true
-    });
-
-    // ৬. ইউজার ডকুমেন্ট তৈরি
-    await admin.firestore().doc(`hospitals/${hospitalId}/users/${userRecord.uid}`).set({
-      name: 'অ্যাডমিন',
-      email: adminEmail,
-      role: 'admin',
-      approved: true,
-      createdAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-
-    // ৭. ডিফল্ট ডিপার্টমেন্ট
-    const defaultDepts = [
-      { name: 'মেডিসিন', icon: 'Stethoscope', color: '#1c5fa8', doctors: [] },
-      { name: 'সার্জারি', icon: 'Scissors', color: '#d1392f', doctors: [] },
-      { name: 'হৃদরোগ', icon: 'Heart', color: '#9c3a9c', doctors: [] }
-    ];
-    for (const dept of defaultDepts) {
-      await admin.firestore().collection(`hospitals/${hospitalId}/departments`).add(dept);
-    }
-
-    // ৮. ডিফল্ট প্যানেল
-    const weekDays = ['শনিবার','রবিবার','সোমবার','মঙ্গলবার','বুধবার','বৃহস্পতিবার','শুক্রবার'];
-    for (const day of weekDays) {
-      await admin.firestore().doc(`hospitals/${hospitalId}/panels/${day}`).set({
-        name: day,
-        title: `${day}ের ডক্টরস প্যানেল`,
-        activeDoctorIds: []
-      });
-    }
-
-    // ৯. ডিফল্ট ফুটার
-    await admin.firestore().doc(`hospitals/${hospitalId}/footer/data`).set({
-      hospitalName: hospitalName,
-      hospitalSubtitle: 'স্বাস্থ্যসেবায় বিশ্বাস',
-      address: address || '',
-      website: `${hospitalName.toLowerCase().replace(/\s/g, '')}.com`,
-      contactLabel: 'সিরিয়ালের এবং তথ্যের জন্যে যোগাযোগ',
-      phones: [''],
-      logo: '/logo.png'
-    });
-
-    res.status(200).json({ success: true, hospitalId, message: `${hospitalName} তৈরি হয়েছে!` });
-
-  } catch (error) {
-    console.error('❌ অনবোর্ডিং ব্যর্থ:', error);
-    res.status(500).json({ error: error.message });
-  }
+// ---------- ইমেইল ট্রান্সপোর্টার ----------
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
 });
 
-const PORT = process.env.PORT || 5000;
+// ---------- 📱 এসএমএস পাঠানোর ফাংশন (sms.net.bd) ----------
+async function sendSMS(phoneNumber, message) {
+  try {
+    const apiKey = process.env.SMS_API_KEY;
+    if (!apiKey) {
+      console.error('❌ SMS_API_KEY .env ফাইলে সেট করা নেই');
+      return false;
+    }
+
+    let number = phoneNumber.replace(/[^0-9]/g, '');
+    if (number.startsWith('0')) {
+      number = '88' + number.substring(1);
+    } else if (!number.startsWith('88')) {
+      number = '88' + number;
+    }
+
+    console.log(`📤 SMS পাঠানোর চেষ্টা: ${number}`);
+
+    const formData = new URLSearchParams();
+    formData.append('api_key', apiKey);
+    formData.append('to', number);
+    formData.append('msg', message);
+    if (process.env.SMS_SENDER_ID) {
+      formData.append('senderid', process.env.SMS_SENDER_ID);
+    }
+
+    const response = await axios.post(
+      'https://api.sms.net.bd/sendsms',
+      formData.toString(),
+      {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        timeout: 15000,
+      }
+    );
+
+    console.log(`📥 sms.net.bd রেসপন্স:`, JSON.stringify(response.data, null, 2));
+
+    if (response.data && response.data.error === 0) {
+      console.log(`📱 SMS সফলভাবে পাঠানো হয়েছে: ${response.data.msg}`);
+      return true;
+    } else {
+      const errorMsg = response.data?.msg || 'অজানা ত্রুটি';
+      console.error(`❌ SMS পাঠাতে ব্যর্থ: ${errorMsg}`);
+      return false;
+    }
+  } catch (error) {
+    console.error('❌ SMS API কল করতে সমস্যা:', error.message);
+    if (error.response) {
+      console.error('   রেসপন্স ডেটা:', error.response.data);
+    }
+    return false;
+  }
+}
+
+// ==================================================
+// ✅ WhatsApp কানেকশন – Improved Reconnect Logic
+// ==================================================
+async function connectToWhatsApp() {
+  try {
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
+    const { version } = await fetchLatestBaileysVersion();
+
+    sock = makeWASocket({
+      version,
+      auth: state,
+      logger: pino({ level: 'silent' }),
+      connectTimeoutMs: 60000,
+      keepAliveIntervalMs: 10000,
+    });
+
+    sock.ev.on('creds.update', saveCreds);
+
+    sock.ev.on('connection.update', (update) => {
+      const { connection, lastDisconnect, qr } = update;
+
+      // ---------- QR Code ----------
+      if (qr) {
+        console.log('\n====================');
+        console.log('📱 WhatsApp QR স্ক্যান করুন (হাসপাতালের WhatsApp থেকে):');
+        console.log('👉 Settings → Linked Devices → Link a Device');
+        console.log('====================\n');
+        qrcode.generate(qr, { small: true });
+        console.log('\n====================\n');
+      }
+
+      // ---------- Connection Closed ----------
+      if (connection === 'close') {
+        isConnected = false;
+        const statusCode = lastDisconnect?.error?.output?.statusCode;
+        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+
+        console.log(`\n🔌 সংযোগ বন্ধ | statusCode: ${statusCode} | reconnect: ${shouldReconnect}`);
+
+        if (shouldReconnect) {
+          reconnectAttempts++;
+          if (reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
+            const delay = Math.min(3000 * reconnectAttempts, 15000);
+            console.log(`🔄 ${delay / 1000} সেকেন্ড পরে পুনরায় সংযোগ... (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+            setTimeout(() => connectToWhatsApp(), delay);
+          } else {
+            console.error(`❌ ${MAX_RECONNECT_ATTEMPTS} বার চেষ্টার পরেও সংযোগ হয়নি!`);
+            console.error('👉 অনুগ্রহ করে server বন্ধ করে আবার চালান: node server.js');
+          }
+        } else {
+          console.log('\n❌ WhatsApp লগআউট হয়েছে!');
+          console.log('=========================================================');
+          console.log('👉 সমাধান:');
+          console.log('   ১. Server বন্ধ করুন (Ctrl+C)');
+          console.log('   ২. auth_info_baileys folder delete করুন');
+          console.log('   ৩. node server.js চালান');
+          console.log('   ৪. নতুন QR code scan করুন');
+          console.log('=========================================================\n');
+          // Exit করছি না, যাতে user terminal এ message দেখতে পারে
+          // কিন্তু process চালু থাকবে যাতে DB listener কাজ করে
+        }
+      }
+      // ---------- Connection Open ----------
+      else if (connection === 'open') {
+        isConnected = true;
+        reconnectAttempts = 0;
+        console.log('\n✅ WhatsApp কানেক্টেড! Server চালু আছে।');
+        console.log(`📞 হাসপাতাল WhatsApp: ${HOSPITAL_WHATSAPP}\n`);
+      }
+    });
+  } catch (error) {
+    console.error('❌ connectToWhatsApp error:', error.message);
+    console.log('🔄 ৫ সেকেন্ড পরে আবার চেষ্টা...');
+    setTimeout(() => connectToWhatsApp(), 5000);
+  }
+}
+
+// ---------- 🆕 রোগীকে কনফার্মেশন মেসেজ পাঠানোর ফাংশন ----------
+async function sendConfirmationMessage(data, appointmentId) {
+  const baseUrl = process.env.BASE_URL || 'https://your-hospital.com';
+  const checkinLink = `${baseUrl}/checkin/${appointmentId}`;
+
+  const serviceMessage =
+    process.env.HOSPITAL_SERVICES ||
+    'আমাদের হাসপাতালে অভিজ্ঞ ডাক্তার, উন্নত চিকিৎসা সেবা ও ২৪/৭ জরুরি বিভাগ রয়েছে।';
+
+  const smsText = `
+🩺 আল-আফিয়া হাসপাতাল
+
+প্রিয় ${data.name},
+আপনার সিরিয়াল নিশ্চিত হয়েছে!
+সিরিয়াল: ${data.serialNo}
+ডাক্তার: ${data.doctorName}
+তারিখ: ${data.bookingDate}
+সময়: ${data.doctorTime || 'উল্লেখিত সময়ে'}
+
+✅ হাসপিটালে এসে চেক-ইন করতে লিংকে ক্লিক করুন:
+${checkinLink}
+
+${serviceMessage}
+
+ধন্যবাদ।
+  `.trim();
+
+  const emailHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; border: 1px solid #e2e8f0; padding: 20px; border-radius: 12px;">
+      <h2 style="color: #1c5fa8;">🩺 আল-আফিয়া হাসপাতাল</h2>
+      <p><strong>প্রিয় ${data.name},</strong></p>
+      <p>আপনার সিরিয়াল <strong>নিশ্চিত</strong> হয়েছে।</p>
+      <ul>
+        <li><strong>সিরিয়াল নম্বর:</strong> ${data.serialNo}</li>
+        <li><strong>ডাক্তার:</strong> ${data.doctorName}</li>
+        <li><strong>তারিখ:</strong> ${data.bookingDate}</li>
+        <li><strong>সময়:</strong> ${data.doctorTime || 'উল্লেখিত সময়ে'}</li>
+      </ul>
+      <p>✅ <strong>হাসপিটালে এসে চেক-ইন করতে</strong> নিচের বাটনে ক্লিক করুন:</p>
+      <a href="${checkinLink}" style="display: inline-block; background: #1c5fa8; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">চেক-ইন করুন</a>
+      <p style="margin-top: 8px; font-size: 13px; color: #1e293b;">
+        🔹 চেক-ইন করার পর আপনি ডাক্তার দেখাতে পারবেন।
+      </p>
+      <p style="margin-top: 12px; font-size: 13px; color: #475569;">
+        ${serviceMessage}
+      </p>
+      <p style="margin-top: 20px; font-size: 12px; color: #64748b;">
+        অথবা এই লিংকে যান: <a href="${checkinLink}">${checkinLink}</a>
+      </p>
+      <p style="font-size: 12px; color: #94a3b8;">ধন্যবাদ।</p>
+    </div>
+  `;
+
+  // ---------- ১. এসএমএস ----------
+  let mobile = data.mobile;
+  if (mobile) {
+    if (mobile.startsWith('0')) mobile = '88' + mobile.substring(1);
+    else if (!mobile.startsWith('88')) mobile = '88' + mobile;
+
+    const smsSent = await sendSMS(mobile, smsText);
+    if (smsSent) {
+      console.log(`📱 এসএমএস পাঠানো হয়েছে ${mobile} নম্বরে`);
+    } else {
+      console.log(`⚠️ এসএমএস পাঠানো সম্ভব হয়নি ${mobile} নম্বরে`);
+    }
+  }
+
+  // ---------- ২. ইমেইল ----------
+  if (data.email) {
+    try {
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: data.email,
+        subject: `✅ আপনার সিরিয়াল নিশ্চিত - ${data.serialNo}`,
+        html: emailHtml,
+      });
+      console.log(`📧 ইমেইল পাঠানো হয়েছে ${data.email} এ`);
+    } catch (err) {
+      console.error('❌ ইমেইল পাঠাতে ব্যর্থ:', err.message);
+    }
+  }
+}
+
+// ==================================================
+// 🔥 FIREBASE লিসেনার (হসপিটাল-নির্দিষ্ট পাথে)
+// ==================================================
+const previousStatuses = new Map();
+const appointmentsPath = `hospitals/${HOSPITAL_ID}/appointments`;
+
+console.log(`\n🔍 Firestore listener চালু হচ্ছে: ${appointmentsPath}`);
+
+db.collection(appointmentsPath).onSnapshot(
+  (snapshot) => {
+    console.log(`📊 Snapshot: ${snapshot.docChanges().length} changes`);
+
+    snapshot.docChanges().forEach(async (change) => {
+      const docId = change.doc.id;
+      const data = change.doc.data();
+      const currentStatus = data.status;
+
+      // ---------- Added ----------
+      if (change.type === 'added') {
+        previousStatuses.set(docId, currentStatus);
+        console.log(`➕ নতুন appointment: ${docId} | status: ${currentStatus}`);
+      }
+
+      // ---------- Modified ----------
+      if (change.type === 'modified') {
+        const previousStatus = previousStatuses.get(docId);
+        console.log(
+          `🔄 Modified: ${docId} | prev: ${previousStatus} → curr: ${currentStatus}`
+        );
+
+        if (previousStatus === 'pending' && currentStatus === 'confirmed') {
+          console.log(
+            `\n✅ অ্যাপয়েন্টমেন্ট ${docId} কনফার্ম করা হয়েছে। রোগীকে নোটিফিকেশন পাঠানো হচ্ছে...`
+          );
+
+          try {
+            await sendConfirmationMessage(data, docId);
+          } catch (err) {
+            console.error('❌ sendConfirmationMessage error:', err.message);
+          }
+
+          // ---------- Hospital WhatsApp Notification ----------
+          if (isConnected && sock) {
+            const jid = HOSPITAL_WHATSAPP + '@s.whatsapp.net';
+            const msg = `🩺 অ্যাপয়েন্টমেন্ট কনফার্ম!\n\nনাম: ${data.name}\nমোবাইল: ${data.mobile}\nসিরিয়াল: ${data.serialNo}\nডাক্তার: ${data.doctorName}\nসময়: ${data.doctorTime || 'উল্লেখিত সময়ে'}\n\nরোগীকে নোটিফিকেশন পাঠানো হয়েছে।`;
+            try {
+              await sock.sendMessage(jid, { text: msg });
+              console.log(`📨 হাসপাতালের WhatsApp-এ নোটিফিকেশন পাঠানো হয়েছে।\n`);
+            } catch (err) {
+              console.error('❌ WhatsApp নোটিফিকেশন পাঠাতে ব্যর্থ:', err.message);
+            }
+          } else {
+            console.log(
+              `⚠️ WhatsApp কানেক্টেড নেই! isConnected=${isConnected}, sock=${!!sock}\n`
+            );
+          }
+        }
+
+        previousStatuses.set(docId, currentStatus);
+      }
+
+      // ---------- Removed ----------
+      if (change.type === 'removed') {
+        previousStatuses.delete(docId);
+        console.log(`➖ Appointment removed: ${docId}`);
+      }
+    });
+  },
+  (error) => {
+    console.error('❌ Firestore listener error:', error.message);
+  }
+);
+
+// ==================================================
+// 🚀 সার্ভার চালু
+// ==================================================
 app.listen(PORT, () => {
-  console.log(`🚀 Backend Server চালু হয়েছে: http://localhost:${PORT}`);
+  console.log(`🚀 Backend Server চলছে: ${PORT}`);
+  console.log(`📁 হসপিটাল আইডি: ${HOSPITAL_ID}`);
+  console.log(`📁 অ্যাপয়েন্টমেন্ট পাথ: ${appointmentsPath}`);
+  console.log(`📞 হাসপাতাল WhatsApp: ${HOSPITAL_WHATSAPP}\n`);
+});
+
+// ---------- WhatsApp কানেকশন শুরু ----------
+connectToWhatsApp();
+
+// ---------- Graceful Shutdown ----------
+process.on('SIGINT', () => {
+  console.log('\n\n🛑 Server বন্ধ হচ্ছে...');
+  if (sock) {
+    try {
+      sock.end(undefined);
+    } catch (e) {
+      // ignore
+    }
+  }
+  process.exit(0);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('⚠️ Unhandled Rejection:', reason);
 });
