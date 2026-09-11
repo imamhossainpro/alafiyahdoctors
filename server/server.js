@@ -7,7 +7,7 @@ import makeWASocket, {
   fetchLatestBaileysVersion,
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
-import qrcode from 'qrcode-terminal';
+import QRCode from 'qrcode';
 import nodemailer from 'nodemailer';
 import axios from 'axios';
 import { initializeApp, cert } from 'firebase-admin/app';
@@ -42,6 +42,9 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT) {
 initializeApp({ credential: cert(serviceAccount) });
 const db = getFirestore();
 
+// ==================================================
+// Express App
+// ==================================================
 const app = express();
 const PORT = process.env.PORT || 3001;
 app.use(express.json());
@@ -54,6 +57,10 @@ let isConnected = false;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 5;
 
+// QR data URL (browser এ দেখানোর জন্য)
+let currentQRDataUrl = null;
+let lastQRGeneratedAt = null;
+
 // ---------- ইমেইল ট্রান্সপোর্টার ----------
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -63,7 +70,9 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// ---------- 📱 এসএমএস পাঠানোর ফাংশন (sms.net.bd) ----------
+// ==================================================
+// 📱 SMS পাঠানোর ফাংশন (sms.net.bd)
+// ==================================================
 async function sendSMS(phoneNumber, message) {
   try {
     const apiKey = process.env.SMS_API_KEY;
@@ -135,22 +144,38 @@ async function connectToWhatsApp() {
 
     sock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('connection.update', (update) => {
+    sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
 
       // ---------- QR Code ----------
       if (qr) {
-        console.log('\n====================');
-        console.log('📱 WhatsApp QR স্ক্যান করুন (হাসপাতালের WhatsApp থেকে):');
-        console.log('👉 Settings → Linked Devices → Link a Device');
-        console.log('====================\n');
-        qrcode.generate(qr, { small: true });
-        console.log('\n====================\n');
+        try {
+          currentQRDataUrl = await QRCode.toDataURL(qr, {
+            width: 400,
+            margin: 2,
+            color: { dark: '#000000', light: '#ffffff' },
+          });
+          lastQRGeneratedAt = new Date();
+
+          const domain = process.env.RAILWAY_PUBLIC_DOMAIN
+            ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+            : 'https://<your-service>.up.railway.app';
+
+          console.log('\n====================');
+          console.log('📱 WhatsApp QR Code প্রস্তুত!');
+          console.log(`👉 Browser এ যান: ${domain}/qr`);
+          console.log('👉 তারপর WhatsApp দিয়ে scan করুন');
+          console.log('====================\n');
+        } catch (err) {
+          console.error('❌ QR generation error:', err.message);
+        }
       }
 
       // ---------- Connection Closed ----------
       if (connection === 'close') {
         isConnected = false;
+        currentQRDataUrl = null;
+
         const statusCode = lastDisconnect?.error?.output?.statusCode;
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
@@ -169,9 +194,9 @@ async function connectToWhatsApp() {
           console.log('\n❌ WhatsApp লগআউট হয়েছে!');
           console.log('=========================================================');
           console.log('👉 সমাধান:');
-          console.log('   ১. Server বন্ধ করুন (Ctrl+C)');
-          console.log('   ২. auth_info_baileys folder delete করুন');
-          console.log('   ৩. node server.js চালান');
+          console.log('   ১. Railway → Service → Settings → Volume');
+          console.log('   ২. auth_info_baileys volume delete করুন');
+          console.log('   ৩. Redeploy করুন');
           console.log('   ৪. নতুন QR code scan করুন');
           console.log('=========================================================\n');
         }
@@ -179,6 +204,7 @@ async function connectToWhatsApp() {
       // ---------- Connection Open ----------
       else if (connection === 'open') {
         isConnected = true;
+        currentQRDataUrl = null;
         reconnectAttempts = 0;
         console.log('\n✅ WhatsApp কানেক্টেড! Server চালু আছে।');
         console.log(`📞 হাসপাতাল WhatsApp: ${HOSPITAL_WHATSAPP}\n`);
@@ -191,7 +217,9 @@ async function connectToWhatsApp() {
   }
 }
 
-// ---------- 🆕 রোগীকে কনফার্মেশন মেসেজ পাঠানোর ফাংশন ----------
+// ==================================================
+// 🆕 রোগীকে কনফার্মেশন মেসেজ পাঠানোর ফাংশন
+// ==================================================
 async function sendConfirmationMessage(data, appointmentId) {
   const baseUrl = process.env.BASE_URL || 'https://your-hospital.com';
   const checkinLink = `${baseUrl}/checkin/${appointmentId}`;
@@ -275,7 +303,222 @@ ${serviceMessage}
 }
 
 // ==================================================
-// 🔥 FIREBASE লিসেনার
+// 🖼️ QR Code HTML Page (browser এ দেখানোর জন্য)
+// ==================================================
+app.get('/qr', (req, res) => {
+  // Connected হলে
+  if (isConnected) {
+    return res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>WhatsApp Connected</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            body {
+              font-family: 'Hind Siliguri', Arial, sans-serif;
+              display: flex; align-items: center; justify-content: center;
+              min-height: 100vh; margin: 0;
+              background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+            }
+            .box {
+              text-align: center; padding: 40px; background: #fff;
+              border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+              max-width: 420px;
+            }
+            h1 { font-size: 26px; color: #166534; margin: 0 0 12px 0; }
+            p { color: #475569; font-size: 15px; margin: 6px 0; }
+            .icon { font-size: 64px; margin-bottom: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="box">
+            <div class="icon">✅</div>
+            <h1>WhatsApp Connected!</h1>
+            <p>কোনো QR code দরকার নেই।</p>
+            <p style="margin-top: 20px; color: #94a3b8; font-size: 13px;">
+              Server স্বাভাবিকভাবে চলছে।
+            </p>
+          </div>
+        </body>
+      </html>
+    `);
+  }
+
+  // QR তৈরি হচ্ছে
+  if (!currentQRDataUrl) {
+    return res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta http-equiv="refresh" content="3">
+          <title>Waiting for QR...</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            body {
+              font-family: 'Hind Siliguri', Arial, sans-serif;
+              display: flex; align-items: center; justify-content: center;
+              min-height: 100vh; margin: 0;
+              background: linear-gradient(135deg, #fef3c7, #fed7aa);
+            }
+            .box { text-align: center; padding: 40px; }
+            h1 { color: #92400e; font-size: 22px; }
+            p { color: #78350f; font-size: 14px; }
+            .spinner {
+              display: inline-block; width: 40px; height: 40px;
+              border: 4px solid #fcd34d; border-top-color: #92400e;
+              border-radius: 50%; animation: spin 1s linear infinite;
+              margin-bottom: 16px;
+            }
+            @keyframes spin { to { transform: rotate(360deg); } }
+          </style>
+        </head>
+        <body>
+          <div class="box">
+            <div class="spinner"></div>
+            <h1>⏳ QR Code তৈরি হচ্ছে...</h1>
+            <p>Page ৩ সেকেন্ড পরে auto-refresh হবে।</p>
+            <p style="font-size: 12px; margin-top: 16px;">
+              যদি অনেকক্ষণ ধরে এই message থাকে, server logs চেক করুন।
+            </p>
+          </div>
+        </body>
+      </html>
+    `);
+  }
+
+  // QR image দেখাও
+  const generatedTime = lastQRGeneratedAt
+    ? lastQRGeneratedAt.toLocaleString('bn-BD')
+    : '';
+
+  return res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Scan WhatsApp QR</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          * { box-sizing: border-box; }
+          body {
+            font-family: 'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            min-height: 100vh; margin: 0;
+            background: linear-gradient(135deg, #f0fdf4, #ecfdf5);
+            padding: 20px;
+          }
+          .card {
+            background: #fff;
+            padding: 32px;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+          }
+          h1 {
+            color: #1c5fa8;
+            font-size: 22px;
+            margin: 0 0 8px 0;
+          }
+          .subtitle {
+            color: #475569;
+            font-size: 14px;
+            margin: 6px 0 0 0;
+            line-height: 1.6;
+          }
+          .qr-wrapper {
+            background: #fff;
+            padding: 16px;
+            border: 2px dashed #cbd5e1;
+            border-radius: 14px;
+            margin: 22px 0;
+            display: inline-block;
+          }
+          .qr-wrapper img {
+            display: block;
+            width: 320px;
+            max-width: 100%;
+            height: auto;
+          }
+          .steps {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 16px 20px;
+            text-align: left;
+            font-size: 14px;
+            color: #334155;
+            margin-top: 16px;
+          }
+          .steps strong {
+            color: #1c5fa8;
+            display: block;
+            margin-bottom: 8px;
+            font-size: 15px;
+          }
+          .steps ol {
+            margin: 0;
+            padding-left: 22px;
+          }
+          .steps li {
+            margin: 8px 0;
+            line-height: 1.5;
+          }
+          .info {
+            margin-top: 16px;
+            font-size: 12px;
+            color: #94a3b8;
+            text-align: center;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h1>📱 WhatsApp QR Code</h1>
+          <p class="subtitle">হাসপাতালের WhatsApp দিয়ে scan করুন</p>
+
+          <div class="qr-wrapper">
+            <img src="${currentQRDataUrl}" alt="WhatsApp QR Code" />
+          </div>
+
+          <div class="steps">
+            <strong>📋 কীভাবে scan করবেন:</strong>
+            <ol>
+              <li>মোবাইলে <b>WhatsApp</b> খুলুন</li>
+              <li><b>Settings</b> → <b>Linked Devices</b></li>
+              <li><b>Link a Device</b> ক্লিক করুন</li>
+              <li>এই QR code টি scan করুন</li>
+            </ol>
+          </div>
+
+          <p class="info">
+            ${generatedTime ? `⏱ QR তৈরি: ${generatedTime}` : ''}
+            <br>
+            🔄 Scan হয়ে গেলে এই page reload করলে "Connected" দেখাবে।
+          </p>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+// ==================================================
+// 🏠 Root endpoint (health check)
+// ==================================================
+app.get('/', (req, res) => {
+  res.json({
+    status: 'ok',
+    hospital: HOSPITAL_ID,
+    whatsapp: isConnected ? 'connected' : 'disconnected',
+    qrAvailable: !!currentQRDataUrl,
+    qrUrl: '/qr',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// ==================================================
+// 🔥 FIREBASE লিসেনার (হসপিটাল-নির্দিষ্ট পাথে)
 // ==================================================
 const previousStatuses = new Map();
 const appointmentsPath = `hospitals/${HOSPITAL_ID}/appointments`;
@@ -354,7 +597,8 @@ app.listen(PORT, () => {
   console.log(`🚀 Backend Server চলছে: ${PORT}`);
   console.log(`📁 হসপিটাল আইডি: ${HOSPITAL_ID}`);
   console.log(`📁 অ্যাপয়েন্টমেন্ট পাথ: ${appointmentsPath}`);
-  console.log(`📞 হাসপাতাল WhatsApp: ${HOSPITAL_WHATSAPP}\n`);
+  console.log(`📞 হাসপাতাল WhatsApp: ${HOSPITAL_WHATSAPP}`);
+  console.log(`🔗 QR page: http://localhost:${PORT}/qr\n`);
 });
 
 // ---------- WhatsApp কানেকশন শুরু ----------
