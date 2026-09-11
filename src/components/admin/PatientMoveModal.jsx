@@ -2,12 +2,15 @@
 import React, { useState, useEffect } from 'react';
 import { X, Loader2, Search, Users, ArrowRight, CheckCircle, AlertCircle } from 'lucide-react';
 import { useHospital } from '../../context/HospitalContext';
+import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase';
 import { collection, query, where, getDocs, updateDoc, doc, writeBatch } from 'firebase/firestore';
+import { logActivity, LOG_MODULES, LOG_ACTIONS } from '../../services/activityLogService';
 
 const PatientMoveModal = ({ isOpen, onClose, currentLocation, onSuccess }) => {
   const { currentHospital } = useHospital();
   const hospitalId = currentHospital?.id;
+  const { user } = useAuth();
 
   const [appointments, setAppointments] = useState([]);
   const [allAppointments, setAllAppointments] = useState([]);
@@ -19,6 +22,7 @@ const PatientMoveModal = ({ isOpen, onClose, currentLocation, onSuccess }) => {
   const [selectedDest, setSelectedDest] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
+  // গন্তব্য লোকেশন লোড
   useEffect(() => {
     if (!isOpen || !hospitalId) return;
     const loadDestinations = async () => {
@@ -36,6 +40,7 @@ const PatientMoveModal = ({ isOpen, onClose, currentLocation, onSuccess }) => {
     loadDestinations();
   }, [isOpen, hospitalId, currentLocation]);
 
+  // বর্তমান লোকেশনের অ্যাপয়েন্টমেন্ট লোড
   useEffect(() => {
     if (!isOpen || !hospitalId || !currentLocation) return;
     const loadAppointments = async () => {
@@ -46,7 +51,7 @@ const PatientMoveModal = ({ isOpen, onClose, currentLocation, onSuccess }) => {
         const locationId = currentLocation.id;
         const locationName = currentLocation.name;
 
-        // ১. locationId দিয়ে খোঁজ
+        // ১. locationId দিয়ে খোঁজ
         let q = query(
           collection(db, 'hospitals', hospitalId, 'appointments'),
           where('locationId', '==', locationId)
@@ -54,7 +59,7 @@ const PatientMoveModal = ({ isOpen, onClose, currentLocation, onSuccess }) => {
         let snapshot = await getDocs(q);
         apptList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        // ২. locationName দিয়ে খোঁজ
+        // ২. locationName দিয়ে খোঁজ
         if (apptList.length === 0 && locationName) {
           q = query(
             collection(db, 'hospitals', hospitalId, 'appointments'),
@@ -64,7 +69,7 @@ const PatientMoveModal = ({ isOpen, onClose, currentLocation, onSuccess }) => {
           apptList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         }
 
-        // ৩. address দিয়ে খোঁজ
+        // ৩. address দিয়ে খোঁজ
         if (apptList.length === 0 && locationName) {
           q = query(
             collection(db, 'hospitals', hospitalId, 'appointments'),
@@ -98,6 +103,7 @@ const PatientMoveModal = ({ isOpen, onClose, currentLocation, onSuccess }) => {
     loadAppointments();
   }, [isOpen, hospitalId, currentLocation]);
 
+  // সার্চ ফিল্টার
   useEffect(() => {
     if (!searchTerm.trim()) {
       setAppointments(allAppointments);
@@ -126,6 +132,7 @@ const PatientMoveModal = ({ isOpen, onClose, currentLocation, onSuccess }) => {
     }
   };
 
+  // ✅ Move + Activity Log
   const handleMove = async () => {
     if (selectedAppointments.length === 0) {
       alert('কমপক্ষে একজন রোগী নির্বাচন করুন');
@@ -141,6 +148,13 @@ const PatientMoveModal = ({ isOpen, onClose, currentLocation, onSuccess }) => {
     setMoving(true);
     setError(null);
     try {
+      // নির্বাচিত অ্যাপয়েন্টমেন্টগুলো লিস্ট আকারে
+      const movedList = selectedAppointments
+        .map(id => allAppointments.find(a => a.id === id))
+        .filter(Boolean)
+        .map(a => ({ id: a.id, name: a.name || 'রোগী', mobile: a.mobile || '' }));
+
+      // Firestore-এ batch update
       const batch = writeBatch(db);
       const apptRef = collection(db, 'hospitals', hospitalId, 'appointments');
       selectedAppointments.forEach(id => {
@@ -152,6 +166,31 @@ const PatientMoveModal = ({ isOpen, onClose, currentLocation, onSuccess }) => {
         });
       });
       await batch.commit();
+
+      // ✅ Activity Log
+      try {
+        await logActivity({
+          hospitalId,
+          module: LOG_MODULES.LOCATION,
+          action: LOG_ACTIONS.LOCATION_CHANGE,
+          recordId: selectedDest,
+          description: `${movedList.length} জন রোগী "${currentLocation?.name || ''}" → "${destName}"-এ স্থানান্তর করা হয়েছে`,
+          oldValue: {
+            location: currentLocation?.name || '',
+            locationId: currentLocation?.id || '',
+            patients: movedList
+          },
+          newValue: {
+            location: destName,
+            locationId: selectedDest,
+            patientCount: movedList.length
+          },
+          user
+        });
+      } catch (logErr) {
+        console.error('Move log error:', logErr);
+      }
+
       setSelectedAppointments([]);
       if (onSuccess) onSuccess();
     } catch (err) {

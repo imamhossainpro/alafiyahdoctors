@@ -6,7 +6,7 @@ import {
   LineChart, Line
 } from 'recharts';
 import { X, MapPin, TrendingUp } from 'lucide-react';
-import { getAllPatients } from '../../services/patientService';
+import { subscribeToPatients } from '../../services/patientService';
 import { getAllLocations } from '../../services/locationService';
 import { useHospital } from '../../context/HospitalContext';
 
@@ -207,32 +207,39 @@ export default function Overview({ appointments }) {
   const [drillPatients, setDrillPatients] = useState([]);
   const [trendDays, setTrendDays] = useState(7);
 
-  // রোগী ও লোকেশন ডেটা লোড
+  // ✅ Real-time Patient Subscription (Patient type change instantly reflected)
   useEffect(() => {
-    const loadData = async () => {
-      if (!hospitalId) {
-        setLoading(false);
-        return;
-      }
-      setLoading(true);
-      try {
-        const [patientsData, locationsData] = await Promise.all([
-          getAllPatients(hospitalId),
-          getAllLocations(hospitalId) // শুধু active locations
-        ]);
-        setPatients(patientsData || []);
-        setLocations(locationsData || []);
-        console.log('✅ Locations loaded:', locationsData.length);
-        console.log('✅ Patients loaded:', patientsData.length);
-      } catch (error) {
-        console.error('❌ ডেটা লোড করতে সমস্যা:', error);
-        setPatients([]);
+    if (!hospitalId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+
+    // Locations - একবারই লোড (এগুলো পরিবর্তন হলে আরেকবার লোড হবে)
+    getAllLocations(hospitalId)
+      .then(locs => setLocations(locs || []))
+      .catch(err => {
+        console.error('❌ Locations load error:', err);
         setLocations([]);
-      } finally {
+      });
+
+    // Patients - real-time subscription
+    const unsubscribe = subscribeToPatients(
+      hospitalId,
+      (patientsData) => {
+        setPatients(patientsData || []);
+        setLoading(false);
+      },
+      (error) => {
+        console.error('❌ Patients subscription error:', error);
+        setPatients([]);
         setLoading(false);
       }
+    );
+
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
     };
-    loadData();
   }, [hospitalId]);
 
   // ---------- রোগীর ক্যাটাগরি নির্ধারণ ----------
@@ -284,22 +291,18 @@ export default function Overview({ appointments }) {
 
   // ---------- লোকেশন ডেটা (শুধু Active Locations) ----------
   const locationData = useMemo(() => {
-    // active location names এর সেট
     const activeLocationNames = new Set(locations.map(loc => loc.name));
     const map = {};
     
     appointments.forEach(appt => {
-      // লোকেশন কী: locationName বা address বা locationId
       let locKey = appt.locationName || appt.address || appt.locationId || 'অজানা';
       
-      // যদি locKey 'অজানা' হয় বা locationId হয় (যা string হতে পারে), তাহলে locationName খুঁজে বের করার চেষ্টা
       if (locKey === 'অজানা' || locKey === appt.locationId) {
         const matchedLoc = locations.find(l => l.id === appt.locationId);
         if (matchedLoc) locKey = matchedLoc.name;
-        else return; // skip if no location
+        else return;
       }
       
-      // যদি location active না হয়, skip
       if (locKey !== 'অজানা' && !activeLocationNames.has(locKey)) return;
       
       if (!map[locKey]) {
@@ -313,15 +316,12 @@ export default function Overview({ appointments }) {
       map[locKey].patients.push(appt);
     });
     
-    const result = Object.values(map)
+    return Object.values(map)
       .filter(loc => loc.count > 0)
       .sort((a, b) => b.count - a.count);
-    
-    console.log('📍 locationData:', result.length, result.map(l => l.name));
-    return result;
   }, [appointments, locations]);
 
-  // ---------- ট্রেন্ড ডেটা (ডায়নামিক ডেট জেনারেশন, শুধু Active Locations) ----------
+  // ---------- ট্রেন্ড ডেটা ----------
   const trendData = useMemo(() => {
     if (appointments.length === 0 || locationData.length === 0) return [];
 
@@ -343,7 +343,6 @@ export default function Overview({ appointments }) {
         const count = appointments.filter(a => {
           const apptDate = a.bookingDate ? a.bookingDate.split('T')[0] : '';
           const locKey = a.locationName || a.address || a.locationId || 'অজানা';
-          // if locKey is id, match by id, else by name
           let match = false;
           if (locKey === a.locationId) {
             const loc = locations.find(l => l.id === a.locationId);
@@ -360,11 +359,10 @@ export default function Overview({ appointments }) {
       return dayData;
     });
 
-    console.log('📈 trendData:', result.length, result);
     return result;
   }, [appointments, locationData, trendDays, locations]);
 
-  // ---------- বাকি ডেটা প্রসেসিং (ইতিমধ্যে আছে) ----------
+  // ---------- বাকি ডেটা প্রসেসিং ----------
   const total = appointments.length;
 
   const pending = appointments.filter(a => a.status === 'pending').length;
@@ -543,7 +541,7 @@ export default function Overview({ appointments }) {
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
               <Tooltip />
               <Area type="monotone" dataKey="count" stroke="#1c5fa8" strokeWidth={3} fill="url(#colorCount)" />
             </AreaChart>
@@ -588,7 +586,7 @@ export default function Overview({ appointments }) {
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={locationData} layout="vertical" margin={{ left: 20 }}>
               <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 12 }} />
+              <XAxis type="number" tick={{ fontSize: 12 }} allowDecimals={false} />
               <YAxis type="category" dataKey="name" width={150} interval={0} tick={{ fontSize: 12, fill: '#334155' }} />
               <Tooltip />
               <Bar 
@@ -705,7 +703,7 @@ export default function Overview({ appointments }) {
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={departmentData} layout="vertical" margin={{ left: 20 }}>
               <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 12 }} />
+              <XAxis type="number" tick={{ fontSize: 12 }} allowDecimals={false} />
               <YAxis type="category" dataKey="name" width={150} interval={0} tick={{ fontSize: 12, fill: '#334155' }} />
               <Tooltip />
               <Bar dataKey="count" fill="#0e8ca3" radius={[0, 5, 5, 0]} barSize={20}>
@@ -721,7 +719,7 @@ export default function Overview({ appointments }) {
             <BarChart data={ageData}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
               <Tooltip />
               <Bar dataKey="count" fill="#2f9e52" radius={[5, 5, 0, 0]} barSize={40}>
                 <LabelList dataKey="count" position="top" style={{ fontSize: 12, fill: '#475569' }} />
@@ -735,7 +733,7 @@ export default function Overview({ appointments }) {
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={doctorData} layout="vertical" margin={{ left: 20 }}>
               <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 12 }} />
+              <XAxis type="number" tick={{ fontSize: 12 }} allowDecimals={false} />
               <YAxis type="category" dataKey="name" width={200} interval={0} tick={{ fontSize: 12, fill: '#334155' }} />
               <Tooltip formatter={(value) => [`${value} সিরিয়াল`, 'মোট']} />
               <Bar dataKey="count" fill="#9c3a9c" radius={[0, 5, 5, 0]} barSize={20}>

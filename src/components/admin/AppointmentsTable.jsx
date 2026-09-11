@@ -5,10 +5,11 @@ import {
   Stethoscope, LayoutList, Undo2, Eye, Search, Edit2, Save, X, 
   ArrowUpDown, Printer, XCircle as XCircleIcon, QrCode
 } from 'lucide-react';
-import { db,  doc, getDoc, updateDoc } from '../../firebase';
+import { db, doc, getDoc, updateDoc } from '../../firebase';
 import { useHospital } from '../../context/HospitalContext';
 import { getAllPatients } from '../../services/patientService';
 import { updateAppointmentStatus, addAuditLog } from '../../services/appointmentService';
+import { logActivity, LOG_MODULES, LOG_ACTIONS } from '../../services/activityLogService';
 
 const StatusBadge = ({ status }) => {
   const styles = {
@@ -57,7 +58,8 @@ export default function AppointmentsTable({
   onRestore, 
   isArchivedView, 
   user,
-  marketingTeam = [] 
+  marketingTeam = [],
+  onAppointmentsChange
 }) {
   const { currentHospital } = useHospital();
   const hospitalId = currentHospital?.id;
@@ -172,6 +174,7 @@ export default function AppointmentsTable({
     }
   };
 
+  // ✅ Patient Type Change + Activity Log + Parent Refresh
   const handleManualCategoryChange = async (appointmentId, patientId, newCategory) => {
     if (!isAdmin) {
       alert('শুধুমাত্র অ্যাডমিন রোগীর টাইপ পরিবর্তন করতে পারবেন।');
@@ -181,12 +184,20 @@ export default function AppointmentsTable({
       alert('এই রোগীর জন্য patientId পাওয়া যায়নি।');
       return;
     }
+    if (!hospitalId) {
+      alert('হাসপাতাল আইডি পাওয়া যায়নি!');
+      return;
+    }
+
+    const oldCategory = patientTypes[appointmentId] || '—';
+    const appointment = appointments.find(a => a.id === appointmentId);
 
     try {
       setUpdatingPatient(appointmentId);
       
-     const patientRef = doc(db, 'hospitals', hospitalId, 'patients', patientId);
-    const patientSnap = await getDoc(patientRef);
+      const patientRef = doc(db, 'hospitals', hospitalId, 'patients', patientId);
+      const patientSnap = await getDoc(patientRef);
+      
       if (!patientSnap.exists()) {
         alert('রোগী পাওয়া যায়নি।');
         return;
@@ -194,7 +205,6 @@ export default function AppointmentsTable({
       
       const patient = patientSnap.data();
       let visits = patient.visits || [];
-      const appointment = appointments.find(a => a.id === appointmentId);
       if (!appointment) {
         alert('অ্যাপয়েন্টমেন্ট পাওয়া যায়নি।');
         return;
@@ -248,12 +258,30 @@ export default function AppointmentsTable({
         visits: visits,
         updatedAt: new Date().toISOString()
       });
+
+      // ✅ Activity Log
+      try {
+        await logActivity({
+          hospitalId,
+          module: LOG_MODULES.BOOKING,
+          action: LOG_ACTIONS.PATIENT_TYPE_CHANGE,
+          recordId: appointmentId,
+          description: `${appointment.name || 'রোগী'} এর ধরন পরিবর্তন: ${oldCategory} → ${newCategory}`,
+          oldValue: oldCategory,
+          newValue: newCategory,
+          user
+        });
+      } catch (logErr) {
+        console.error('Patient type log error:', logErr);
+      }
       
-      setPatientTypes(prev => ({
-        ...prev,
-        [appointmentId]: newCategory
-      }));
-      
+      setPatientTypes(prev => ({ ...prev, [appointmentId]: newCategory }));
+
+      // ✅ Parent কে refresh করতে বলুন
+      if (onAppointmentsChange) {
+        try { await onAppointmentsChange(); } catch (e) { console.error(e); }
+      }
+
       alert(`রোগীর টাইপ "${newCategory}" এ পরিবর্তন করা হয়েছে।`);
     } catch (error) {
       console.error('Error updating patient category:', error);
@@ -275,22 +303,85 @@ export default function AppointmentsTable({
     setEditData({
       referralSource: appt.referralSource || '',
       marketingOfficer: appt.marketingOfficer || '',
+      marketingOfficerId: appt.marketingOfficerId || '',
       remarks: appt.remarks || ''
     });
   };
 
+  // ✅ saveEdit + Activity Log + Parent Refresh
   const saveEdit = async (id) => {
     if (!hospitalId) {
       alert('হাসপাতাল আইডি পাওয়া যায়নি!');
       return;
     }
+    const oldAppt = appointments.find(a => a.id === id);
+    if (!oldAppt) { alert('অ্যাপয়েন্টমেন্ট পাওয়া যায়নি'); return; }
+
     try {
       await updateDoc(doc(db, 'hospitals', hospitalId, 'appointments', id), {
         referralSource: editData.referralSource,
         marketingOfficer: editData.marketingOfficer,
+        marketingOfficerId: editData.marketingOfficerId || null,
         remarks: editData.remarks
       });
+
+      // ✅ Marketing Officer change log
+      const oldOffId = oldAppt.marketingOfficerId || '';
+      const newOffId = editData.marketingOfficerId || '';
+      if (oldOffId !== newOffId) {
+        const isAssign = !oldOffId && newOffId;
+        const isUnassign = oldOffId && !newOffId;
+        const actionType = isUnassign ? LOG_ACTIONS.UNASSIGN : (isAssign ? LOG_ACTIONS.ASSIGN : LOG_ACTIONS.MARKETING_OFFICER_CHANGE);
+        try {
+          await logActivity({
+            hospitalId,
+            module: LOG_MODULES.BOOKING,
+            action: actionType,
+            recordId: id,
+            description: isUnassign
+              ? `${oldAppt.name || 'রোগী'} থেকে Marketing Officer সরানো হয়েছে (${oldAppt.marketingOfficer || ''})`
+              : `${oldAppt.name || 'রোগী'} এর Marketing Officer: ${oldAppt.marketingOfficer || '—'} → ${editData.marketingOfficer || '—'}`,
+            oldValue: oldOffId ? { id: oldOffId, name: oldAppt.marketingOfficer || '' } : null,
+            newValue: newOffId ? { id: newOffId, name: editData.marketingOfficer || '' } : null,
+            user
+          });
+        } catch (logErr) {
+          console.error('Marketing change log error:', logErr);
+        }
+      }
+
+      // ✅ Referral / Remarks change log
+      const changes = [];
+      if ((oldAppt.referralSource || '') !== (editData.referralSource || '')) {
+        changes.push(`রেফারেল: ${oldAppt.referralSource || '—'} → ${editData.referralSource || '—'}`);
+      }
+      if ((oldAppt.remarks || '') !== (editData.remarks || '')) {
+        changes.push(`রিমার্কস পরিবর্তন`);
+      }
+      if (changes.length > 0) {
+        try {
+          await logActivity({
+            hospitalId,
+            module: LOG_MODULES.BOOKING,
+            action: LOG_ACTIONS.UPDATE,
+            recordId: id,
+            description: `${oldAppt.name || 'রোগী'} এর তথ্য আপডেট: ${changes.join(', ')}`,
+            oldValue: { referralSource: oldAppt.referralSource || '', remarks: oldAppt.remarks || '' },
+            newValue: { referralSource: editData.referralSource || '', remarks: editData.remarks || '' },
+            user
+          });
+        } catch (logErr) {
+          console.error('Edit log error:', logErr);
+        }
+      }
+
       setEditingId(null);
+
+      // ✅ Parent কে refresh করতে বলুন
+      if (onAppointmentsChange) {
+        try { await onAppointmentsChange(); } catch (e) { console.error(e); }
+      }
+
       alert('✅ আপডেট সফল হয়েছে!');
     } catch (error) {
       console.error('Save edit error:', error);
@@ -595,15 +686,30 @@ export default function AppointmentsTable({
                     <td style={{ padding: '12px' }}>
                       {isEditing ? (
                         <select 
-                          value={editData.marketingOfficer} 
-                          onChange={(e) => setEditData({...editData, marketingOfficer: e.target.value})}
+                          value={editData.marketingOfficerId || ''} 
+                          onChange={(e) => {
+                            const selectedId = e.target.value;
+                            const officer = marketingTeam.find(m => {
+                              const id = typeof m === 'string' ? m : (m.id || m.name);
+                              return id === selectedId;
+                            });
+                            const officerName = officer
+                              ? (typeof officer === 'string' ? officer : officer.name)
+                              : '';
+                            setEditData({
+                              ...editData,
+                              marketingOfficerId: selectedId || '',
+                              marketingOfficer: officerName
+                            });
+                          }}
                           style={{ padding: '4px', border: '1px solid #cbd5e1', borderRadius: '4px', width: '100%' }}
                         >
                           <option value="">নির্বাচন করুন</option>
                           {marketingTeam.map((m, idx) => {
                             const name = typeof m === 'string' ? m : m.name;
-                            const key = typeof m === 'string' ? idx : m.id || idx;
-                            return <option key={key} value={name}>{name}</option>;
+                            const id = typeof m === 'string' ? m : (m.id || m.name);
+                            const key = typeof m === 'string' ? idx : (m.id || idx);
+                            return <option key={key} value={id}>{name}</option>;
                           })}
                         </select>
                       ) : (
@@ -635,12 +741,6 @@ export default function AppointmentsTable({
                             boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
                             transition: 'all 0.2s ease',
                             appearance: 'auto'
-                          }}
-                          onFocus={(e) => {
-                            e.target.style.boxShadow = '0 0 0 3px rgba(13, 148, 136, 0.2)';
-                          }}
-                          onBlur={(e) => {
-                            e.target.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06)';
                           }}
                         >
                           <option value="নতুন">নতুন</option>
@@ -710,7 +810,6 @@ export default function AppointmentsTable({
                     </span>
                     <button
                       onClick={() => printDoctorWise(doctorName, info.patients)}
-                      title={`${doctorName} - প্রিন্ট`}
                       style={{
                         background: '#1c5fa8',
                         color: '#fff',
@@ -722,11 +821,8 @@ export default function AppointmentsTable({
                         fontWeight: '600',
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: '4px',
-                        transition: 'all 0.2s'
+                        gap: '4px'
                       }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = '#154a82'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = '#1c5fa8'}
                     >
                       <Printer size={15} /> প্রিন্ট
                     </button>

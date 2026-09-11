@@ -1,8 +1,13 @@
+// src/components/admin/DisplaySettings.jsx
 import React, { useState, useEffect } from 'react';
 import { db, doc, getDoc, setDoc } from '../../firebase';
+import { useHospital } from '../../context/HospitalContext';
 import { Power, Clock, Save, AlertCircle } from 'lucide-react';
 
 export default function DisplaySettings({ user }) {
+  const { currentHospital } = useHospital();
+  const hospitalId = currentHospital?.id || 'alafiyah_main';
+
   const [settings, setSettings] = useState({
     isActive: true,
     useTimeRange: false,
@@ -13,35 +18,58 @@ export default function DisplaySettings({ user }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
 
-  // লোড সেটিংস
+  // ✅ সেটিংস লোড – path: hospitals/{hospitalId}/displaySettings/data
   useEffect(() => {
+    let mounted = true;
+
     const loadSettings = async () => {
       try {
-        const docRef = doc(db, 'master', 'displaySettings');
+        const docRef = doc(db, 'hospitals', hospitalId, 'displaySettings', 'data');
         const docSnap = await getDoc(docRef);
+
+        if (!mounted) return;
+
         if (docSnap.exists()) {
-          setSettings(docSnap.data());
+          const data = docSnap.data();
+          setSettings({
+            isActive: data.isActive !== undefined ? data.isActive : true,
+            useTimeRange: data.useTimeRange !== undefined ? data.useTimeRange : false,
+            startTime: data.startTime || '08:00',
+            endTime: data.endTime || '22:00'
+          });
         } else {
           // ডিফল্ট সেটিংস সেভ
-          await setDoc(docRef, {
+          const defaults = {
             isActive: true,
             useTimeRange: false,
             startTime: '08:00',
-            endTime: '22:00'
-          });
+            endTime: '22:00',
+            updatedAt: new Date().toISOString()
+          };
+          await setDoc(docRef, defaults);
+          if (mounted) setSettings(defaults);
         }
       } catch (error) {
         console.error('Error loading display settings:', error);
+        if (mounted) setMessage('❌ সেটিংস লোড করতে সমস্যা হয়েছে।');
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
-    if (isAdmin) loadSettings();
-  }, [isAdmin]);
 
-  // সেটিংস সেভ
+    if (isAdmin) {
+      loadSettings();
+    } else {
+      // ✅ isAdmin না হলে loading বন্ধ করুন
+      setLoading(false);
+    }
+
+    return () => { mounted = false; };
+  }, [hospitalId, isAdmin]);
+
+  // ✅ সেটিংস সেভ
   const saveSettings = async () => {
     if (!isAdmin) {
       setMessage('শুধুমাত্র অ্যাডমিন সেটিংস পরিবর্তন করতে পারবেন।');
@@ -50,7 +78,10 @@ export default function DisplaySettings({ user }) {
     try {
       setSaving(true);
       setMessage('');
-      await setDoc(doc(db, 'master', 'displaySettings'), settings);
+      await setDoc(
+        doc(db, 'hospitals', hospitalId, 'displaySettings', 'data'),
+        { ...settings, updatedAt: new Date().toISOString() }
+      );
       setMessage('✅ সেটিংস সফলভাবে সংরক্ষণ করা হয়েছে।');
       setTimeout(() => setMessage(''), 3000);
     } catch (error) {
@@ -70,7 +101,7 @@ export default function DisplaySettings({ user }) {
   }
 
   if (loading) {
-    return <div style={{ padding: '20px', textAlign: 'center' }}>লোড হচ্ছে...</div>;
+    return <div style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>লোড হচ্ছে...</div>;
   }
 
   return (
@@ -133,7 +164,7 @@ export default function DisplaySettings({ user }) {
           </span>
         </div>
 
-        {/* সময় রেঞ্জ (শুধু useTimeRange true হলে) */}
+        {/* সময় রেঞ্জ */}
         {settings.useTimeRange && (
           <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center', paddingLeft: '20px', borderLeft: '3px solid #dbeafe' }}>
             <div>
@@ -187,7 +218,7 @@ export default function DisplaySettings({ user }) {
               color: '#fff',
               border: 'none',
               borderRadius: '8px',
-              cursor: 'pointer',
+              cursor: saving ? 'not-allowed' : 'pointer',
               fontWeight: '600',
               fontSize: '14px',
               display: 'flex',

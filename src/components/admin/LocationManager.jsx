@@ -19,6 +19,7 @@ import LocationMergeModal from './LocationMergeModal';
 import PatientMoveModal from './PatientMoveModal';
 import { db } from '../../firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
+import { logActivity, LOG_MODULES, LOG_ACTIONS } from '../../services/activityLogService';
 
 const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
   const { currentHospital } = useHospital();
@@ -46,7 +47,7 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
     const loadLocations = async () => {
       if (!hospitalId) {
         setLoading(false);
-        showMessage('error', 'হাসপাতাল আইডি পাওয়া যায়নি!');
+        showMessage('error', 'হাসপাতাল আইডি পাওয়া যায়নি!');
         return;
       }
       setLoading(true);
@@ -54,7 +55,7 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
         const locs = await getAllLocations(hospitalId);
         setLocations(locs || []);
         if (!locs || locs.length === 0) {
-          showMessage('info', 'কোনো লোকেশন পাওয়া যায়নি। "লোকেশন মাইগ্রেট করুন" বাটনে ক্লিক করে অ্যাপয়েন্টমেন্ট থেকে লোকেশন তৈরি করুন।');
+          showMessage('info', 'কোনো লোকেশন পাওয়া যায়নি। "লোকেশন মাইগ্রেট করুন" বাটনে ক্লিক করে অ্যাপয়েন্টমেন্ট থেকে লোকেশন তৈরি করুন।');
         }
       } catch (error) {
         console.error('❌ লোকেশন লোড এরর:', error);
@@ -67,10 +68,10 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
     loadLocations();
   }, [hospitalId, refreshKey]);
 
-  // ✅ মাইগ্রেশন হ্যান্ডলার
+  // ✅ মাইগ্রেশন হ্যান্ডলার + Activity Log
   const handleMigrate = async () => {
     if (!hospitalId) {
-      showMessage('error', 'হাসপাতাল আইডি পাওয়া যায়নি!');
+      showMessage('error', 'হাসপাতাল আইডি পাওয়া যায়নি!');
       return;
     }
     if (!confirm('অ্যাপয়েন্টমেন্ট থেকে লোকেশন ডেটা মাইগ্রেট করতে চান? এটি নতুন লোকেশন তৈরি করবে এবং কাউন্ট আপডেট করবে।')) return;
@@ -79,12 +80,28 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
     try {
       const result = await migrateAppointmentsToLocations(hospitalId);
       if (result) {
-        showMessage('success', `${result.created} টি নতুন লোকেশন তৈরি হয়েছে, ${result.updated} টি আপডেট হয়েছে!`);
+        showMessage('success', `${result.created} টি নতুন লোকেশন তৈরি হয়েছে, ${result.updated} টি আপডেট হয়েছে!`);
         setRefreshKey(prev => prev + 1);
-        // অ্যাপয়েন্টমেন্ট রিফ্রেশ
+
+        // ✅ Activity Log
+        try {
+          await logActivity({
+            hospitalId,
+            module: LOG_MODULES.LOCATION,
+            action: LOG_ACTIONS.UPDATE,
+            recordId: null,
+            description: `লোকেশন মাইগ্রেশন: ${result.created} টি নতুন তৈরি, ${result.updated} টি আপডেট`,
+            oldValue: null,
+            newValue: { created: result.created, updated: result.updated },
+            user
+          });
+        } catch (logErr) {
+          console.error('Migration log error:', logErr);
+        }
+
         if (onAppointmentsChange) await onAppointmentsChange();
       } else {
-        showMessage('error', 'মাইগ্রেশন ব্যর্থ হয়েছে!');
+        showMessage('error', 'মাইগ্রেশন ব্যর্থ হয়েছে!');
       }
     } catch (error) {
       console.error('❌ মাইগ্রেশন error:', error);
@@ -95,7 +112,7 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
   };
 
   // প্রকৃত রোগী কাউন্ট চেক
-  const getActualPatientCount = async (locationId, locationName) => {
+  const getActualPatientCount = async (locationId) => {
     try {
       if (!hospitalId) return -1;
       const q = query(
@@ -110,9 +127,10 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
     }
   };
 
+  // ✅ Delete + Activity Log
   const handleDelete = async (id) => {
     if (!hospitalId) {
-      showMessage('error', 'হাসপাতাল আইডি পাওয়া যায়নি!');
+      showMessage('error', 'হাসপাতাল আইডি পাওয়া যায়নি!');
       return;
     }
     const loc = (locations || []).find(l => l.id === id);
@@ -121,7 +139,7 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
       return;
     }
 
-    const actualCount = await getActualPatientCount(loc.id, loc.name);
+    const actualCount = await getActualPatientCount(loc.id);
     if (actualCount === -1) {
       showMessage('error', 'রোগী কাউন্ট চেক করতে সমস্যা হয়েছে, আবার চেষ্টা করুন।');
       return;
@@ -134,9 +152,25 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
     if (!confirm(`"${loc.name}" লোকেশনটি ডিলিট করতে চান? এটি স্থায়ীভাবে মুছে যাবে।`)) return;
     try {
       await deleteLocation(hospitalId, id, true);
-      showMessage('success', `"${loc.name}" ডিলিট করা হয়েছে!`);
+
+      // ✅ Activity Log
+      try {
+        await logActivity({
+          hospitalId,
+          module: LOG_MODULES.LOCATION,
+          action: LOG_ACTIONS.DELETE,
+          recordId: loc.id,
+          description: `লোকেশন "${loc.name}" ডিলিট করা হয়েছে`,
+          oldValue: { id: loc.id, name: loc.name, patientCount: loc.patientCount || 0 },
+          newValue: null,
+          user
+        });
+      } catch (logErr) {
+        console.error('Delete log error:', logErr);
+      }
+
+      showMessage('success', `"${loc.name}" ডিলিট করা হয়েছে!`);
       setRefreshKey(prev => prev + 1);
-      // অ্যাপয়েন্টমেন্ট রিফ্রেশ
       if (onAppointmentsChange) await onAppointmentsChange();
     } catch (error) {
       console.error('❌ ডিলিট error:', error);
@@ -144,9 +178,10 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
     }
   };
 
+  // ✅ Recalculate + Activity Log
   const handleRecalculateCounts = async () => {
     if (!hospitalId) {
-      showMessage('error', 'হাসপাতাল আইডি পাওয়া যায়নি!');
+      showMessage('error', 'হাসপাতাল আইডি পাওয়া যায়নি!');
       return;
     }
     if (!confirm('সব লোকেশনের রোগী সংখ্যা পুনঃগণনা করতে চান?')) return;
@@ -156,7 +191,23 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
       if (result && result.success) {
         showMessage('success', 'সব লোকেশনের কাউন্ট আপডেট করা হয়েছে!');
         setRefreshKey(prev => prev + 1);
-        // অ্যাপয়েন্টমেন্ট রিফ্রেশ
+
+        // ✅ Activity Log
+        try {
+          await logActivity({
+            hospitalId,
+            module: LOG_MODULES.LOCATION,
+            action: LOG_ACTIONS.UPDATE,
+            recordId: null,
+            description: `লোকেশন কাউন্ট পুনঃগণনা করা হয়েছে`,
+            oldValue: null,
+            newValue: { updated: result.updated || 0, deleted: result.deleted || 0 },
+            user
+          });
+        } catch (logErr) {
+          console.error('Recalculate log error:', logErr);
+        }
+
         if (onAppointmentsChange) await onAppointmentsChange();
       } else {
         showMessage('error', 'কাউন্ট রিক্যালকুলেট ব্যর্থ হয়েছে!');
@@ -179,19 +230,16 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
     setShowMoveModal(true);
   };
 
-  // ✅ মুভ সফল হলে লোকেশন ও অ্যাপয়েন্টমেন্ট রিফ্রেশ
+  // ✅ Move success + Activity Log
   const handleMoveSuccess = async () => {
     setRefreshKey(prev => prev + 1);
     showMessage('success', 'রোগী স্থানান্তরিত হয়েছে!');
-    // অ্যাপয়েন্টমেন্ট রিফ্রেশ
-    if (onAppointmentsChange) {
-      await onAppointmentsChange();
-    }
+    if (onAppointmentsChange) await onAppointmentsChange();
   };
 
   const handleFindDuplicates = async () => {
     if (!hospitalId) {
-      showMessage('error', 'হাসপাতাল আইডি পাওয়া যায়নি!');
+      showMessage('error', 'হাসপাতাল আইডি পাওয়া যায়নি!');
       return;
     }
     setLoading(true);
@@ -212,13 +260,14 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
     }
   };
 
+  // ✅ Direct Merge + Activity Log
   const handleDirectMerge = async (master, slaves) => {
     if (!hospitalId) {
-      showMessage('error', 'হাসপাতাল আইডি পাওয়া যায়নি!');
+      showMessage('error', 'হাসপাতাল আইডি পাওয়া যায়নি!');
       return;
     }
     if (!master || !master.id) {
-      showMessage('error', 'মাস্টার লোকেশন সঠিক নয়!');
+      showMessage('error', 'মাস্টার লোকেশন সঠিক নয়!');
       return;
     }
     const slaveIds = slaves.map(s => s.id).filter(id => id);
@@ -235,10 +284,26 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
         setRefreshKey(prev => prev + 1);
         setShowDuplicates(false);
         setDuplicates([]);
-        // অ্যাপয়েন্টমেন্ট রিফ্রেশ
+
+        // ✅ Activity Log
+        try {
+          await logActivity({
+            hospitalId,
+            module: LOG_MODULES.LOCATION,
+            action: LOG_ACTIONS.UPDATE,
+            recordId: master.id,
+            description: `লোকেশন মার্জ: ${slaves.map(s => s.name).join(', ')} → ${master.name}`,
+            oldValue: { master: master.name, slaves: slaves.map(s => ({ id: s.id, name: s.name })) },
+            newValue: { master: master.name, masterId: master.id, totalPatients: result.totalPatients || 0 },
+            user
+          });
+        } catch (logErr) {
+          console.error('Merge log error:', logErr);
+        }
+
         if (onAppointmentsChange) await onAppointmentsChange();
       } else {
-        showMessage('error', 'মার্জ সম্পন্ন হয়নি!');
+        showMessage('error', 'মার্জ সম্পন্ন হয়নি!');
       }
     } catch (error) {
       console.error('❌ মার্জ ব্যর্থ:', error);
@@ -251,14 +316,35 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
     setShowMergeModal(true);
   };
 
+  // ✅ Merge modal success + Activity Log
   const onMergeSuccess = async () => {
     setRefreshKey(prev => prev + 1);
     showMessage('success', 'লোকেশন মার্জ সম্পন্ন হয়েছে!');
+
+    // Activity Log
+    if (selectedLocations.length >= 2 && hospitalId) {
+      const master = selectedLocations[0];
+      const slaves = selectedLocations.slice(1);
+      try {
+        await logActivity({
+          hospitalId,
+          module: LOG_MODULES.LOCATION,
+          action: LOG_ACTIONS.UPDATE,
+          recordId: master.id,
+          description: `লোকেশন মার্জ: ${slaves.map(s => s.name).join(', ')} → ${master.name}`,
+          oldValue: { master: master.name, slaves: slaves.map(s => ({ id: s.id, name: s.name })) },
+          newValue: { master: master.name, masterId: master.id },
+          user
+        });
+      } catch (logErr) {
+        console.error('Merge modal log error:', logErr);
+      }
+    }
+
     setShowMergeModal(false);
     setSelectedLocations([]);
     setShowDuplicates(false);
     setDuplicates([]);
-    // অ্যাপয়েন্টমেন্ট রিফ্রেশ
     if (onAppointmentsChange) await onAppointmentsChange();
   };
 
@@ -300,7 +386,7 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          {/* মাইগ্রেশন বাটন */}
+          {/* ✅ Migration বাটন */}
           <button 
             onClick={handleMigrate}
             disabled={migrating || loading}
@@ -323,6 +409,7 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
             {migrating ? 'মাইগ্রেট হচ্ছে...' : '🔁 লোকেশন মাইগ্রেট করুন'}
           </button>
 
+          {/* ✅ Recalculate বাটন */}
           <button 
             onClick={handleRecalculateCounts}
             disabled={recalculating || loading}
@@ -622,7 +709,11 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
           isOpen={showEditModal}
           onClose={() => { setShowEditModal(false); setSelectedLocation(null); }}
           location={selectedLocation}
-          onSuccess={() => { setRefreshKey(prev => prev + 1); showMessage('success', 'লোকেশন আপডেট করা হয়েছে!'); }}
+          onSuccess={async () => {
+            setRefreshKey(prev => prev + 1);
+            showMessage('success', 'লোকেশন আপডেট করা হয়েছে!');
+            if (onAppointmentsChange) await onAppointmentsChange();
+          }}
         />
       )}
 

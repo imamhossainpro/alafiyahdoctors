@@ -1,13 +1,10 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 :root {
   --text: #475569;
   --text-h: #1e293b;
   --bg: #ffffff;
   --border: #e2e8f0;
   --code-bg: #f1f5f9;
-  --accent: #0d9488; /* বেগুনি রঙের বদলে অ্যাপের টিল (Teal) কালার */
+  --accent: #0d9488; /* অ্যাপের টিল (Teal) কালার */
   --accent-bg: rgba(13, 148, 136, 0.1);
   --accent-border: rgba(13, 148, 136, 0.5);
   --social-bg: rgba(241, 245, 249, 0.5);
@@ -20,10 +17,9 @@
 
   font: 16px/145% var(--sans);
   letter-spacing: 0.18px;
-  
-  /* ✅ এই লাইনটি পরিবর্তন করা হয়েছে: Dark Mode বন্ধ করে ফোর্স Light করা হয়েছে */
-  color-scheme: light; 
-  
+
+  color-scheme: light;
+
   color: var(--text);
   background: var(--bg);
   font-synthesis: none;
@@ -36,18 +32,15 @@
   }
 }
 
-/* ❌ ডার্ক মোডের ব্লকটি সম্পূর্ণ মুছে ফেলা হয়েছে যাতে কখনো ব্যাকগ্রাউন্ড কালো না হয় */
-
 body {
   margin: 0;
 }
 
-/* ✅ মূল ফিক্স: #root থেকে নির্দিষ্ট উইডথ ও সেন্টারিং সরিয়ে ফুল-স্ক্রিন করা হয়েছে */
 #root {
   width: 100%;
   max-width: 100%;
   margin: 0;
-  text-align: left; /* ✅ ড্যাশবোর্ডের জন্য বাম পাশে অ্যালাইনমেন্ট */
+  text-align: left;
   border: none;
   min-height: 100svh;
   display: flex;

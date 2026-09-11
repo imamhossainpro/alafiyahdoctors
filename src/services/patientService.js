@@ -16,16 +16,27 @@ import {
 import { db } from '../firebase';
 
 // ==========================================
+// ✅ Cache Layer (১ মিনিট TTL)
+// ==========================================
+let patientsCache = null;
+let patientsCacheTimestamp = 0;
+let patientsCacheHospitalId = null;
+const CACHE_TTL = 60 * 1000; // 1 মিনিট
+
+/**
+ * Cache invalidate করুন – কোনো create/update/delete এর পর কল করুন
+ */
+export const invalidatePatientsCache = () => {
+  patientsCache = null;
+  patientsCacheTimestamp = 0;
+  patientsCacheHospitalId = null;
+};
+
+// ==========================================
 // ১. রেফারেন্স হেল্পার (নিরাপদ)
 // ==========================================
 
-/**
- * পেশেন্ট কালেকশনের রেফারেন্স তৈরি করে
- * @param {string} hospitalId - হাসপিটালের আইডি (string হতে হবে)
- * @returns {CollectionReference}
- */
 const getPatientsRef = (hospitalId) => {
-  // ✅ hospitalId যাচাই
   if (!hospitalId || typeof hospitalId !== 'string') {
     throw new Error('getPatientsRef: hospitalId অবশ্যই একটি স্ট্রিং হতে হবে।');
   }
@@ -37,11 +48,10 @@ const getPatientsRef = (hospitalId) => {
 // ==========================================
 
 /**
- * নতুন পেশেন্ট তৈরি করুন (createPatient)
+ * নতুন পেশেন্ট তৈরি করুন
  */
 export const createPatient = async (hospitalId, patientData) => {
   try {
-    // ✅ hospitalId যাচাই
     if (!hospitalId || typeof hospitalId !== 'string') {
       throw new Error('createPatient: hospitalId অবশ্যই একটি স্ট্রিং হতে হবে।');
     }
@@ -52,6 +62,10 @@ export const createPatient = async (hospitalId, patientData) => {
       updatedAt: Timestamp.now(),
       hospitalId,
     });
+
+    // ✅ Cache invalidate
+    invalidatePatientsCache();
+
     return { id: docRef.id, ...patientData };
   } catch (error) {
     console.error('❌ createPatient error:', error);
@@ -60,7 +74,7 @@ export const createPatient = async (hospitalId, patientData) => {
 };
 
 /**
- * পেশেন্ট ভিজিট যোগ করুন (addPatientVisit)
+ * পেশেন্ট ভিজিট যোগ করুন
  */
 export const addPatientVisit = async (hospitalId, visitData) => {
   try {
@@ -76,6 +90,10 @@ export const addPatientVisit = async (hospitalId, visitData) => {
       hospitalId,
       type: 'visit',
     });
+
+    // ✅ Cache invalidate
+    invalidatePatientsCache();
+
     return { id: docRef.id, ...visitData };
   } catch (error) {
     console.error('❌ addPatientVisit error:', error);
@@ -84,7 +102,7 @@ export const addPatientVisit = async (hospitalId, visitData) => {
 };
 
 /**
- * মোবাইল নম্বর দিয়ে পেশেন্ট খুঁজুন (findPatientByMobile)
+ * মোবাইল নম্বর দিয়ে পেশেন্ট খুঁজুন
  */
 export const findPatientByMobile = async (hospitalId, mobileNumber) => {
   try {
@@ -118,6 +136,10 @@ export const updatePatient = async (hospitalId, patientId, data) => {
       ...data,
       updatedAt: Timestamp.now(),
     });
+
+    // ✅ Cache invalidate
+    invalidatePatientsCache();
+
     return { id: patientId, ...data };
   } catch (error) {
     console.error('❌ updatePatient error:', error);
@@ -135,6 +157,10 @@ export const deletePatient = async (hospitalId, patientId) => {
     }
     const ref = doc(db, 'hospitals', hospitalId, 'patients', patientId);
     await deleteDoc(ref);
+
+    // ✅ Cache invalidate
+    invalidatePatientsCache();
+
     return { success: true };
   } catch (error) {
     console.error('❌ deletePatient error:', error);
@@ -143,21 +169,44 @@ export const deletePatient = async (hospitalId, patientId) => {
 };
 
 // ==========================================
-// ৩. ডেটা ফেচ (One-time)
+// ৩. ডেটা ফেচ (Cache সহ)
 // ==========================================
 
 /**
- * সব পেশেন্ট ফেচ করুন (fetchAllPatients)
+ * ✅ Cache-aware fetchAllPatients
+ * - প্রথমবার Firestore থেকে load করবে
+ * - পরেরবার (১ মিনিটের মধ্যে) cache থেকে দেবে
  */
-export const fetchAllPatients = async (hospitalId) => {
+export const fetchAllPatients = async (hospitalId, forceRefresh = false) => {
   try {
     if (!hospitalId || typeof hospitalId !== 'string') {
       throw new Error('fetchAllPatients: hospitalId অবশ্যই একটি স্ট্রিং হতে হবে।');
     }
+
+    const now = Date.now();
+
+    // ✅ Cache hit
+    if (
+      !forceRefresh &&
+      patientsCache &&
+      patientsCacheHospitalId === hospitalId &&
+      (now - patientsCacheTimestamp) < CACHE_TTL
+    ) {
+      return patientsCache;
+    }
+
+    // Cache miss – Firestore থেকে load
     const ref = getPatientsRef(hospitalId);
     const q = query(ref);
     const snapshot = await getDocs(q);
-    return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const patients = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+    // ✅ Cache store
+    patientsCache = patients;
+    patientsCacheTimestamp = now;
+    patientsCacheHospitalId = hospitalId;
+
+    return patients;
   } catch (error) {
     console.error('❌ fetchAllPatients error:', error);
     return [];
@@ -165,7 +214,8 @@ export const fetchAllPatients = async (hospitalId) => {
 };
 
 // Alias for Overview.jsx
-export const getAllPatients = (hospitalId) => fetchAllPatients(hospitalId);
+export const getAllPatients = (hospitalId, forceRefresh = false) =>
+  fetchAllPatients(hospitalId, forceRefresh);
 
 /**
  * নির্দিষ্ট পেশেন্টের বিস্তারিত
@@ -186,11 +236,11 @@ export const getPatientById = async (hospitalId, patientId) => {
 };
 
 // ==========================================
-// ৪. রিয়েল-টাইম লিসেনার
+// ৪. রিয়েল-টাইম লিসেনার
 // ==========================================
 
 /**
- * সব পেশেন্টের রিয়েল-টাইম লিসেনার
+ * সব পেশেন্টের রিয়েল-টাইম লিসেনার
  */
 export const subscribeToPatients = (hospitalId, callback, errorCallback) => {
   if (!hospitalId || typeof hospitalId !== 'string') {
@@ -204,6 +254,12 @@ export const subscribeToPatients = (hospitalId, callback, errorCallback) => {
       q,
       (snapshot) => {
         const patients = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+        // ✅ Real-time update-এ cache-ও sync করুন
+        patientsCache = patients;
+        patientsCacheTimestamp = Date.now();
+        patientsCacheHospitalId = hospitalId;
+
         if (callback) callback(patients);
       },
       (error) => {
@@ -254,4 +310,5 @@ export default {
   getPatientById,
   subscribeToPatients,
   getPatientCount,
+  invalidatePatientsCache,
 };
