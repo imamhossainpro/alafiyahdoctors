@@ -6,7 +6,19 @@ import { generateQRCode } from './services/qrService';
 import { addLocationFromBooking } from './services/locationService';
 import { useHospital } from './context/HospitalContext';
 import { useAuth } from './context/AuthContext';
-import { Send, Loader2, User, Phone, MapPin, Stethoscope, CalendarDays, ArrowLeft, PlusCircle, CheckCircle2, Clock } from 'lucide-react';
+import {
+  Send,
+  Loader2,
+  User,
+  Phone,
+  MapPin,
+  Stethoscope,
+  CalendarDays,
+  ArrowLeft,
+  PlusCircle,
+  CheckCircle2,
+  Clock,
+} from 'lucide-react';
 
 const DEFAULT_HOSPITAL_ID = 'alafiyah_main';
 const BANGLA_DAYS = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
@@ -23,7 +35,9 @@ const getTodayString = () => {
 const toEnglishDigits = (str) => {
   const banglaDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
   const englishDigits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
-  return str.replace(/[০-৯]/g, (char) => banglaDigits.indexOf(char) !== -1 ? englishDigits[banglaDigits.indexOf(char)] : char);
+  return str.replace(/[০-৯]/g, (char) =>
+    banglaDigits.indexOf(char) !== -1 ? englishDigits[banglaDigits.indexOf(char)] : char
+  );
 };
 
 // ---------- ক্যালেন্ডার (৭ দিনের সীমা সহ) ----------
@@ -31,7 +45,6 @@ function CustomCalendar({ selectedDate, onDateChange }) {
   const today = new Date();
   const todayStr = getTodayString();
 
-  // সর্বোচ্চ অনুমোদিত তারিখ (আজ + ৭ দিন)
   const maxDate = new Date(today);
   maxDate.setDate(maxDate.getDate() + MAX_DAYS_AHEAD);
   const maxDateStr = maxDate.toISOString().split('T')[0];
@@ -55,21 +68,36 @@ function CustomCalendar({ selectedDate, onDateChange }) {
   const month = viewDate.getMonth();
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const monthNames = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
+  const monthNames = [
+    'জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন',
+    'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর',
+  ];
   const dayNames = ['রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহঃ', 'শুক্র', 'শনি'];
 
   return (
     <div className="custom-calendar">
       <div className="cal-header">
-        <button type="button" onClick={() => setViewDate(new Date(year, month - 1, 1))}>&lt;</button>
-        <span>{monthNames[month]} {year}</span>
-        <button type="button" onClick={() => setViewDate(new Date(year, month + 1, 1))}>&gt;</button>
+        <button type="button" onClick={() => setViewDate(new Date(year, month - 1, 1))}>
+          &lt;
+        </button>
+        <span>
+          {monthNames[month]} {year}
+        </span>
+        <button type="button" onClick={() => setViewDate(new Date(year, month + 1, 1))}>
+          &gt;
+        </button>
       </div>
       <div className="cal-grid cal-weekdays">
-        {dayNames.map(d => <div key={d} className="cal-day-name">{d}</div>)}
+        {dayNames.map((d) => (
+          <div key={d} className="cal-day-name">
+            {d}
+          </div>
+        ))}
       </div>
       <div className="cal-grid cal-days">
-        {Array.from({ length: firstDay }).map((_, i) => <div key={`empty-${i}`} className="cal-day empty"></div>)}
+        {Array.from({ length: firstDay }).map((_, i) => (
+          <div key={`empty-${i}`} className="cal-day empty"></div>
+        ))}
         {Array.from({ length: daysInMonth }).map((_, i) => {
           const day = i + 1;
           const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -194,11 +222,10 @@ export default function BookingSystem({ departments, panels, onBack }) {
   const [successMsg, setSuccessMsg] = useState('');
   const [qrCode, setQrCode] = useState(null);
   const [appointmentId, setAppointmentId] = useState(null);
+  const [bookedSerialNo, setBookedSerialNo] = useState(null);
 
   useEffect(() => {
     console.log('🔄 useEffect চলছে... selectedDate:', selectedDate);
-    console.log('📦 panels:', panels);
-    console.log('📦 departments:', departments);
 
     if (!panels || panels.length === 0) {
       console.warn('⚠️ Panels খালি বা undefined');
@@ -215,37 +242,29 @@ export default function BookingSystem({ departments, panels, onBack }) {
     const englishDay = dateObj.getDay();
     const dayName = BANGLA_DAYS[englishDay];
     setSelectedDayName(dayName);
-    console.log(`📅 দিন: ${dayName} (${selectedDate})`);
 
-    const dayPanel = panels.find(p => p.name === dayName);
-    console.log(`🔍 প্যানেল পাওয়া গেছে?`, dayPanel ? '✅' : '❌', dayPanel);
-
+    const dayPanel = panels.find((p) => p.name === dayName);
     if (!dayPanel) {
-      console.warn(`⚠️ "${dayName}" এর জন্য কোনো প্যানেল নেই`);
       setAvailableDoctors([]);
       return;
     }
 
     const activeIds = dayPanel.activeDoctorIds || [];
-    console.log(`👨‍⚕️ activeDoctorIds:`, activeIds);
-
     if (activeIds.length === 0) {
-      console.warn(`⚠️ "${dayName}" প্যানেলে কোনো ডাক্তার আইডি নেই`);
       setAvailableDoctors([]);
       return;
     }
 
     const filteredDocs = [];
-    departments.forEach(dept => {
+    departments.forEach((dept) => {
       const deptDoctors = dept.doctors || [];
-      deptDoctors.forEach(doc => {
+      deptDoctors.forEach((doc) => {
         if (activeIds.includes(doc.id)) {
           filteredDocs.push({ ...doc, deptName: dept.name, deptId: dept.id });
         }
       });
     });
 
-    console.log(`✅ পাওয়া গেছে ${filteredDocs.length} জন ডাক্তার`);
     setAvailableDoctors(filteredDocs);
     setSelectedDoctor(null);
   }, [selectedDate, panels, departments]);
@@ -253,9 +272,9 @@ export default function BookingSystem({ departments, panels, onBack }) {
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (name === 'age' || name === 'mobile') {
-      setFormData(prev => ({ ...prev, [name]: toEnglishDigits(value) }));
+      setFormData((prev) => ({ ...prev, [name]: toEnglishDigits(value) }));
     } else {
-      setFormData(prev => ({ ...prev, [name]: value }));
+      setFormData((prev) => ({ ...prev, [name]: value }));
     }
     if (name === 'departmentId') setSelectedDoctor(null);
     setSuccessMsg('');
@@ -263,9 +282,15 @@ export default function BookingSystem({ departments, panels, onBack }) {
 
   const resetForm = () => {
     setFormData({
-      name: '', age: '', mobile: '', gender: 'পুরুষ', address: '',
-      referralSource: 'Walk-in / নিজে এসেছেন', referredDoctorName: '',
-      otherReferralNote: '', departmentId: ''
+      name: '',
+      age: '',
+      mobile: '',
+      gender: 'পুরুষ',
+      address: '',
+      referralSource: 'Walk-in / নিজে এসেছেন',
+      referredDoctorName: '',
+      otherReferralNote: '',
+      departmentId: '',
     });
     setSelectedDate(getTodayString());
     setAvailableDoctors([]);
@@ -273,6 +298,7 @@ export default function BookingSystem({ departments, panels, onBack }) {
     setSuccessMsg('');
     setQrCode(null);
     setAppointmentId(null);
+    setBookedSerialNo(null);
   };
 
   const handleSubmit = async (e) => {
@@ -280,6 +306,7 @@ export default function BookingSystem({ departments, panels, onBack }) {
     setLoading(true);
     setSuccessMsg('');
     try {
+      // ---------- Validation ----------
       if (!formData.name.trim()) throw new Error('রোগীর নাম লিখুন');
       if (!formData.age.trim()) throw new Error('বয়স লিখুন');
       if (!formData.mobile.trim()) throw new Error('মোবাইল নম্বর লিখুন');
@@ -290,6 +317,9 @@ export default function BookingSystem({ departments, panels, onBack }) {
         throw new Error('hospitalId অবশ্যই একটি স্ট্রিং হতে হবে।');
       }
 
+      // ==================================================
+      // ১. Patient তৈরি / খোঁজ
+      // ==================================================
       let patient = await findPatientByMobile(hospitalId, formData.mobile);
       let patientId;
       let isNewPatient = true;
@@ -308,7 +338,7 @@ export default function BookingSystem({ departments, panels, onBack }) {
           mobile: formData.mobile,
           age: formData.age,
           gender: formData.gender,
-          address: formData.address
+          address: formData.address,
         });
         patientId = newPatient.id;
         isNewPatient = true;
@@ -319,22 +349,61 @@ export default function BookingSystem({ departments, panels, onBack }) {
         });
       }
 
-      const counterRef = doc(db, 'hospitals', hospitalId, 'counters', selectedDoctor.id);
+      // ==================================================
+      // ✅ ২. Serial Number (প্রতি ডাক্তার + প্রতি দিন আলাদা)
+      // ==================================================
+      // Counter key format: {doctorId}_{YYYY-MM-DD}
+      // উদাহরণ: abc123_2026-09-12
+      // এতে প্রতি ডাক্তারের সিরিয়াল প্রতিদিন ১ থেকে শুরু হবে
+      // ==================================================
+      const bookingDateStr = selectedDate; // YYYY-MM-DD
+      const counterKey = `${selectedDoctor.id}_${bookingDateStr}`;
+      const counterRef = doc(db, 'hospitals', hospitalId, 'counters', counterKey);
+
       let serialNo = 1;
       const counterDoc = await getDoc(counterRef);
+
       if (counterDoc.exists()) {
-        serialNo = counterDoc.data().count + 1;
-        await setDoc(counterRef, { count: serialNo }, { merge: true });
+        serialNo = (counterDoc.data().count || 0) + 1;
+        await setDoc(
+          counterRef,
+          {
+            count: serialNo,
+            doctorId: selectedDoctor.id,
+            doctorName: selectedDoctor.name,
+            date: bookingDateStr,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
       } else {
-        await setDoc(counterRef, { count: serialNo });
+        await setDoc(counterRef, {
+          count: serialNo,
+          doctorId: selectedDoctor.id,
+          doctorName: selectedDoctor.name,
+          date: bookingDateStr,
+          createdAt: new Date().toISOString(),
+        });
       }
 
+      console.log(
+        `🔢 Serial: ${serialNo} | Doctor: ${selectedDoctor.name} (${selectedDoctor.id}) | Date: ${bookingDateStr}`
+      );
+
+      // ==================================================
+      // ৩. Appointment তৈরি
+      // ==================================================
       const appointmentData = {
         ...formData,
         patientId,
+        doctorId: selectedDoctor.id,
         doctorName: selectedDoctor.name,
         doctorDept: selectedDoctor.deptName,
         doctorQuals: selectedDoctor.quals || '',
+        doctorTime:
+          selectedDoctor.timeSlots && selectedDoctor.timeSlots.length > 0
+            ? `${selectedDoctor.timeSlots[0].start} - ${selectedDoctor.timeSlots[0].end}`
+            : '',
         bookingDate: selectedDate,
         bookingDay: selectedDayName,
         serialNo,
@@ -345,37 +414,51 @@ export default function BookingSystem({ departments, panels, onBack }) {
         hospitalId,
       };
 
-      const docRef = await addDoc(collection(db, 'hospitals', hospitalId, 'appointments'), appointmentData);
+      const docRef = await addDoc(
+        collection(db, 'hospitals', hospitalId, 'appointments'),
+        appointmentData
+      );
       setAppointmentId(docRef.id);
-      console.log('✅ Appointment created with ID:', docRef.id);
+      setBookedSerialNo(serialNo);
+      console.log('✅ Appointment created:', docRef.id, '| Serial:', serialNo);
 
-      // ✅ লোকেশন যোগ করুন (address থেকে)
+      // ---------- Location save ----------
       if (formData.address && formData.address.trim()) {
         await addLocationFromBooking(hospitalId, formData.address, docRef.id);
       }
 
+      // ---------- QR code ----------
       const qrImage = await generateQRCode(docRef.id);
       if (qrImage) setQrCode(qrImage);
 
-      setSuccessMsg('আপনার সিরিয়ালটি সফলভাবে কনফার্ম করা হয়েছে। চেক-ইন করতে QR কোড ব্যবহার করুন।');
+      setSuccessMsg(
+        'আপনার সিরিয়ালটি সফলভাবে কনফার্ম করা হয়েছে। চেক-ইন করতে QR কোড ব্যবহার করুন।'
+      );
       setIsBooked(true);
     } catch (error) {
-      console.error("Booking error:", error);
-      alert(error.message || "বুকিং সম্পন্ন হয়নি। আবার চেষ্টা করুন।");
+      console.error('Booking error:', error);
+      alert(error.message || 'বুকিং সম্পন্ন হয়নি। আবার চেষ্টা করুন।');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleNewBooking = () => { resetForm(); setIsBooked(false); };
+  const handleNewBooking = () => {
+    resetForm();
+    setIsBooked(false);
+  };
+
   const handleBackToDoctors = () => {
     if (onBack) onBack();
-    else { resetForm(); setIsBooked(false); }
+    else {
+      resetForm();
+      setIsBooked(false);
+    }
   };
 
   const filteredDoctors = selectedDoctor
-    ? availableDoctors.filter(doc => doc.id === selectedDoctor.id)
-    : availableDoctors.filter(doc => !formData.departmentId || doc.deptId === formData.departmentId);
+    ? availableDoctors.filter((doc) => doc.id === selectedDoctor.id)
+    : availableDoctors.filter((doc) => !formData.departmentId || doc.deptId === formData.departmentId);
 
   return (
     <div className="booking-wrapper">
@@ -390,16 +473,62 @@ export default function BookingSystem({ departments, panels, onBack }) {
               </svg>
             </div>
             <h3 className="success-title">বুকিং সফল হয়েছে!</h3>
+
+            {bookedSerialNo && (
+              <div
+                style={{
+                  background: 'linear-gradient(135deg, #0d9488, #14b8a6)',
+                  color: '#fff',
+                  padding: '16px 32px',
+                  borderRadius: '16px',
+                  marginBottom: '16px',
+                  boxShadow: '0 8px 20px rgba(13, 148, 136, 0.3)',
+                }}
+              >
+                <div style={{ fontSize: '13px', opacity: 0.9, marginBottom: '4px' }}>
+                  আপনার সিরিয়াল নম্বর
+                </div>
+                <div style={{ fontSize: '42px', fontWeight: '800', lineHeight: '1' }}>
+                  {bookedSerialNo}
+                </div>
+              </div>
+            )}
+
             <p className="success-text">{successMsg}</p>
+
             {qrCode && (
               <div style={{ marginBottom: '16px' }}>
-                <p style={{ fontSize: '14px', color: '#475569', marginBottom: '8px' }}>📱 চেক-ইন করতে QR কোড স্ক্যান করুন</p>
-                <img src={qrCode} alt="QR Code" style={{ width: '150px', height: '150px', borderRadius: '8px', border: '1px solid #e2e8f0', padding: '4px' }} />
+                <p style={{ fontSize: '14px', color: '#475569', marginBottom: '8px' }}>
+                  📱 চেক-ইন করতে QR কোড স্ক্যান করুন
+                </p>
+                <img
+                  src={qrCode}
+                  alt="QR Code"
+                  style={{
+                    width: '150px',
+                    height: '150px',
+                    borderRadius: '8px',
+                    border: '1px solid #e2e8f0',
+                    padding: '4px',
+                  }}
+                />
                 {appointmentId && (
                   <>
-                    <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px' }}>অ্যাপয়েন্টমেন্ট আইডি: {appointmentId}</p>
+                    <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px' }}>
+                      অ্যাপয়েন্টমেন্ট আইডি: {appointmentId}
+                    </p>
                     <p style={{ fontSize: '13px', marginTop: '8px' }}>
-                      <a href={`${window.location.origin}/checkin/${appointmentId}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1c5fa8', fontWeight: '600', textDecoration: 'underline', cursor: 'pointer' }}>
+                      <a
+                        href={`${window.location.origin}/checkin/${appointmentId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          color: '#1c5fa8',
+                          fontWeight: '600',
+                          textDecoration: 'underline',
+                          cursor: 'pointer',
+                        }}
+                      >
                         🔗 চেক-ইন করতে এখানে ক্লিক করুন
                       </a>
                     </p>
@@ -408,8 +537,12 @@ export default function BookingSystem({ departments, panels, onBack }) {
               </div>
             )}
             <div className="success-buttons">
-              <button className="success-btn success-btn-secondary" onClick={handleBackToDoctors}><ArrowLeft size={18} /> ফিরে যান হোমপেইজে</button>
-              <button className="success-btn success-btn-primary" onClick={handleNewBooking}><PlusCircle size={18} /> আরো একটি সিরিয়াল দিন</button>
+              <button className="success-btn success-btn-secondary" onClick={handleBackToDoctors}>
+                <ArrowLeft size={18} /> ফিরে যান হোমপেইজে
+              </button>
+              <button className="success-btn success-btn-primary" onClick={handleNewBooking}>
+                <PlusCircle size={18} /> আরো একটি সিরিয়াল দিন
+              </button>
             </div>
           </div>
         ) : (
@@ -417,53 +550,118 @@ export default function BookingSystem({ departments, panels, onBack }) {
             <h2 className="booking-title">রোগীর ডাক্তার বুকিং ফর্ম</h2>
 
             <div className="form-section">
-              <div className="section-title"><CalendarDays size={18} /> বুকিং তারিখ নির্বাচন</div>
+              <div className="section-title">
+                <CalendarDays size={18} /> বুকিং তারিখ নির্বাচন
+              </div>
               <div className="form-group">
                 <CustomCalendar selectedDate={selectedDate} onDateChange={setSelectedDate} />
-                {selectedDayName && <span className="day-badge">সপ্তাহের দিন: {selectedDayName}</span>}
+                {selectedDayName && (
+                  <span className="day-badge">সপ্তাহের দিন: {selectedDayName}</span>
+                )}
               </div>
             </div>
 
             <div className="form-section">
-              <div className="section-title"><User size={18} /> রোগীর তথ্য <span className="required-asterisk">*</span></div>
-              <div className="form-group">
-                <label>রোগীর নাম <span className="required-asterisk">*</span></label>
-                <input type="text" className="input" name="name" value={formData.name} onChange={handleChange} required placeholder="আপনার পুরো নাম" />
+              <div className="section-title">
+                <User size={18} /> রোগীর তথ্য <span className="required-asterisk">*</span>
               </div>
               <div className="form-group">
-                <label>বয়স (বাংলা বা ইংরেজি সংখ্যায়) <span className="required-asterisk">*</span></label>
-                <input type="text" className="input" name="age" value={formData.age} onChange={handleChange} required placeholder="যেমনঃ ২৫ বা 25" />
+                <label>
+                  রোগীর নাম <span className="required-asterisk">*</span>
+                </label>
+                <input
+                  type="text"
+                  className="input"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  required
+                  placeholder="আপনার পুরো নাম"
+                />
               </div>
               <div className="form-group">
-                <label>মোবাইল নম্বর (বাংলা বা ইংরেজি সংখ্যায়) <span className="required-asterisk">*</span></label>
-                <input type="tel" className="input" name="mobile" value={formData.mobile} onChange={handleChange} required placeholder="যেমনঃ ০১৭১২৩৪৫৬৭৮ বা 01712345678" />
+                <label>
+                  বয়স (বাংলা বা ইংরেজি সংখ্যায়) <span className="required-asterisk">*</span>
+                </label>
+                <input
+                  type="text"
+                  className="input"
+                  name="age"
+                  value={formData.age}
+                  onChange={handleChange}
+                  required
+                  placeholder="যেমনঃ ২৫ বা 25"
+                />
               </div>
               <div className="form-group">
-                <label>লিঙ্গ <span className="required-asterisk">*</span></label>
+                <label>
+                  মোবাইল নম্বর (বাংলা বা ইংরেজি সংখ্যায়) <span className="required-asterisk">*</span>
+                </label>
+                <input
+                  type="tel"
+                  className="input"
+                  name="mobile"
+                  value={formData.mobile}
+                  onChange={handleChange}
+                  required
+                  placeholder="যেমনঃ ০১৭১২৩৪৫৬৭৮ বা 01712345678"
+                />
+              </div>
+              <div className="form-group">
+                <label>
+                  লিঙ্গ <span className="required-asterisk">*</span>
+                </label>
                 <select className="select" name="gender" value={formData.gender} onChange={handleChange} required>
-                  <option value="পুরুষ">পুরুষ</option><option value="মহিলা">মহিলা</option><option value="অন্যান্য">অন্যান্য</option>
+                  <option value="পুরুষ">পুরুষ</option>
+                  <option value="মহিলা">মহিলা</option>
+                  <option value="অন্যান্য">অন্যান্য</option>
                 </select>
               </div>
               <div className="form-group">
                 <label>বর্তমান ঠিকানা (ঐচ্ছিক)</label>
-                <textarea className="textarea" name="address" value={formData.address} onChange={handleChange} placeholder="আপনার বর্তমান ঠিকানা লিখুন (যদি ইচ্ছা)" />
+                <textarea
+                  className="textarea"
+                  name="address"
+                  value={formData.address}
+                  onChange={handleChange}
+                  placeholder="আপনার বর্তমান ঠিকানা লিখুন (যদি ইচ্ছা)"
+                />
               </div>
             </div>
 
             <div className="form-section">
-              <div className="section-title"><MapPin size={18} /> রেফারেল তথ্য (ঐচ্ছিক)</div>
+              <div className="section-title">
+                <MapPin size={18} /> রেফারেল তথ্য (ঐচ্ছিক)
+              </div>
               <div className="form-group">
                 <label>রোগী কীভাবে/কার মাধ্যমে এসেছেন?</label>
-                <select className="select" name="referralSource" value={formData.referralSource} onChange={handleChange}>
-                  <option>Walk-in / নিজে এসেছেন</option><option>Refer Doctor</option><option>Facebook</option><option>Google</option>
-                  <option>Campaign / Medical Camp</option><option>আত্মীয়/বন্ধু</option><option>অন্যান্য</option>
+                <select
+                  className="select"
+                  name="referralSource"
+                  value={formData.referralSource}
+                  onChange={handleChange}
+                >
+                  <option>Walk-in / নিজে এসেছেন</option>
+                  <option>Refer Doctor</option>
+                  <option>Facebook</option>
+                  <option>Google</option>
+                  <option>Campaign / Medical Camp</option>
+                  <option>আত্মীয়/বন্ধু</option>
+                  <option>অন্যান্য</option>
                 </select>
               </div>
               {formData.referralSource === 'Refer Doctor' && (
                 <div className="conditional-field">
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label>রেফারিং ডাক্তারের নাম লিখুন</label>
-                    <input type="text" className="input" name="referredDoctorName" value={formData.referredDoctorName} onChange={handleChange} placeholder="যেমনঃ ডাঃ কামরুল হাসান" />
+                    <input
+                      type="text"
+                      className="input"
+                      name="referredDoctorName"
+                      value={formData.referredDoctorName}
+                      onChange={handleChange}
+                      placeholder="যেমনঃ ডাঃ কামরুল হাসান"
+                    />
                   </div>
                 </div>
               )}
@@ -471,64 +669,123 @@ export default function BookingSystem({ departments, panels, onBack }) {
                 <div className="conditional-field">
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label>অন্যান্য উৎস সম্পর্কে লিখুন</label>
-                    <input type="text" className="input" name="otherReferralNote" value={formData.otherReferralNote} onChange={handleChange} placeholder="যেমনঃ ফেসবুক গ্রুপ, মাইক্রোব্লগ, পরিচিতজন ইত্যাদি" />
+                    <input
+                      type="text"
+                      className="input"
+                      name="otherReferralNote"
+                      value={formData.otherReferralNote}
+                      onChange={handleChange}
+                      placeholder="যেমনঃ ফেসবুক গ্রুপ, মাইক্রোব্লগ, পরিচিতজন ইত্যাদি"
+                    />
                   </div>
                 </div>
               )}
             </div>
 
             <div className="form-section">
-              <div className="section-title"><Stethoscope size={18} /> অ্যাপয়েন্টমেন্ট ডাক্তার নির্বাচন <span className="required-asterisk">*</span></div>
+              <div className="section-title">
+                <Stethoscope size={18} /> অ্যাপয়েন্টমেন্ট ডাক্তার নির্বাচন{' '}
+                <span className="required-asterisk">*</span>
+              </div>
 
               <div className="form-group">
                 <label>বিভাগ নির্বাচন করুন</label>
-                <select className="select" name="departmentId" value={formData.departmentId} onChange={handleChange}>
+                <select
+                  className="select"
+                  name="departmentId"
+                  value={formData.departmentId}
+                  onChange={handleChange}
+                >
                   <option value="">সব বিভাগ</option>
-                  {departments.map(dept => <option key={dept.id} value={dept.id}>{dept.name}</option>)}
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div className="form-group">
-                <label>ডাক্তার নির্বাচন করুন ({selectedDayName}) <span className="required-asterisk">*</span></label>
+                <label>
+                  ডাক্তার নির্বাচন করুন ({selectedDayName}){' '}
+                  <span className="required-asterisk">*</span>
+                </label>
                 <div className="doctor-options">
                   {filteredDoctors.length === 0 ? (
-                    <div style={{ padding: '15px', textAlign: 'center', color: '#64748b', fontSize: '14px' }}>
+                    <div
+                      style={{
+                        padding: '15px',
+                        textAlign: 'center',
+                        color: '#64748b',
+                        fontSize: '14px',
+                      }}
+                    >
                       {availableDoctors.length === 0 ? (
                         <div>
                           <p>⚠️ এই দিনে ({selectedDayName}) কোনো ডাক্তারের সিরিয়াল নেই।</p>
-                          <p style={{ fontSize: '12px', marginTop: '5px', color: '#94a3b8' }}>
-                            {panels?.length === 0 ? 'প্যানেল ডেটা পাওয়া যায়নি।' : 'অন্য কোনো দিন নির্বাচন করুন।'}
+                          <p
+                            style={{
+                              fontSize: '12px',
+                              marginTop: '5px',
+                              color: '#94a3b8',
+                            }}
+                          >
+                            {panels?.length === 0
+                              ? 'প্যানেল ডেটা পাওয়া যায়নি।'
+                              : 'অন্য কোনো দিন নির্বাচন করুন।'}
                           </p>
                         </div>
                       ) : (
                         <div>
                           <p>⚠️ নির্বাচিত বিভাগে ডাক্তার নেই।</p>
-                          <p style={{ fontSize: '12px', marginTop: '5px', color: '#94a3b8' }}>অন্য বিভাগ নির্বাচন করুন।</p>
+                          <p
+                            style={{
+                              fontSize: '12px',
+                              marginTop: '5px',
+                              color: '#94a3b8',
+                            }}
+                          >
+                            অন্য বিভাগ নির্বাচন করুন।
+                          </p>
                         </div>
                       )}
                     </div>
                   ) : (
-                    filteredDoctors.map(doc => (
-                      <div key={doc.id} className={`doctor-option ${selectedDoctor?.id === doc.id ? 'selected' : ''}`} onClick={() => setSelectedDoctor(doc)}>
+                    filteredDoctors.map((doc) => (
+                      <div
+                        key={doc.id}
+                        className={`doctor-option ${selectedDoctor?.id === doc.id ? 'selected' : ''}`}
+                        onClick={() => setSelectedDoctor(doc)}
+                      >
                         <div>
                           <div className="doctor-name">{doc.name}</div>
-                          <div className="doctor-details">{doc.specialty || doc.quals || doc.deptName}</div>
+                          <div className="doctor-details">
+                            {doc.specialty || doc.quals || doc.deptName}
+                          </div>
                           {doc.timeSlots && doc.timeSlots.length > 0 && (
                             <div className="slot-display">
                               {doc.timeSlots.map((slot, idx) => (
-                                <span key={idx} className="slot-badge">⏱ {slot.start} - {slot.end}</span>
+                                <span key={idx} className="slot-badge">
+                                  ⏱ {slot.start} - {slot.end}
+                                </span>
                               ))}
                             </div>
                           )}
                         </div>
-                        {selectedDoctor?.id === doc.id && <CheckCircle2 size={18} color="#0d9488" />}
+                        {selectedDoctor?.id === doc.id && (
+                          <CheckCircle2 size={18} color="#0d9488" />
+                        )}
                       </div>
                     ))
                   )}
                 </div>
 
                 {selectedDoctor && (
-                  <button type="button" className="clear-doctor-btn" onClick={() => setSelectedDoctor(null)}>
+                  <button
+                    type="button"
+                    className="clear-doctor-btn"
+                    onClick={() => setSelectedDoctor(null)}
+                  >
                     ডাক্তার পরিবর্তন করুন (ডিসিলেক্ট)
                   </button>
                 )}
@@ -536,18 +793,49 @@ export default function BookingSystem({ departments, panels, onBack }) {
             </div>
 
             <div className="summary-box">
-              <div className="section-title" style={{ borderBottom: 'none', marginBottom: '10px', paddingBottom: '0' }}>বুকিং সামারি</div>
-              <div className="summary-row"><span className="summary-label">তারিখ:</span><span className="summary-value">{selectedDate} ({selectedDayName})</span></div>
-              <div className="summary-row"><span className="summary-label">রোগীর নাম:</span><span className="summary-value">{formData.name || '-'}</span></div>
-              <div className="summary-row"><span className="summary-label">মোবাইল:</span><span className="summary-value">{formData.mobile || '-'}</span></div>
-              <div className="summary-row"><span className="summary-label">ঠিকানা:</span><span className="summary-value">{formData.address || '-'}</span></div>
-              <div className="summary-row"><span className="summary-label">নির্বাচিত ডাক্তার:</span><span className="summary-value">{selectedDoctor?.name || '-'}</span></div>
-              <div className="summary-row"><span className="summary-label">রেফারেল সোর্স:</span><span className="summary-value">{formData.referralSource || '-'}</span></div>
+              <div
+                className="section-title"
+                style={{ borderBottom: 'none', marginBottom: '10px', paddingBottom: '0' }}
+              >
+                বুকিং সামারি
+              </div>
+              <div className="summary-row">
+                <span className="summary-label">তারিখ:</span>
+                <span className="summary-value">
+                  {selectedDate} ({selectedDayName})
+                </span>
+              </div>
+              <div className="summary-row">
+                <span className="summary-label">রোগীর নাম:</span>
+                <span className="summary-value">{formData.name || '-'}</span>
+              </div>
+              <div className="summary-row">
+                <span className="summary-label">মোবাইল:</span>
+                <span className="summary-value">{formData.mobile || '-'}</span>
+              </div>
+              <div className="summary-row">
+                <span className="summary-label">ঠিকানা:</span>
+                <span className="summary-value">{formData.address || '-'}</span>
+              </div>
+              <div className="summary-row">
+                <span className="summary-label">নির্বাচিত ডাক্তার:</span>
+                <span className="summary-value">{selectedDoctor?.name || '-'}</span>
+              </div>
+              <div className="summary-row">
+                <span className="summary-label">রেফারেল সোর্স:</span>
+                <span className="summary-value">{formData.referralSource || '-'}</span>
+              </div>
               {formData.referredDoctorName && (
-                <div className="summary-row"><span className="summary-label">রেফারিং ডাক্তার:</span><span className="summary-value">{formData.referredDoctorName}</span></div>
+                <div className="summary-row">
+                  <span className="summary-label">রেফারিং ডাক্তার:</span>
+                  <span className="summary-value">{formData.referredDoctorName}</span>
+                </div>
               )}
               {formData.otherReferralNote && (
-                <div className="summary-row"><span className="summary-label">অন্যান্য নোট:</span><span className="summary-value">{formData.otherReferralNote}</span></div>
+                <div className="summary-row">
+                  <span className="summary-label">অন্যান্য নোট:</span>
+                  <span className="summary-value">{formData.otherReferralNote}</span>
+                </div>
               )}
             </div>
 
