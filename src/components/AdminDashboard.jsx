@@ -2,14 +2,15 @@
 import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { useHospital } from '../context/HospitalContext';
 import { useAuth } from '../context/AuthContext';
+import { usePermission } from '../context/PermissionContext';
 import { db } from '../firebase';
-import { collection, getDocs, getDoc, doc } from 'firebase/firestore';
-import { RefreshCw } from 'lucide-react';
+import { collection, getDocs, getDoc, doc, onSnapshot } from 'firebase/firestore';
+import { RefreshCw, Shield } from 'lucide-react';
 import { updateAppointmentStatus } from '../services/appointmentService';
 import { subscribeToActivityLogs, logActivity, LOG_MODULES, LOG_ACTIONS } from '../services/activityLogService';
 
 // ==================================================
-// ✅ Lazy Load – প্রতিটি tab-এর component আলাদা chunk-এ load হবে
+// ✅ Lazy Load Components
 // ==================================================
 const AppointmentsTable = lazy(() => import('./admin/AppointmentsTable'));
 const Overview = lazy(() => import('./admin/Overview'));
@@ -17,35 +18,21 @@ const MarketingTeamManager = lazy(() => import('./admin/MarketingTeamManager'));
 const MarketingReport = lazy(() => import('./admin/MarketingReport'));
 const DisplaySettings = lazy(() => import('./admin/DisplaySettings'));
 const LocationManager = lazy(() => import('./admin/LocationManager'));
+const UserAccessManager = lazy(() => import('./admin/UserAccessManager'));
 
 // ==================================================
-// Tab Loader – প্রতিটি tab-এর জন্য ছোট loading indicator
+// ✅ Tab Loader
 // ==================================================
 const TabLoader = () => (
-  <div style={{
-    padding: '60px 20px',
-    textAlign: 'center',
-    color: '#64748b',
-    background: '#fff',
-    borderRadius: '10px',
-    border: '1px solid #e2e8f0'
-  }}>
-    <div style={{
-      display: 'inline-block',
-      width: '32px',
-      height: '32px',
-      border: '3px solid #e2e8f0',
-      borderTopColor: '#1c5fa8',
-      borderRadius: '50%',
-      animation: 'spin 0.8s linear infinite'
-    }} />
+  <div style={{ padding: '60px 20px', textAlign: 'center', color: '#64748b', background: '#fff', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+    <div style={{ display: 'inline-block', width: '32px', height: '32px', border: '3px solid #e2e8f0', borderTopColor: '#1c5fa8', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
     <p style={{ marginTop: '12px', fontSize: '14px' }}>লোড হচ্ছে...</p>
     <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
   </div>
 );
 
 // ==================================================
-// SafeArea (Error Boundary)
+// ✅ SafeArea (Error Boundary)
 // ==================================================
 class SafeArea extends React.Component {
   constructor(props) {
@@ -62,7 +49,7 @@ class SafeArea extends React.Component {
 }
 
 // ==================================================
-// Main Component
+// ✅ MAIN COMPONENT
 // ==================================================
 export default function AdminDashboard({ user: propUser }) {
   const { currentHospital } = useHospital();
@@ -70,8 +57,9 @@ export default function AdminDashboard({ user: propUser }) {
   const { user: authUser } = useAuth();
   const user = propUser || authUser;
 
+  const { can, hasPermission, permissions } = usePermission();
+
   const [appointments, setAppointments] = useState([]);
-  const [archivedAppointments] = useState([]);
   const [activityLogs, setActivityLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -83,59 +71,61 @@ export default function AdminDashboard({ user: propUser }) {
   const [endDate, setEndDate] = useState('2030-12-31');
   const [filterPreset, setFilterPreset] = useState('all');
 
-  const isAdmin = user?.role === 'admin';
-  const isSubAdmin = user?.role === 'sub-admin';
-
   // ==================================================
-  // ✅ Initial Load – সব ডেটা Parallel (একসাথে) load
+  // ✅ Initial Load – Parallel
   // ==================================================
   useEffect(() => {
     if (!hospitalId) return;
     let mounted = true;
+    setLoading(true);
 
     const loadAll = async () => {
-      setLoading(true);
-      setError(null);
       try {
-        // ✅ Parallel requests – 3টি একসাথে
-        const [apptSnap, teamSnap] = await Promise.all([
-          getDocs(collection(db, 'hospitals', hospitalId, 'appointments')),
-          getDoc(doc(db, 'hospitals', hospitalId, 'settings', 'marketingTeam')),
-        ]);
-
-        if (!mounted) return;
-
-        // Appointments
-        const appts = apptSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setAppointments(appts);
-
-        // Marketing Team
-        if (teamSnap.exists()) {
+        // Team parallel load
+        const teamRef = doc(db, 'hospitals', hospitalId, 'settings', 'marketingTeam');
+        const teamSnap = await getDoc(teamRef);
+        if (mounted && teamSnap.exists()) {
           setMarketingTeam(teamSnap.data().members || []);
-        } else {
-          setMarketingTeam([]);
         }
       } catch (err) {
-        console.error('❌ Initial load error:', err);
+        console.error('❌ Load error:', err);
         if (mounted) setError(err.message);
       } finally {
         if (mounted) setLoading(false);
       }
     };
-
     loadAll();
     return () => { mounted = false; };
   }, [hospitalId]);
 
   // ==================================================
-  // ✅ Silent Refresh – Edit/Save করার পর UI তে loading ছাড়াই refresh
+  // ✅ Real-time Appointments
+  // ==================================================
+  useEffect(() => {
+    if (!hospitalId) return;
+    const ref = collection(db, 'hospitals', hospitalId, 'appointments');
+    const unsub = onSnapshot(
+      ref,
+      (snapshot) => {
+        const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        setAppointments(data);
+      },
+      (err) => {
+        console.error('Appointments listener error:', err);
+      }
+    );
+    return () => unsub();
+  }, [hospitalId]);
+
+  // ==================================================
+  // ✅ Silent Refresh
   // ==================================================
   const refreshData = async () => {
     if (!hospitalId) return;
     try {
       const ref = collection(db, 'hospitals', hospitalId, 'appointments');
       const snapshot = await getDocs(ref);
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       setAppointments(data);
     } catch (err) {
       console.error('❌ Silent refresh error:', err);
@@ -143,29 +133,10 @@ export default function AdminDashboard({ user: propUser }) {
   };
 
   // ==================================================
-  // ✅ Manual Refresh – loading indicator সহ
-  // ==================================================
-  const handleManualRefresh = async () => {
-    if (!hospitalId) return;
-    setLoading(true);
-    try {
-      const ref = collection(db, 'hospitals', hospitalId, 'appointments');
-      const snapshot = await getDocs(ref);
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAppointments(data);
-    } catch (err) {
-      console.error('❌ Refresh error:', err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ==================================================
-  // ✅ Activity Logs – শুধু Logs ট্যাব active হলে subscribe
+  // ✅ Activity Logs – শুধু logs tab active হলে + access থাকলে
   // ==================================================
   useEffect(() => {
-    if (!hospitalId || tab !== 'logs' || !isAdmin) return;
+    if (!hospitalId || tab !== 'logs' || !can('activity_log.view')) return;
     setLogsLoading(true);
     const unsub = subscribeToActivityLogs(
       hospitalId,
@@ -180,18 +151,21 @@ export default function AdminDashboard({ user: propUser }) {
       200
     );
     return () => { if (typeof unsub === 'function') unsub(); };
-  }, [hospitalId, tab, isAdmin]);
+  }, [hospitalId, tab]);
 
   // ==================================================
-  // ✅ Status Change – Optimistic + Activity Log
+  // ✅ Status Change
   // ==================================================
   const handleStatusChange = async (id, newStatus) => {
     if (!hospitalId) return;
-    const currentAppt = appointments.find(a => a.id === id);
+    if (!can('booking.status_change')) {
+      alert('❌ আপনার status পরিবর্তন করার permission নেই।');
+      return;
+    }
+    const currentAppt = appointments.find((a) => a.id === id);
     if (!currentAppt) return;
 
-    // Optimistic update
-    const updatedAppointments = appointments.map(app =>
+    const updatedAppointments = appointments.map((app) =>
       app.id === id ? { ...app, status: newStatus } : app
     );
     setAppointments(updatedAppointments);
@@ -206,7 +180,7 @@ export default function AdminDashboard({ user: propUser }) {
         description: `${currentAppt.name || 'Unknown'} এর status পরিবর্তন: ${currentAppt.status || 'pending'} → ${newStatus}`,
         oldValue: currentAppt.status || 'pending',
         newValue: newStatus,
-        user
+        user,
       });
     } catch (error) {
       console.error('Status change error:', error);
@@ -216,14 +190,22 @@ export default function AdminDashboard({ user: propUser }) {
   };
 
   const handleArchive = async () => {
+    if (!can('archive.restore')) {
+      alert('❌ আপনার এই action-এর permission নেই।');
+      return;
+    }
     alert('আর্কাইভ ফিচার বর্তমানে নিষ্ক্রিয়');
   };
   const handleRestore = async () => {
+    if (!can('archive.restore')) {
+      alert('❌ আপনার restore permission নেই।');
+      return;
+    }
     alert('রিস্টোর ফিচার বর্তমানে নিষ্ক্রিয়');
   };
 
   // ==================================================
-  // Date Filter Preset
+  // ✅ Filter Presets
   // ==================================================
   const applyPreset = (preset) => {
     setFilterPreset(preset);
@@ -239,23 +221,23 @@ export default function AdminDashboard({ user: propUser }) {
         setEndDate(todayStr);
         break;
       case 'week': {
-        const weekStart = new Date(now);
-        weekStart.setDate(now.getDate() - 7);
-        setStartDate(weekStart.toISOString().split('T')[0]);
+        const d = new Date(now);
+        d.setDate(now.getDate() - 7);
+        setStartDate(d.toISOString().split('T')[0]);
         setEndDate(todayStr);
         break;
       }
       case 'month': {
-        const monthStart = new Date(now);
-        monthStart.setMonth(now.getMonth() - 1);
-        setStartDate(monthStart.toISOString().split('T')[0]);
+        const d = new Date(now);
+        d.setMonth(now.getMonth() - 1);
+        setStartDate(d.toISOString().split('T')[0]);
         setEndDate(todayStr);
         break;
       }
       case 'year': {
-        const yearStart = new Date(now);
-        yearStart.setFullYear(now.getFullYear() - 1);
-        setStartDate(yearStart.toISOString().split('T')[0]);
+        const d = new Date(now);
+        d.setFullYear(now.getFullYear() - 1);
+        setStartDate(d.toISOString().split('T')[0]);
         setEndDate(todayStr);
         break;
       }
@@ -278,27 +260,19 @@ export default function AdminDashboard({ user: propUser }) {
   };
 
   // ==================================================
-  // Memoized Filters
+  // ✅ Filtered Data
   // ==================================================
   const filteredAppointments = useMemo(() => {
     if (!appointments || !Array.isArray(appointments)) return [];
-    return appointments.filter(item => {
+    return appointments.filter((item) => {
       if (!item.bookingDate) return false;
       return item.bookingDate >= startDate && item.bookingDate <= endDate;
     });
   }, [appointments, startDate, endDate]);
 
-  const filteredArchived = useMemo(() => {
-    if (!archivedAppointments || !Array.isArray(archivedAppointments)) return [];
-    return archivedAppointments.filter(item => {
-      if (!item.bookingDate) return false;
-      return item.bookingDate >= startDate && item.bookingDate <= endDate;
-    });
-  }, [archivedAppointments, startDate, endDate]);
-
   const filteredAuditLogs = useMemo(() => {
     if (!activityLogs || !Array.isArray(activityLogs)) return [];
-    return activityLogs.filter(item => {
+    return activityLogs.filter((item) => {
       if (!item.timestamp) return true;
       let logDate;
       if (item.timestamp?.seconds) logDate = new Date(item.timestamp.seconds * 1000);
@@ -311,20 +285,12 @@ export default function AdminDashboard({ user: propUser }) {
   }, [activityLogs, startDate, endDate]);
 
   // ==================================================
-  // Loading / Error
+  // ✅ Loading State
   // ==================================================
   if (loading) {
     return (
       <div style={{ padding: '60px 20px', textAlign: 'center', color: '#64748b' }}>
-        <div style={{
-          display: 'inline-block',
-          width: '36px',
-          height: '36px',
-          border: '3px solid #e2e8f0',
-          borderTopColor: '#1c5fa8',
-          borderRadius: '50%',
-          animation: 'spin 0.8s linear infinite'
-        }} />
+        <div style={{ display: 'inline-block', width: '36px', height: '36px', border: '3px solid #e2e8f0', borderTopColor: '#1c5fa8', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
         <p style={{ marginTop: '12px', fontSize: '15px' }}>📊 ডেটা লোড হচ্ছে...</p>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
@@ -336,44 +302,200 @@ export default function AdminDashboard({ user: propUser }) {
   }
 
   // ==================================================
-  // Render
+  // ✅ No Access Check – কোনো tab access না থাকলে
+  // ==================================================
+  const hasAnyTab =
+    can('dashboard.view') ||
+    can('booking.view') ||
+    can('marketing_report.view') ||
+    can('display.view') ||
+    can('location.view') ||
+    can('activity_log.view') ||
+    can('user.view') ||
+    can('archive.view');
+
+  if (!hasAnyTab) {
+    return (
+      <div style={{ padding: '60px 20px', textAlign: 'center', background: '#fff', borderRadius: '10px', margin: '20px', border: '1px solid #e2e8f0' }}>
+        <div style={{ fontSize: '64px', marginBottom: '16px' }}>🚫</div>
+        <h3 style={{ color: '#dc2626', marginBottom: '8px' }}>Access Denied</h3>
+        <p style={{ color: '#64748b' }}>
+          আপনার এই ড্যাশবোর্ডে কোনো section দেখার permission নেই।<br />
+          অনুগ্রহ করে অ্যাডমিনের সাথে যোগাযোগ করুন।
+        </p>
+      </div>
+    );
+  }
+
+  // ==================================================
+  // ✅ RENDER
   // ==================================================
   return (
     <div style={{ padding: '20px', width: '100%', boxSizing: 'border-box', background: '#f9fafb', color: '#1f2937' }}>
 
-      {/* ===== Top Bar ===== */}
+      {/* ============ Top Bar ============ */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
         <h2>অ্যাডমিন ড্যাশবোর্ড</h2>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <button onClick={handleManualRefresh} style={{ padding: '6px 12px', background: '#e2e8f0', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <button
+            onClick={refreshData}
+            style={{ padding: '6px 12px', background: '#e2e8f0', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}
+          >
             <RefreshCw size={14} /> রিফ্রেশ
           </button>
-          <button onClick={() => { setShowArchived(false); setTab('overview'); }} style={{ padding: '8px 16px', background: tab === 'overview' && !showArchived ? '#1c5fa8' : '#ffffff', color: tab === 'overview' && !showArchived ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>পরিসংখ্যান</button>
-          <button onClick={() => { setShowArchived(false); setTab('appointments'); }} style={{ padding: '8px 16px', background: tab === 'appointments' && !showArchived ? '#1c5fa8' : '#ffffff', color: tab === 'appointments' && !showArchived ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>বুকিং লিস্ট</button>
-          {(isAdmin || isSubAdmin) && (
-            <button onClick={() => { setShowArchived(false); setTab('marketing'); }} style={{ padding: '8px 16px', background: tab === 'marketing' ? '#1c5fa8' : '#ffffff', color: tab === 'marketing' ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>মার্কেটিং রিপোর্ট</button>
+
+          {/* Dashboard / Overview */}
+          {can('dashboard.view') && (
+            <button
+              onClick={() => { setShowArchived(false); setTab('overview'); }}
+              style={{
+                padding: '8px 16px',
+                background: tab === 'overview' && !showArchived ? '#1c5fa8' : '#ffffff',
+                color: tab === 'overview' && !showArchived ? '#ffffff' : '#333333',
+                border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600',
+              }}
+            >
+              পরিসংখ্যান
+            </button>
           )}
-          {isAdmin && (
-            <>
-              <button onClick={() => { setShowArchived(false); setTab('display'); }} style={{ padding: '8px 16px', background: tab === 'display' ? '#1c5fa8' : '#ffffff', color: tab === 'display' ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>📺 ডিসপ্লে সেটিংস</button>
-              <button onClick={() => { setShowArchived(false); setTab('locations'); }} style={{ padding: '8px 16px', background: tab === 'locations' ? '#1c5fa8' : '#ffffff', color: tab === 'locations' ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>📍 লোকেশন ম্যানেজার</button>
-              <button onClick={() => setTab('logs')} style={{ padding: '8px 16px', background: tab === 'logs' ? '#1c5fa8' : '#ffffff', color: tab === 'logs' ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>Activity Log</button>
-            </>
+
+          {/* Booking List */}
+          {can('booking.view') && (
+            <button
+              onClick={() => { setShowArchived(false); setTab('appointments'); }}
+              style={{
+                padding: '8px 16px',
+                background: tab === 'appointments' && !showArchived ? '#1c5fa8' : '#ffffff',
+                color: tab === 'appointments' && !showArchived ? '#ffffff' : '#333333',
+                border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600',
+              }}
+            >
+              বুকিং লিস্ট
+            </button>
           )}
-          <button onClick={() => { setShowArchived(!showArchived); setTab('appointments'); }} style={{ padding: '8px 16px', background: showArchived ? '#374151' : '#ffffff', color: showArchived ? '#ffffff' : '#333333', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>{showArchived ? 'Active List' : 'Archived'}</button>
+
+          {/* Marketing Report */}
+          {can('marketing_report.view') && (
+            <button
+              onClick={() => { setShowArchived(false); setTab('marketing'); }}
+              style={{
+                padding: '8px 16px',
+                background: tab === 'marketing' ? '#1c5fa8' : '#ffffff',
+                color: tab === 'marketing' ? '#ffffff' : '#333333',
+                border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600',
+              }}
+            >
+              মার্কেটিং রিপোর্ট
+            </button>
+          )}
+
+          {/* Display Settings */}
+          {can('display.view') && (
+            <button
+              onClick={() => { setShowArchived(false); setTab('display'); }}
+              style={{
+                padding: '8px 16px',
+                background: tab === 'display' ? '#1c5fa8' : '#ffffff',
+                color: tab === 'display' ? '#ffffff' : '#333333',
+                border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600',
+              }}
+            >
+              📺 ডিসপ্লে সেটিংস
+            </button>
+          )}
+
+          {/* Location Manager */}
+          {can('location.view') && (
+            <button
+              onClick={() => { setShowArchived(false); setTab('locations'); }}
+              style={{
+                padding: '8px 16px',
+                background: tab === 'locations' ? '#1c5fa8' : '#ffffff',
+                color: tab === 'locations' ? '#ffffff' : '#333333',
+                border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600',
+              }}
+            >
+              📍 লোকেশন ম্যানেজার
+            </button>
+          )}
+
+          {/* Activity Log */}
+          {can('activity_log.view') && (
+            <button
+              onClick={() => setTab('logs')}
+              style={{
+                padding: '8px 16px',
+                background: tab === 'logs' ? '#1c5fa8' : '#ffffff',
+                color: tab === 'logs' ? '#ffffff' : '#333333',
+                border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600',
+              }}
+            >
+              Activity Log
+            </button>
+          )}
+
+          {/* User Access Control */}
+          {can('user.view') && (
+            <button
+              onClick={() => { setShowArchived(false); setTab('user_access'); }}
+              style={{
+                padding: '8px 16px',
+                background: tab === 'user_access' ? '#1c5fa8' : '#ffffff',
+                color: tab === 'user_access' ? '#ffffff' : '#333333',
+                border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600',
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+              }}
+            >
+              <Shield size={14} /> User Access
+            </button>
+          )}
+
+          {/* Archived */}
+          {can('archive.view') && (
+            <button
+              onClick={() => { setShowArchived(!showArchived); setTab('appointments'); }}
+              style={{
+                padding: '8px 16px',
+                background: showArchived ? '#374151' : '#ffffff',
+                color: showArchived ? '#ffffff' : '#333333',
+                border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', fontWeight: '600',
+              }}
+            >
+              {showArchived ? 'Active List' : 'Archived'}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* ===== Date Filter Bar ===== */}
+      {/* ============ Date Filter Bar ============ */}
       {(tab === 'overview' || tab === 'appointments') && (
         <div style={{ background: '#ffffff', padding: '15px 20px', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '20px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px' }}>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <button onClick={() => applyPreset('all')} style={{ padding: '6px 14px', background: filterPreset === 'all' ? '#1c5fa8' : '#f1f5f9', color: filterPreset === 'all' ? '#fff' : '#334155', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' }}>সব</button>
-            <button onClick={() => applyPreset('today')} style={{ padding: '6px 14px', background: filterPreset === 'today' ? '#1c5fa8' : '#f1f5f9', color: filterPreset === 'today' ? '#fff' : '#334155', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' }}>আজ</button>
-            <button onClick={() => applyPreset('week')} style={{ padding: '6px 14px', background: filterPreset === 'week' ? '#1c5fa8' : '#f1f5f9', color: filterPreset === 'week' ? '#fff' : '#334155', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' }}>গত ৭ দিন</button>
-            <button onClick={() => applyPreset('month')} style={{ padding: '6px 14px', background: filterPreset === 'month' ? '#1c5fa8' : '#f1f5f9', color: filterPreset === 'month' ? '#fff' : '#334155', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' }}>গত ১ মাস</button>
-            <button onClick={() => applyPreset('year')} style={{ padding: '6px 14px', background: filterPreset === 'year' ? '#1c5fa8' : '#f1f5f9', color: filterPreset === 'year' ? '#fff' : '#334155', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' }}>গত ১ বছর</button>
-            <button onClick={() => setFilterPreset('custom')} style={{ padding: '6px 14px', background: filterPreset === 'custom' ? '#1c5fa8' : '#f1f5f9', color: filterPreset === 'custom' ? '#fff' : '#334155', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' }}>কাস্টম</button>
+            {['all', 'today', 'week', 'month', 'year'].map((p) => (
+              <button
+                key={p}
+                onClick={() => applyPreset(p)}
+                style={{
+                  padding: '6px 14px',
+                  background: filterPreset === p ? '#1c5fa8' : '#f1f5f9',
+                  color: filterPreset === p ? '#fff' : '#334155',
+                  border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px',
+                }}
+              >
+                {{ all: 'সব', today: 'আজ', week: 'গত ৭ দিন', month: 'গত ১ মাস', year: 'গত ১ বছর' }[p]}
+              </button>
+            ))}
+            <button
+              onClick={() => setFilterPreset('custom')}
+              style={{
+                padding: '6px 14px',
+                background: filterPreset === 'custom' ? '#1c5fa8' : '#f1f5f9',
+                color: filterPreset === 'custom' ? '#fff' : '#334155',
+                border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '13px',
+              }}
+            >
+              কাস্টম
+            </button>
           </div>
           {filterPreset === 'custom' && (
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -391,8 +513,10 @@ export default function AdminDashboard({ user: propUser }) {
         </div>
       )}
 
-      {/* ===== Tab Content (Lazy Loaded) ===== */}
-      {tab === 'overview' && !showArchived && (
+      {/* ============ Tab Content ============ */}
+
+      {/* Overview */}
+      {tab === 'overview' && !showArchived && can('dashboard.view') && (
         <SafeArea>
           <Suspense fallback={<TabLoader />}>
             <Overview appointments={filteredAppointments} />
@@ -400,11 +524,12 @@ export default function AdminDashboard({ user: propUser }) {
         </SafeArea>
       )}
 
-      {tab === 'appointments' && (
+      {/* Booking List */}
+      {tab === 'appointments' && can('booking.view') && (
         <SafeArea>
           <Suspense fallback={<TabLoader />}>
             <AppointmentsTable
-              appointments={showArchived ? filteredArchived : filteredAppointments}
+              appointments={filteredAppointments}
               onStatusChange={handleStatusChange}
               onArchive={handleArchive}
               onRestore={handleRestore}
@@ -417,12 +542,15 @@ export default function AdminDashboard({ user: propUser }) {
         </SafeArea>
       )}
 
-      {tab === 'marketing' && (isAdmin || isSubAdmin) && (
+      {/* Marketing Report */}
+      {tab === 'marketing' && can('marketing_report.view') && (
         <SafeArea>
           <Suspense fallback={<TabLoader />}>
-            {isAdmin && <MarketingTeamManager user={user} onTeamUpdate={setMarketingTeam} />}
+            {can('marketing_manager.view') && (
+              <MarketingTeamManager user={user} onTeamUpdate={setMarketingTeam} />
+            )}
             <MarketingReport
-              appointments={filteredAppointments}
+              appointments={appointments}
               marketingTeam={marketingTeam}
               onTeamUpdate={setMarketingTeam}
               user={user}
@@ -431,7 +559,8 @@ export default function AdminDashboard({ user: propUser }) {
         </SafeArea>
       )}
 
-      {tab === 'display' && isAdmin && (
+      {/* Display Settings */}
+      {tab === 'display' && can('display.view') && (
         <SafeArea>
           <Suspense fallback={<TabLoader />}>
             <DisplaySettings user={user} />
@@ -439,15 +568,30 @@ export default function AdminDashboard({ user: propUser }) {
         </SafeArea>
       )}
 
-      {tab === 'locations' && isAdmin && (
+      {/* Location Manager */}
+      {tab === 'locations' && can('location.view') && (
         <SafeArea>
           <Suspense fallback={<TabLoader />}>
-            <LocationManager appointments={filteredAppointments} user={user} onAppointmentsChange={refreshData} />
+            <LocationManager
+              appointments={filteredAppointments}
+              user={user}
+              onAppointmentsChange={refreshData}
+            />
           </Suspense>
         </SafeArea>
       )}
 
-      {tab === 'logs' && isAdmin && (
+      {/* User Access Control */}
+      {tab === 'user_access' && can('user.view') && (
+        <SafeArea>
+          <Suspense fallback={<TabLoader />}>
+            <UserAccessManager user={user} />
+          </Suspense>
+        </SafeArea>
+      )}
+
+      {/* Activity Log */}
+      {tab === 'logs' && can('activity_log.view') && (
         <SafeArea>
           <div style={{ background: '#fff', padding: '20px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
@@ -471,6 +615,7 @@ export default function AdminDashboard({ user: propUser }) {
                     : log.action === 'STATUS_CHANGE' ? '#0d9488'
                     : log.action === 'PATIENT_TYPE_CHANGE' ? '#8b5cf6'
                     : log.action === 'MARKETING_OFFICER_CHANGE' || log.action === 'UNASSIGN' ? '#d97706'
+                    : log.action === 'PERMISSION_UPDATED' ? '#8b5cf6'
                     : '#1c5fa8';
                   return (
                     <div key={log.id || idx} style={{ borderBottom: '1px solid #f1f5f9', padding: '12px 0' }}>
