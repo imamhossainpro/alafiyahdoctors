@@ -57,7 +57,6 @@ let isConnected = false;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 5;
 
-// QR data URL (browser এ দেখানোর জন্য)
 let currentQRDataUrl = null;
 let lastQRGeneratedAt = null;
 
@@ -147,7 +146,6 @@ async function connectToWhatsApp() {
     sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
 
-      // ---------- QR Code ----------
       if (qr) {
         try {
           currentQRDataUrl = await QRCode.toDataURL(qr, {
@@ -164,14 +162,12 @@ async function connectToWhatsApp() {
           console.log('\n====================');
           console.log('📱 WhatsApp QR Code প্রস্তুত!');
           console.log(`👉 Browser এ যান: ${domain}/qr`);
-          console.log('👉 তারপর WhatsApp দিয়ে scan করুন');
           console.log('====================\n');
         } catch (err) {
           console.error('❌ QR generation error:', err.message);
         }
       }
 
-      // ---------- Connection Closed ----------
       if (connection === 'close') {
         isConnected = false;
         currentQRDataUrl = null;
@@ -185,24 +181,13 @@ async function connectToWhatsApp() {
           reconnectAttempts++;
           if (reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
             const delay = Math.min(3000 * reconnectAttempts, 15000);
-            console.log(`🔄 ${delay / 1000} সেকেন্ড পরে পুনরায় সংযোগ... (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+            console.log(`🔄 ${delay / 1000} সেকেন্ড পরে পুনরায় সংযোগ...`);
             setTimeout(() => connectToWhatsApp(), delay);
-          } else {
-            console.error(`❌ ${MAX_RECONNECT_ATTEMPTS} বার চেষ্টার পরেও সংযোগ হয়নি!`);
           }
         } else {
-          console.log('\n❌ WhatsApp লগআউট হয়েছে!');
-          console.log('=========================================================');
-          console.log('👉 সমাধান:');
-          console.log('   ১. Railway → Service → Settings → Volume');
-          console.log('   ২. auth_info_baileys volume delete করুন');
-          console.log('   ৩. Redeploy করুন');
-          console.log('   ৪. নতুন QR code scan করুন');
-          console.log('=========================================================\n');
+          console.log('\n❌ WhatsApp লগআউট হয়েছে! নতুন QR scan করতে হবে।\n');
         }
-      }
-      // ---------- Connection Open ----------
-      else if (connection === 'open') {
+      } else if (connection === 'open') {
         isConnected = true;
         currentQRDataUrl = null;
         reconnectAttempts = 0;
@@ -212,13 +197,13 @@ async function connectToWhatsApp() {
     });
   } catch (error) {
     console.error('❌ connectToWhatsApp error:', error.message);
-    console.log('🔄 ৫ সেকেন্ড পরে আবার চেষ্টা...');
     setTimeout(() => connectToWhatsApp(), 5000);
   }
 }
 
 // ==================================================
-// 🆕 হাসপাতালের WhatsApp-এ নতুন বুকিং এর নোটিফিকেশন
+// 🆕 TRIGGER 1: হাসপাতালের WhatsApp-এ নতুন বুকিং notification
+// (রোগী form submit করলেই চলবে)
 // ==================================================
 async function sendHospitalNotification(data, appointmentId) {
   if (!isConnected || !sock) {
@@ -247,8 +232,11 @@ async function sendHospitalNotification(data, appointmentId) {
 📢 *রেফারেল:* ${data.referralSource || '-'}
 
 ━━━━━━━━━━━━━━━━━
+⚠️ *Status:* Pending
 🆕 Booking ID: ${appointmentId}
-🕒 ${new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka' })}`;
+🕒 ${new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka' })}
+
+👉 Admin confirm করলে রোগীকে SMS/Email যাবে।`;
 
   try {
     await sock.sendMessage(jid, { text: msg });
@@ -259,91 +247,154 @@ async function sendHospitalNotification(data, appointmentId) {
 }
 
 // ==================================================
-// 🖼️ QR Code HTML Page (browser এ দেখানোর জন্য)
+// 🆕 TRIGGER 2: Admin Confirm করলে রোগীকে SMS + Email
+// (pending → confirmed হলে চলবে)
+// ==================================================
+async function sendPatientConfirmation(data, appointmentId) {
+  const baseUrl = process.env.BASE_URL || 'https://your-hospital.com';
+  const checkinLink = `${baseUrl}/checkin/${appointmentId}`;
+
+  const serviceMessage =
+    process.env.HOSPITAL_SERVICES ||
+    'আমাদের হাসপাতালে অভিজ্ঞ ডাক্তার, উন্নত চিকিৎসা সেবা ও ২৪/৭ জরুরি বিভাগ রয়েছে।';
+
+  const smsText = `
+🩺 আল-আফিয়া হাসপাতাল
+
+প্রিয় ${data.name},
+আপনার সিরিয়াল নিশ্চিত হয়েছে!
+সিরিয়াল: ${data.serialNo}
+ডাক্তার: ${data.doctorName}
+তারিখ: ${data.bookingDate}
+সময়: ${data.doctorTime || 'উল্লেখিত সময়ে'}
+
+✅ হাসপিটালে এসে চেক-ইন করতে লিংকে ক্লিক করুন:
+${checkinLink}
+
+${serviceMessage}
+
+ধন্যবাদ।
+  `.trim();
+
+  const emailHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; border: 1px solid #e2e8f0; padding: 20px; border-radius: 12px;">
+      <h2 style="color: #1c5fa8;">🩺 আল-আফিয়া হাসপাতাল</h2>
+      <p><strong>প্রিয় ${data.name},</strong></p>
+      <p>আপনার সিরিয়াল <strong>নিশ্চিত</strong> হয়েছে।</p>
+      <ul>
+        <li><strong>সিরিয়াল নম্বর:</strong> ${data.serialNo}</li>
+        <li><strong>ডাক্তার:</strong> ${data.doctorName}</li>
+        <li><strong>তারিখ:</strong> ${data.bookingDate}</li>
+        <li><strong>সময়:</strong> ${data.doctorTime || 'উল্লেখিত সময়ে'}</li>
+      </ul>
+      <p>✅ <strong>হাসপিটালে এসে চেক-ইন করতে</strong> নিচের বাটনে ক্লিক করুন:</p>
+      <a href="${checkinLink}" style="display: inline-block; background: #1c5fa8; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">চেক-ইন করুন</a>
+      <p style="margin-top: 8px; font-size: 13px; color: #1e293b;">
+        🔹 চেক-ইন করার পর আপনি ডাক্তার দেখাতে পারবেন।
+      </p>
+      <p style="margin-top: 12px; font-size: 13px; color: #475569;">
+        ${serviceMessage}
+      </p>
+      <p style="margin-top: 20px; font-size: 12px; color: #64748b;">
+        অথবা এই লিংকে যান: <a href="${checkinLink}">${checkinLink}</a>
+      </p>
+      <p style="font-size: 12px; color: #94a3b8;">ধন্যবাদ।</p>
+    </div>
+  `;
+
+  // ---------- ১. এসএমএস ----------
+  let mobile = data.mobile;
+  if (mobile) {
+    if (mobile.startsWith('0')) mobile = '88' + mobile.substring(1);
+    else if (!mobile.startsWith('88')) mobile = '88' + mobile;
+
+    const smsSent = await sendSMS(mobile, smsText);
+    if (smsSent) {
+      console.log(`📱 রোগীকে এসএমএস পাঠানো হয়েছে ${mobile} নম্বরে`);
+    } else {
+      console.log(`⚠️ রোগীকে এসএমএস পাঠানো সম্ভব হয়নি ${mobile} নম্বরে`);
+    }
+  }
+
+  // ---------- ২. ইমেইল ----------
+  if (data.email) {
+    try {
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: data.email,
+        subject: `✅ আপনার সিরিয়াল নিশ্চিত - ${data.serialNo}`,
+        html: emailHtml,
+      });
+      console.log(`📧 রোগীকে ইমেইল পাঠানো হয়েছে ${data.email} এ`);
+    } catch (err) {
+      console.error('❌ ইমেইল পাঠাতে ব্যর্থ:', err.message);
+    }
+  }
+}
+
+// ==================================================
+// 🖼️ QR Code HTML Page
 // ==================================================
 app.get('/qr', (req, res) => {
-  // Connected হলে
   if (isConnected) {
     return res.send(`
       <!DOCTYPE html>
       <html>
-        <head>
-          <title>WhatsApp Connected</title>
-          <meta name="viewport" content="width=device-width, initial-scale=1">
-          <style>
-            body {
-              font-family: 'Hind Siliguri', Arial, sans-serif;
-              display: flex; align-items: center; justify-content: center;
-              min-height: 100vh; margin: 0;
-              background: linear-gradient(135deg, #f0fdf4, #dcfce7);
-            }
-            .box {
-              text-align: center; padding: 40px; background: #fff;
-              border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-              max-width: 420px;
-            }
-            h1 { font-size: 26px; color: #166534; margin: 0 0 12px 0; }
-            p { color: #475569; font-size: 15px; margin: 6px 0; }
-            .icon { font-size: 64px; margin-bottom: 12px; }
-          </style>
+        <head><title>WhatsApp Connected</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          body { font-family: Arial; display: flex; align-items: center;
+                 justify-content: center; min-height: 100vh; margin: 0;
+                 background: linear-gradient(135deg, #f0fdf4, #dcfce7); }
+          .box { text-align: center; padding: 40px; background: #fff;
+                 border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+                 max-width: 420px; }
+          h1 { font-size: 26px; color: #166534; margin: 0 0 12px 0; }
+          p { color: #475569; font-size: 15px; }
+          .icon { font-size: 64px; margin-bottom: 12px; }
+        </style>
         </head>
         <body>
           <div class="box">
             <div class="icon">✅</div>
             <h1>WhatsApp Connected!</h1>
-            <p>কোনো QR code দরকার নেই।</p>
-            <p style="margin-top: 20px; color: #94a3b8; font-size: 13px;">
-              Server স্বাভাবিকভাবে চলছে।
-            </p>
+            <p>নতুন বুকিং হলেই হাসপাতালের WhatsApp এ message যাবে।</p>
           </div>
         </body>
       </html>
     `);
   }
 
-  // QR তৈরি হচ্ছে
   if (!currentQRDataUrl) {
     return res.send(`
       <!DOCTYPE html>
       <html>
-        <head>
-          <meta http-equiv="refresh" content="3">
-          <title>Waiting for QR...</title>
-          <meta name="viewport" content="width=device-width, initial-scale=1">
-          <style>
-            body {
-              font-family: 'Hind Siliguri', Arial, sans-serif;
-              display: flex; align-items: center; justify-content: center;
-              min-height: 100vh; margin: 0;
-              background: linear-gradient(135deg, #fef3c7, #fed7aa);
-            }
-            .box { text-align: center; padding: 40px; }
-            h1 { color: #92400e; font-size: 22px; }
-            p { color: #78350f; font-size: 14px; }
-            .spinner {
-              display: inline-block; width: 40px; height: 40px;
-              border: 4px solid #fcd34d; border-top-color: #92400e;
-              border-radius: 50%; animation: spin 1s linear infinite;
-              margin-bottom: 16px;
-            }
-            @keyframes spin { to { transform: rotate(360deg); } }
-          </style>
+        <head><meta http-equiv="refresh" content="3"><title>Waiting...</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          body { font-family: Arial; display: flex; align-items: center;
+                 justify-content: center; min-height: 100vh; margin: 0;
+                 background: linear-gradient(135deg, #fef3c7, #fed7aa); }
+          .box { text-align: center; padding: 40px; }
+          h1 { color: #92400e; }
+          .spinner { display: inline-block; width: 40px; height: 40px;
+            border: 4px solid #fcd34d; border-top-color: #92400e;
+            border-radius: 50%; animation: spin 1s linear infinite;
+            margin-bottom: 16px; }
+          @keyframes spin { to { transform: rotate(360deg); } }
+        </style>
         </head>
         <body>
           <div class="box">
             <div class="spinner"></div>
             <h1>⏳ QR Code তৈরি হচ্ছে...</h1>
             <p>Page ৩ সেকেন্ড পরে auto-refresh হবে।</p>
-            <p style="font-size: 12px; margin-top: 16px;">
-              যদি অনেকক্ষণ ধরে এই message থাকে, server logs চেক করুন।
-            </p>
           </div>
         </body>
       </html>
     `);
   }
 
-  // QR image দেখাও
   const generatedTime = lastQRGeneratedAt
     ? lastQRGeneratedAt.toLocaleString('bn-BD')
     : '';
@@ -356,77 +407,31 @@ app.get('/qr', (req, res) => {
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
           * { box-sizing: border-box; }
-          body {
-            font-family: 'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif;
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
-            min-height: 100vh; margin: 0;
-            background: linear-gradient(135deg, #f0fdf4, #ecfdf5);
-            padding: 20px;
-          }
-          .card {
-            background: #fff;
-            padding: 32px;
-            border-radius: 20px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-            text-align: center;
-            max-width: 500px;
-            width: 100%;
-          }
-          h1 {
-            color: #1c5fa8;
-            font-size: 22px;
-            margin: 0 0 8px 0;
-          }
-          .subtitle {
-            color: #475569;
-            font-size: 14px;
-            margin: 6px 0 0 0;
-            line-height: 1.6;
-          }
-          .qr-wrapper {
-            background: #fff;
-            padding: 16px;
-            border: 2px dashed #cbd5e1;
-            border-radius: 14px;
-            margin: 22px 0;
-            display: inline-block;
-          }
-          .qr-wrapper img {
-            display: block;
-            width: 320px;
-            max-width: 100%;
-            height: auto;
-          }
-          .steps {
-            background: #f8fafc;
-            border-radius: 12px;
-            padding: 16px 20px;
-            text-align: left;
-            font-size: 14px;
-            color: #334155;
-            margin-top: 16px;
-          }
-          .steps strong {
-            color: #1c5fa8;
-            display: block;
-            margin-bottom: 8px;
-            font-size: 15px;
-          }
-          .steps ol {
-            margin: 0;
-            padding-left: 22px;
-          }
-          .steps li {
-            margin: 8px 0;
-            line-height: 1.5;
-          }
-          .info {
-            margin-top: 16px;
-            font-size: 12px;
-            color: #94a3b8;
-            text-align: center;
-          }
+          body { font-family: 'Hind Siliguri', Arial, sans-serif;
+                 display: flex; flex-direction: column;
+                 align-items: center; justify-content: center;
+                 min-height: 100vh; margin: 0;
+                 background: linear-gradient(135deg, #f0fdf4, #ecfdf5);
+                 padding: 20px; }
+          .card { background: #fff; padding: 32px; border-radius: 20px;
+                  box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+                  text-align: center; max-width: 500px; width: 100%; }
+          h1 { color: #1c5fa8; font-size: 22px; margin: 0 0 8px 0; }
+          .subtitle { color: #475569; font-size: 14px; margin: 6px 0 0 0; }
+          .qr-wrapper { background: #fff; padding: 16px;
+                        border: 2px dashed #cbd5e1; border-radius: 14px;
+                        margin: 22px 0; display: inline-block; }
+          .qr-wrapper img { display: block; width: 320px; max-width: 100%;
+                            height: auto; }
+          .steps { background: #f8fafc; border-radius: 12px;
+                   padding: 16px 20px; text-align: left;
+                   font-size: 14px; color: #334155; margin-top: 16px; }
+          .steps strong { color: #1c5fa8; display: block;
+                          margin-bottom: 8px; font-size: 15px; }
+          .steps ol { margin: 0; padding-left: 22px; }
+          .steps li { margin: 8px 0; line-height: 1.5; }
+          .info { margin-top: 16px; font-size: 12px; color: #94a3b8;
+                  text-align: center; }
         </style>
       </head>
       <body>
@@ -460,7 +465,7 @@ app.get('/qr', (req, res) => {
 });
 
 // ==================================================
-// 🏠 Root endpoint (health check)
+// 🏠 Root endpoint
 // ==================================================
 app.get('/', (req, res) => {
   res.json({
@@ -474,12 +479,14 @@ app.get('/', (req, res) => {
 });
 
 // ==================================================
-// 🔥 FIREBASE লিসেনার (হসপিটাল-নির্দিষ্ট পাথে)
+// 🔥 FIREBASE লিসেনার – Dual Trigger
 // ==================================================
 const previousStatuses = new Map();
 const appointmentsPath = `hospitals/${HOSPITAL_ID}/appointments`;
 
 console.log(`\n🔍 Firestore listener চালু হচ্ছে: ${appointmentsPath}`);
+console.log(`📢 Trigger 1: নতুন বুকিং → হাসপাতালের WhatsApp`);
+console.log(`📢 Trigger 2: Admin Confirm → রোগীকে SMS + Email\n`);
 
 db.collection(appointmentsPath).onSnapshot(
   (snapshot) => {
@@ -490,51 +497,68 @@ db.collection(appointmentsPath).onSnapshot(
       const data = change.doc.data();
       const currentStatus = data.status;
 
-      // ---------- Added ----------
+      // ==================================================
+      // 🆕 TRIGGER 1: NEW BOOKING → হাসপাতালের WhatsApp
+      // ==================================================
       if (change.type === 'added') {
         previousStatuses.set(docId, currentStatus);
-        console.log(`➕ নতুন appointment: ${docId} | status: ${currentStatus}`);
+
+        const createdAt = data.createdAt?.toDate
+          ? data.createdAt.toDate()
+          : data.createdAt
+          ? new Date(data.createdAt)
+          : null;
+
+        const now = new Date();
+        const secondsSinceCreation = createdAt
+          ? (now.getTime() - createdAt.getTime()) / 1000
+          : 999;
+
+        const isFreshBooking = secondsSinceCreation < 60;
+
+        console.log(
+          `➕ নতুন appointment: ${docId} | status: ${currentStatus} | age: ${Math.round(secondsSinceCreation)}s`
+        );
+
+        if (isFreshBooking) {
+          console.log(`\n✅ নতুন বুকিং → হাসপাতালের WhatsApp এ পাঠাচ্ছি...`);
+          try {
+            await sendHospitalNotification(data, docId);
+          } catch (err) {
+            console.error('❌ sendHospitalNotification error:', err.message);
+          }
+        } else {
+          console.log(`⏭️ পুরোনো booking (${Math.round(secondsSinceCreation)}s), skip\n`);
+        }
       }
 
-      // ---------- Modified ----------
+      // ==================================================
+      // ✅ TRIGGER 2: PENDING → CONFIRMED → রোগীকে SMS + Email
+      // ==================================================
       if (change.type === 'modified') {
         const previousStatus = previousStatuses.get(docId);
         console.log(
           `🔄 Modified: ${docId} | prev: ${previousStatus} → curr: ${currentStatus}`
         );
 
+        // শুধু pending → confirmed হলে
         if (previousStatus === 'pending' && currentStatus === 'confirmed') {
           console.log(
-            `\n✅ অ্যাপয়েন্টমেন্ট ${docId} কনফার্ম করা হয়েছে। রোগীকে নোটিফিকেশন পাঠানো হচ্ছে...`
+            `\n✅ Admin booking confirm করেছে! রোগীকে SMS + Email পাঠাচ্ছি...`
           );
 
           try {
-            await sendConfirmationMessage(data, docId);
+            await sendPatientConfirmation(data, docId);
+            console.log(`✅ রোগীকে notification পাঠানো সম্পন্ন\n`);
           } catch (err) {
-            console.error('❌ sendConfirmationMessage error:', err.message);
-          }
-
-          // ---------- Hospital WhatsApp Notification ----------
-          if (isConnected && sock) {
-            const jid = HOSPITAL_WHATSAPP + '@s.whatsapp.net';
-            const msg = `🩺 অ্যাপয়েন্টমেন্ট কনফার্ম!\n\nনাম: ${data.name}\nমোবাইল: ${data.mobile}\nসিরিয়াল: ${data.serialNo}\nডাক্তার: ${data.doctorName}\nসময়: ${data.doctorTime || 'উল্লেখিত সময়ে'}\n\nরোগীকে নোটিফিকেশন পাঠানো হয়েছে।`;
-            try {
-              await sock.sendMessage(jid, { text: msg });
-              console.log(`📨 হাসপাতালের WhatsApp-এ নোটিফিকেশন পাঠানো হয়েছে।\n`);
-            } catch (err) {
-              console.error('❌ WhatsApp নোটিফিকেশন পাঠাতে ব্যর্থ:', err.message);
-            }
-          } else {
-            console.log(
-              `⚠️ WhatsApp কানেক্টেড নেই! isConnected=${isConnected}, sock=${!!sock}\n`
-            );
+            console.error('❌ sendPatientConfirmation error:', err.message);
           }
         }
 
         previousStatuses.set(docId, currentStatus);
       }
 
-      // ---------- Removed ----------
+      // ---------- ➖ Removed ----------
       if (change.type === 'removed') {
         previousStatuses.delete(docId);
         console.log(`➖ Appointment removed: ${docId}`);
@@ -557,7 +581,6 @@ app.listen(PORT, () => {
   console.log(`🔗 QR page: http://localhost:${PORT}/qr\n`);
 });
 
-// ---------- WhatsApp কানেকশন শুরু ----------
 connectToWhatsApp();
 
 // ---------- Graceful Shutdown ----------
@@ -566,9 +589,7 @@ process.on('SIGINT', () => {
   if (sock) {
     try {
       sock.end(undefined);
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) {}
   }
   process.exit(0);
 });
