@@ -11,13 +11,31 @@ const axios = require('axios');
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 
+// ==================================================
+// ✅ Firebase Credentials Loader
+// ==================================================
+// Priority:
+//   1. FIREBASE_SERVICE_ACCOUNT env variable (Railway-এর জন্য)
+//   2. ./serviceAccountKey.json (local development-এর জন্য)
+// ==================================================
 let serviceAccount;
-try {
-  serviceAccount = require('./serviceAccountKey.json');
-  console.log('✅ serviceAccountKey.json সফলভাবে লোড হয়েছে');
-} catch (err) {
-  console.error('❌ serviceAccountKey.json ফাইলটি পাওয়া যায়নি!');
-  process.exit(1);
+if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+  try {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    console.log('✅ Firebase service account loaded from ENV');
+  } catch (err) {
+    console.error('❌ FIREBASE_SERVICE_ACCOUNT env parse error:', err.message);
+    process.exit(1);
+  }
+} else {
+  try {
+    serviceAccount = require('./serviceAccountKey.json');
+    console.log('✅ Firebase service account loaded from FILE');
+  } catch (err) {
+    console.error('❌ No Firebase credentials found!');
+    console.error('👉 Set FIREBASE_SERVICE_ACCOUNT env variable OR add serviceAccountKey.json');
+    process.exit(1);
+  }
 }
 
 initializeApp({ credential: cert(serviceAccount) });
@@ -156,8 +174,6 @@ async function connectToWhatsApp() {
           console.log('   ৩. node server.js চালান');
           console.log('   ৪. নতুন QR code scan করুন');
           console.log('=========================================================\n');
-          // Exit করছি না, যাতে user terminal এ message দেখতে পারে
-          // কিন্তু process চালু থাকবে যাতে DB listener কাজ করে
         }
       }
       // ---------- Connection Open ----------
