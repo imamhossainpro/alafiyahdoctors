@@ -500,37 +500,43 @@ db.collection(appointmentsPath).onSnapshot(
       // ==================================================
       // 🆕 TRIGGER 1: NEW BOOKING → হাসপাতালের WhatsApp
       // ==================================================
-      if (change.type === 'added') {
-        previousStatuses.set(docId, currentStatus);
+      // =================================================
+        if (change.type === 'added') {
+          previousStatuses.set(docId, currentStatus);
 
-        const createdAt = data.createdAt?.toDate
-          ? data.createdAt.toDate()
-          : data.createdAt
-          ? new Date(data.createdAt)
-          : null;
+          // ✅ createdAt অথবা timestamp — যেটা আছে সেটা check
+          const rawDate = data.createdAt || data.timestamp;
 
-        const now = new Date();
-        const secondsSinceCreation = createdAt
-          ? (now.getTime() - createdAt.getTime()) / 1000
-          : 999;
+          const createdAt = rawDate?.toDate
+            ? rawDate.toDate()
+            : rawDate?.seconds
+            ? new Date(rawDate.seconds * 1000)
+            : rawDate
+            ? new Date(rawDate)
+            : null;
 
-        const isFreshBooking = secondsSinceCreation < 60;
+          const now = new Date();
+          const secondsSinceCreation = createdAt
+            ? (now.getTime() - createdAt.getTime()) / 1000
+            : 999;
 
-        console.log(
-          `➕ নতুন appointment: ${docId} | status: ${currentStatus} | age: ${Math.round(secondsSinceCreation)}s`
-        );
+          const isFreshBooking = secondsSinceCreation < 300; // 5 মিনিট
 
-        if (isFreshBooking) {
-          console.log(`\n✅ নতুন বুকিং → হাসপাতালের WhatsApp এ পাঠাচ্ছি...`);
-          try {
-            await sendHospitalNotification(data, docId);
-          } catch (err) {
-            console.error('❌ sendHospitalNotification error:', err.message);
+          console.log(
+            `➕ নতুন appointment: ${docId} | status: ${currentStatus} | age: ${Math.round(secondsSinceCreation)}s | fresh: ${isFreshBooking}`
+          );
+
+          if (isFreshBooking) {
+            console.log(`\n✅ নতুন বুকিং → হাসপাতালের WhatsApp এ পাঠাচ্ছি...`);
+            try {
+              await sendHospitalNotification(data, docId);
+            } catch (err) {
+              console.error('❌ sendHospitalNotification error:', err.message);
+            }
+          } else {
+            console.log(`⏭️ পুরোনো booking (${Math.round(secondsSinceCreation)}s), skip\n`);
           }
-        } else {
-          console.log(`⏭️ পুরোনো booking (${Math.round(secondsSinceCreation)}s), skip\n`);
         }
-      }
 
       // ==================================================
       // ✅ TRIGGER 2: PENDING → CONFIRMED → রোগীকে SMS + Email
