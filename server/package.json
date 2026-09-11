@@ -1,7 +1,7 @@
 {
   "name": "alafiyah-whatsapp-server",
   "version": "1.0.0",
-  "description": "Al-Afiya Hospital WhatsApp notification server",
+  "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

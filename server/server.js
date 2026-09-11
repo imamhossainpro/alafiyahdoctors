@@ -1,22 +1,23 @@
-require('dotenv').config();
-const express = require('express');
-const makeWASocket = require('@whiskeysockets/baileys').default;
-const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
-const pino = require('pino');
-const qrcode = require('qrcode-terminal');
-const nodemailer = require('nodemailer');
-const axios = require('axios');
+// server/server.js
+import 'dotenv/config';
+import express from 'express';
+import makeWASocket, {
+  useMultiFileAuthState,
+  DisconnectReason,
+  fetchLatestBaileysVersion,
+} from '@whiskeysockets/baileys';
+import pino from 'pino';
+import qrcode from 'qrcode-terminal';
+import nodemailer from 'nodemailer';
+import axios from 'axios';
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { createRequire } from 'module';
 
-// ---------- Firebase Admin ----------
-const { initializeApp, cert } = require('firebase-admin/app');
-const { getFirestore } = require('firebase-admin/firestore');
+const require = createRequire(import.meta.url);
 
 // ==================================================
 // ✅ Firebase Credentials Loader
-// ==================================================
-// Priority:
-//   1. FIREBASE_SERVICE_ACCOUNT env variable (Railway-এর জন্য)
-//   2. ./serviceAccountKey.json (local development-এর জন্য)
 // ==================================================
 let serviceAccount;
 if (process.env.FIREBASE_SERVICE_ACCOUNT) {
@@ -117,7 +118,7 @@ async function sendSMS(phoneNumber, message) {
 }
 
 // ==================================================
-// ✅ WhatsApp কানেকশন – Improved Reconnect Logic
+// ✅ WhatsApp কানেকশন
 // ==================================================
 async function connectToWhatsApp() {
   try {
@@ -163,7 +164,6 @@ async function connectToWhatsApp() {
             setTimeout(() => connectToWhatsApp(), delay);
           } else {
             console.error(`❌ ${MAX_RECONNECT_ATTEMPTS} বার চেষ্টার পরেও সংযোগ হয়নি!`);
-            console.error('👉 অনুগ্রহ করে server বন্ধ করে আবার চালান: node server.js');
           }
         } else {
           console.log('\n❌ WhatsApp লগআউট হয়েছে!');
@@ -275,7 +275,7 @@ ${serviceMessage}
 }
 
 // ==================================================
-// 🔥 FIREBASE লিসেনার (হসপিটাল-নির্দিষ্ট পাথে)
+// 🔥 FIREBASE লিসেনার
 // ==================================================
 const previousStatuses = new Map();
 const appointmentsPath = `hospitals/${HOSPITAL_ID}/appointments`;
