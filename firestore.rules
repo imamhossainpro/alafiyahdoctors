@@ -1,0 +1,85 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: get user doc
+    function userDoc(hospitalId) {
+      return get(/databases/$(database)/documents/hospitals/$(hospitalId)/users/$(request.auth.uid)).data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function hasRole(hospitalId, roles) {
+      return isSignedIn() && userDoc(hospitalId).role in roles;
+    }
+
+    function hasPermission(hospitalId, perm) {
+      return isSignedIn() &&
+        (userDoc(hospitalId).role == 'admin' ||
+         userDoc(hospitalId).permissionOverrides[perm] == true ||
+         userDoc(hospitalId).role == 'sub-admin');
+    }
+
+    match /hospitals/{hospitalId} {
+
+      // ---------- APPOINTMENTS ----------
+      match /appointments/{appointmentId} {
+        allow read: if isSignedIn();
+
+        allow create: if isSignedIn()
+          && request.resource.data.hospitalId == hospitalId;
+
+        allow update: if isSignedIn() && (
+          // status change
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status','statusNote','updatedAt','checkedInAt','checkedInVia','qrCode','qrData','qrGeneratedAt'])
+          // archive
+          || request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['isArchived','archivedAt','archivedBy','archivedByName','updatedAt'])
+          // restore
+          || request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['isArchived','archivedAt','archivedBy','archivedByName','restoredAt','restoredBy','updatedAt'])
+          // edit
+          || hasPermission(hospitalId, 'booking.edit')
+          // marketing / referral edit
+          || hasPermission(hospitalId, 'booking.referral_edit')
+          || hasPermission(hospitalId, 'booking.marketing_assignment')
+          || hasPermission(hospitalId, 'booking.patient_type_change')
+        );
+
+        allow delete: if hasPermission(hospitalId, 'archive.delete');
+      }
+
+      // ---------- ACTIVITY LOGS (centralized) ----------
+      match /activityLogs/{logId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update, delete: if false; // immutable
+      }
+
+      // ---------- AUDIT LOGS (legacy – allow signed-in) ----------
+      match /audit_logs/{logId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update, delete: if false;
+      }
+
+      // ---------- USERS ----------
+      match /users/{userId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && userId == request.auth.uid;
+        allow update: if isSignedIn() &&
+          (userId == request.auth.uid || userDoc(hospitalId).role == 'admin');
+        allow delete: if isSignedIn() && userDoc(hospitalId).role == 'admin';
+      }
+
+      // ---------- OTHER COLLECTIONS ----------
+      match /{document=**} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn();
+      }
+    }
+  }
+}

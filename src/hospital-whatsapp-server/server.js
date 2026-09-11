@@ -14,9 +14,9 @@ const { getFirestore } = require('firebase-admin/firestore');
 let serviceAccount;
 try {
   serviceAccount = require('./serviceAccountKey.json');
-  console.log('✅ serviceAccountKey.json সফলভাবে লোড হয়েছে');
+  console.log('✅ serviceAccountKey.json সফলভাবে লোড হয়েছে');
 } catch (err) {
-  console.error('❌ serviceAccountKey.json ফাইলটি পাওয়া যায়নি!');
+  console.error('❌ serviceAccountKey.json ফাইলটি পাওয়া যায়নি!');
   process.exit(1);
 }
 
@@ -28,10 +28,12 @@ const PORT = process.env.PORT || 3001;
 app.use(express.json());
 
 // ---------- কনস্ট্যান্ট ----------
-const HOSPITAL_ID = 'alafiyah_main'; // আপনার হসপিটাল ডকুমেন্টের আইডি
-const HOSPITAL_WHATSAPP = "8801886776512";
+const HOSPITAL_ID = 'alafiyah_main';
+const HOSPITAL_WHATSAPP = '8801889885094';
 let sock = null;
 let isConnected = false;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
 
 // ---------- ইমেইল ট্রান্সপোর্টার ----------
 const transporter = nodemailer.createTransport({
@@ -68,10 +70,14 @@ async function sendSMS(phoneNumber, message) {
       formData.append('senderid', process.env.SMS_SENDER_ID);
     }
 
-    const response = await axios.post('https://api.sms.net.bd/sendsms', formData.toString(), {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      timeout: 15000,
-    });
+    const response = await axios.post(
+      'https://api.sms.net.bd/sendsms',
+      formData.toString(),
+      {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        timeout: 15000,
+      }
+    );
 
     console.log(`📥 sms.net.bd রেসপন্স:`, JSON.stringify(response.data, null, 2));
 
@@ -92,40 +98,81 @@ async function sendSMS(phoneNumber, message) {
   }
 }
 
-// ---------- WhatsApp কানেকশন ----------
+// ==================================================
+// ✅ WhatsApp কানেকশন – Improved Reconnect Logic
+// ==================================================
 async function connectToWhatsApp() {
-  const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
-  const { version } = await fetchLatestBaileysVersion();
+  try {
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
+    const { version } = await fetchLatestBaileysVersion();
 
-  sock = makeWASocket({
-    version,
-    auth: state,
-    logger: pino({ level: 'silent' }),
-    connectTimeoutMs: 60000,
-    keepAliveIntervalMs: 10000,
-  });
+    sock = makeWASocket({
+      version,
+      auth: state,
+      logger: pino({ level: 'silent' }),
+      connectTimeoutMs: 60000,
+      keepAliveIntervalMs: 10000,
+    });
 
-  sock.ev.on('creds.update', saveCreds);
+    sock.ev.on('creds.update', saveCreds);
 
-  sock.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect, qr } = update;
-    if (qr) {
-      console.log('====================');
-      console.log('WhatsApp QR স্ক্যান করুন:');
-      qrcode.generate(qr, { small: true });
-      console.log('====================');
-    }
-    if (connection === 'close') {
-      isConnected = false;
-      const statusCode = lastDisconnect?.error?.output?.statusCode;
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-      console.log('সংযোগ বন্ধ হয়েছে, পুনরায় সংযোগ হচ্ছে...', shouldReconnect);
-      if (shouldReconnect) connectToWhatsApp();
-    } else if (connection === 'open') {
-      isConnected = true;
-      console.log('✅ WhatsApp কানেক্টেড! Server চালু আছে।');
-    }
-  });
+    sock.ev.on('connection.update', (update) => {
+      const { connection, lastDisconnect, qr } = update;
+
+      // ---------- QR Code ----------
+      if (qr) {
+        console.log('\n====================');
+        console.log('📱 WhatsApp QR স্ক্যান করুন (হাসপাতালের WhatsApp থেকে):');
+        console.log('👉 Settings → Linked Devices → Link a Device');
+        console.log('====================\n');
+        qrcode.generate(qr, { small: true });
+        console.log('\n====================\n');
+      }
+
+      // ---------- Connection Closed ----------
+      if (connection === 'close') {
+        isConnected = false;
+        const statusCode = lastDisconnect?.error?.output?.statusCode;
+        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+
+        console.log(`\n🔌 সংযোগ বন্ধ | statusCode: ${statusCode} | reconnect: ${shouldReconnect}`);
+
+        if (shouldReconnect) {
+          reconnectAttempts++;
+          if (reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
+            const delay = Math.min(3000 * reconnectAttempts, 15000);
+            console.log(`🔄 ${delay / 1000} সেকেন্ড পরে পুনরায় সংযোগ... (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+            setTimeout(() => connectToWhatsApp(), delay);
+          } else {
+            console.error(`❌ ${MAX_RECONNECT_ATTEMPTS} বার চেষ্টার পরেও সংযোগ হয়নি!`);
+            console.error('👉 অনুগ্রহ করে server বন্ধ করে আবার চালান: node server.js');
+          }
+        } else {
+          console.log('\n❌ WhatsApp লগআউট হয়েছে!');
+          console.log('=========================================================');
+          console.log('👉 সমাধান:');
+          console.log('   ১. Server বন্ধ করুন (Ctrl+C)');
+          console.log('   ২. auth_info_baileys folder delete করুন');
+          console.log('   ৩. node server.js চালান');
+          console.log('   ৪. নতুন QR code scan করুন');
+          console.log('=========================================================\n');
+          // Exit করছি না, যাতে user terminal এ message দেখতে পারে
+          // কিন্তু process চালু থাকবে যাতে DB listener কাজ করে
+        }
+      }
+      // ---------- Connection Open ----------
+      else if (connection === 'open') {
+        isConnected = true;
+        reconnectAttempts = 0;
+        console.log('\n✅ WhatsApp কানেক্টেড! Server চালু আছে।');
+        console.log(`📞 হাসপাতাল WhatsApp: ${HOSPITAL_WHATSAPP}\n`);
+      }
+    });
+  } catch (error) {
+    console.error('❌ connectToWhatsApp error:', error.message);
+    console.log('🔄 ৫ সেকেন্ড পরে আবার চেষ্টা...');
+    setTimeout(() => connectToWhatsApp(), 5000);
+  }
 }
 
 // ---------- 🆕 রোগীকে কনফার্মেশন মেসেজ পাঠানোর ফাংশন ----------
@@ -133,18 +180,19 @@ async function sendConfirmationMessage(data, appointmentId) {
   const baseUrl = process.env.BASE_URL || 'https://your-hospital.com';
   const checkinLink = `${baseUrl}/checkin/${appointmentId}`;
 
-  const serviceMessage = process.env.HOSPITAL_SERVICES || 
+  const serviceMessage =
+    process.env.HOSPITAL_SERVICES ||
     'আমাদের হাসপাতালে অভিজ্ঞ ডাক্তার, উন্নত চিকিৎসা সেবা ও ২৪/৭ জরুরি বিভাগ রয়েছে।';
 
   const smsText = `
-🩺 আল-আফিয়া হাসপাতাল
+🩺 আল-আফিয়া হাসপাতাল
 
-প্রিয় ${data.name},
-আপনার সিরিয়াল নিশ্চিত হয়েছে!
-সিরিয়াল: ${data.serialNo}
+প্রিয় ${data.name},
+আপনার সিরিয়াল নিশ্চিত হয়েছে!
+সিরিয়াল: ${data.serialNo}
 ডাক্তার: ${data.doctorName}
 তারিখ: ${data.bookingDate}
-সময়: ${data.doctorTime || 'উল্লেখিত সময়ে'}
+সময়: ${data.doctorTime || 'উল্লেখিত সময়ে'}
 
 ✅ হাসপিটালে এসে চেক-ইন করতে লিংকে ক্লিক করুন:
 ${checkinLink}
@@ -156,14 +204,14 @@ ${serviceMessage}
 
   const emailHtml = `
     <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; border: 1px solid #e2e8f0; padding: 20px; border-radius: 12px;">
-      <h2 style="color: #1c5fa8;">🩺 আল-আফিয়া হাসপাতাল</h2>
-      <p><strong>প্রিয় ${data.name},</strong></p>
-      <p>আপনার সিরিয়াল <strong>নিশ্চিত</strong> হয়েছে।</p>
+      <h2 style="color: #1c5fa8;">🩺 আল-আফিয়া হাসপাতাল</h2>
+      <p><strong>প্রিয় ${data.name},</strong></p>
+      <p>আপনার সিরিয়াল <strong>নিশ্চিত</strong> হয়েছে।</p>
       <ul>
-        <li><strong>সিরিয়াল নম্বর:</strong> ${data.serialNo}</li>
+        <li><strong>সিরিয়াল নম্বর:</strong> ${data.serialNo}</li>
         <li><strong>ডাক্তার:</strong> ${data.doctorName}</li>
         <li><strong>তারিখ:</strong> ${data.bookingDate}</li>
-        <li><strong>সময়:</strong> ${data.doctorTime || 'উল্লেখিত সময়ে'}</li>
+        <li><strong>সময়:</strong> ${data.doctorTime || 'উল্লেখিত সময়ে'}</li>
       </ul>
       <p>✅ <strong>হাসপিটালে এসে চেক-ইন করতে</strong> নিচের বাটনে ক্লিক করুন:</p>
       <a href="${checkinLink}" style="display: inline-block; background: #1c5fa8; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">চেক-ইন করুন</a>
@@ -188,9 +236,9 @@ ${serviceMessage}
 
     const smsSent = await sendSMS(mobile, smsText);
     if (smsSent) {
-      console.log(`📱 এসএমএস পাঠানো হয়েছে ${mobile} নম্বরে`);
+      console.log(`📱 এসএমএস পাঠানো হয়েছে ${mobile} নম্বরে`);
     } else {
-      console.log(`⚠️ এসএমএস পাঠানো সম্ভব হয়নি ${mobile} নম্বরে`);
+      console.log(`⚠️ এসএমএস পাঠানো সম্ভব হয়নি ${mobile} নম্বরে`);
     }
   }
 
@@ -200,63 +248,115 @@ ${serviceMessage}
       await transporter.sendMail({
         from: process.env.EMAIL_USER,
         to: data.email,
-        subject: `✅ আপনার সিরিয়াল নিশ্চিত - ${data.serialNo}`,
+        subject: `✅ আপনার সিরিয়াল নিশ্চিত - ${data.serialNo}`,
         html: emailHtml,
       });
-      console.log(`📧 ইমেইল পাঠানো হয়েছে ${data.email} এ`);
+      console.log(`📧 ইমেইল পাঠানো হয়েছে ${data.email} এ`);
     } catch (err) {
       console.error('❌ ইমেইল পাঠাতে ব্যর্থ:', err.message);
     }
   }
 }
 
-// ---------- 🔥 FIREBASE লিসেনার (হসপিটাল-নির্দিষ্ট পাথে) ----------
+// ==================================================
+// 🔥 FIREBASE লিসেনার (হসপিটাল-নির্দিষ্ট পাথে)
+// ==================================================
 const previousStatuses = new Map();
-
-// পাথ: hospitals/alafiyah_main/appointments
 const appointmentsPath = `hospitals/${HOSPITAL_ID}/appointments`;
 
-db.collection(appointmentsPath).onSnapshot((snapshot) => {
-  snapshot.docChanges().forEach(async (change) => {
-    const docId = change.doc.id;
-    const data = change.doc.data();
-    const currentStatus = data.status;
+console.log(`\n🔍 Firestore listener চালু হচ্ছে: ${appointmentsPath}`);
 
-    if (change.type === 'added') {
-      previousStatuses.set(docId, currentStatus);
-    }
+db.collection(appointmentsPath).onSnapshot(
+  (snapshot) => {
+    console.log(`📊 Snapshot: ${snapshot.docChanges().length} changes`);
 
-    if (change.type === 'modified') {
-      const previousStatus = previousStatuses.get(docId);
-      if (previousStatus === 'pending' && currentStatus === 'confirmed') {
-        console.log(`✅ অ্যাপয়েন্টমেন্ট ${docId} কনফার্ম করা হয়েছে। রোগীকে নোটিফিকেশন পাঠানো হচ্ছে...`);
-        await sendConfirmationMessage(data, docId);
+    snapshot.docChanges().forEach(async (change) => {
+      const docId = change.doc.id;
+      const data = change.doc.data();
+      const currentStatus = data.status;
 
-        if (isConnected && sock) {
-          const jid = HOSPITAL_WHATSAPP + '@s.whatsapp.net';
-          const msg = `🩺 অ্যাপয়েন্টমেন্ট কনফার্ম!\n\nনাম: ${data.name}\nমোবাইল: ${data.mobile}\nসিরিয়াল: ${data.serialNo}\nডাক্তার: ${data.doctorName}\nসময়: ${data.doctorTime || 'উল্লেখিত সময়ে'}\n\nরোগীকে নোটিফিকেশন পাঠানো হয়েছে।`;
+      // ---------- Added ----------
+      if (change.type === 'added') {
+        previousStatuses.set(docId, currentStatus);
+        console.log(`➕ নতুন appointment: ${docId} | status: ${currentStatus}`);
+      }
+
+      // ---------- Modified ----------
+      if (change.type === 'modified') {
+        const previousStatus = previousStatuses.get(docId);
+        console.log(
+          `🔄 Modified: ${docId} | prev: ${previousStatus} → curr: ${currentStatus}`
+        );
+
+        if (previousStatus === 'pending' && currentStatus === 'confirmed') {
+          console.log(
+            `\n✅ অ্যাপয়েন্টমেন্ট ${docId} কনফার্ম করা হয়েছে। রোগীকে নোটিফিকেশন পাঠানো হচ্ছে...`
+          );
+
           try {
-            await sock.sendMessage(jid, { text: msg });
-            console.log(`📨 হাসপাতালের WhatsApp-এ নোটিফিকেশন পাঠানো হয়েছে।`);
+            await sendConfirmationMessage(data, docId);
           } catch (err) {
-            console.error('❌ WhatsApp নোটিফিকেশন পাঠাতে ব্যর্থ:', err.message);
+            console.error('❌ sendConfirmationMessage error:', err.message);
+          }
+
+          // ---------- Hospital WhatsApp Notification ----------
+          if (isConnected && sock) {
+            const jid = HOSPITAL_WHATSAPP + '@s.whatsapp.net';
+            const msg = `🩺 অ্যাপয়েন্টমেন্ট কনফার্ম!\n\nনাম: ${data.name}\nমোবাইল: ${data.mobile}\nসিরিয়াল: ${data.serialNo}\nডাক্তার: ${data.doctorName}\nসময়: ${data.doctorTime || 'উল্লেখিত সময়ে'}\n\nরোগীকে নোটিফিকেশন পাঠানো হয়েছে।`;
+            try {
+              await sock.sendMessage(jid, { text: msg });
+              console.log(`📨 হাসপাতালের WhatsApp-এ নোটিফিকেশন পাঠানো হয়েছে।\n`);
+            } catch (err) {
+              console.error('❌ WhatsApp নোটিফিকেশন পাঠাতে ব্যর্থ:', err.message);
+            }
+          } else {
+            console.log(
+              `⚠️ WhatsApp কানেক্টেড নেই! isConnected=${isConnected}, sock=${!!sock}\n`
+            );
           }
         }
+
+        previousStatuses.set(docId, currentStatus);
       }
-      previousStatuses.set(docId, currentStatus);
-    }
 
-    if (change.type === 'removed') {
-      previousStatuses.delete(docId);
-    }
-  });
-});
+      // ---------- Removed ----------
+      if (change.type === 'removed') {
+        previousStatuses.delete(docId);
+        console.log(`➖ Appointment removed: ${docId}`);
+      }
+    });
+  },
+  (error) => {
+    console.error('❌ Firestore listener error:', error.message);
+  }
+);
 
-// ---------- সার্ভার চালু ----------
+// ==================================================
+// 🚀 সার্ভার চালু
+// ==================================================
 app.listen(PORT, () => {
   console.log(`🚀 Backend Server চলছে: ${PORT}`);
   console.log(`📁 হসপিটাল আইডি: ${HOSPITAL_ID}`);
-  console.log(`📁 অ্যাপয়েন্টমেন্ট পাথ: ${appointmentsPath}`);
+  console.log(`📁 অ্যাপয়েন্টমেন্ট পাথ: ${appointmentsPath}`);
+  console.log(`📞 হাসপাতাল WhatsApp: ${HOSPITAL_WHATSAPP}\n`);
 });
 
+// ---------- WhatsApp কানেকশন শুরু ----------
 connectToWhatsApp();
+
+// ---------- Graceful Shutdown ----------
+process.on('SIGINT', () => {
+  console.log('\n\n🛑 Server বন্ধ হচ্ছে...');
+  if (sock) {
+    try {
+      sock.end(undefined);
+    } catch (e) {
+      // ignore
+    }
+  }
+  process.exit(0);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('⚠️ Unhandled Rejection:', reason);
+});

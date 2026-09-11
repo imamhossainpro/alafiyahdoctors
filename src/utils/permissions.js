@@ -34,6 +34,7 @@ export const PERMISSION_REGISTRY = [
       { key: 'booking.view', label: 'বুকিং দেখুন' },
       { key: 'booking.create', label: 'নতুন বুকিং' },
       { key: 'booking.edit', label: 'বুকিং এডিট' },
+        { key: 'booking.archive', label: 'বুকিং আর্কাইভ' },  
       { key: 'booking.delete', label: 'বুকিং ডিলিট' },
       { key: 'booking.status_change', label: 'স্ট্যাটাস পরিবর্তন' },
       { key: 'booking.patient_type_change', label: 'রোগীর টাইপ পরিবর্তন' },
@@ -120,7 +121,7 @@ export const PERMISSION_REGISTRY = [
       { key: 'user.disable', label: 'ইউজার নিষ্ক্রিয়' },
       { key: 'user.delete', label: 'ইউজার ডিলিট' },
       { key: 'user.role_change', label: 'Role পরিবর্তন' },
-      { key: 'user.permission_manage', label: 'Permission مدیریت' },
+      { key: 'user.permission_manage', label: 'Permission' },
     ],
   },
 ];
@@ -167,6 +168,7 @@ export const ROLE_TEMPLATES = {
       'booking.qr_view': true,
       'marketing_report.view': true,
       'marketing_report.filter': true,
+      'booking.archive': true,
     },
   },
   viewer: {
@@ -244,6 +246,7 @@ export const PERMISSION_DEPENDENCIES = {
   'booking.create': 'booking.view',
   'booking.edit': 'booking.view',
   'booking.delete': 'booking.view',
+  'booking.archive': 'booking.view',
   'booking.status_change': 'booking.view',
   'booking.patient_type_change': 'booking.view',
   'booking.marketing_assignment': 'booking.view',
