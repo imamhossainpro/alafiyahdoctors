@@ -218,87 +218,43 @@ async function connectToWhatsApp() {
 }
 
 // ==================================================
-// 🆕 রোগীকে কনফার্মেশন মেসেজ পাঠানোর ফাংশন
+// 🆕 হাসপাতালের WhatsApp-এ নতুন বুকিং এর নোটিফিকেশন
 // ==================================================
-async function sendConfirmationMessage(data, appointmentId) {
-  const baseUrl = process.env.BASE_URL || 'https://your-hospital.com';
-  const checkinLink = `${baseUrl}/checkin/${appointmentId}`;
-
-  const serviceMessage =
-    process.env.HOSPITAL_SERVICES ||
-    'আমাদের হাসপাতালে অভিজ্ঞ ডাক্তার, উন্নত চিকিৎসা সেবা ও ২৪/৭ জরুরি বিভাগ রয়েছে।';
-
-  const smsText = `
-🩺 আল-আফিয়া হাসপাতাল
-
-প্রিয় ${data.name},
-আপনার সিরিয়াল নিশ্চিত হয়েছে!
-সিরিয়াল: ${data.serialNo}
-ডাক্তার: ${data.doctorName}
-তারিখ: ${data.bookingDate}
-সময়: ${data.doctorTime || 'উল্লেখিত সময়ে'}
-
-✅ হাসপিটালে এসে চেক-ইন করতে লিংকে ক্লিক করুন:
-${checkinLink}
-
-${serviceMessage}
-
-ধন্যবাদ।
-  `.trim();
-
-  const emailHtml = `
-    <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; border: 1px solid #e2e8f0; padding: 20px; border-radius: 12px;">
-      <h2 style="color: #1c5fa8;">🩺 আল-আফিয়া হাসপাতাল</h2>
-      <p><strong>প্রিয় ${data.name},</strong></p>
-      <p>আপনার সিরিয়াল <strong>নিশ্চিত</strong> হয়েছে।</p>
-      <ul>
-        <li><strong>সিরিয়াল নম্বর:</strong> ${data.serialNo}</li>
-        <li><strong>ডাক্তার:</strong> ${data.doctorName}</li>
-        <li><strong>তারিখ:</strong> ${data.bookingDate}</li>
-        <li><strong>সময়:</strong> ${data.doctorTime || 'উল্লেখিত সময়ে'}</li>
-      </ul>
-      <p>✅ <strong>হাসপিটালে এসে চেক-ইন করতে</strong> নিচের বাটনে ক্লিক করুন:</p>
-      <a href="${checkinLink}" style="display: inline-block; background: #1c5fa8; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">চেক-ইন করুন</a>
-      <p style="margin-top: 8px; font-size: 13px; color: #1e293b;">
-        🔹 চেক-ইন করার পর আপনি ডাক্তার দেখাতে পারবেন।
-      </p>
-      <p style="margin-top: 12px; font-size: 13px; color: #475569;">
-        ${serviceMessage}
-      </p>
-      <p style="margin-top: 20px; font-size: 12px; color: #64748b;">
-        অথবা এই লিংকে যান: <a href="${checkinLink}">${checkinLink}</a>
-      </p>
-      <p style="font-size: 12px; color: #94a3b8;">ধন্যবাদ।</p>
-    </div>
-  `;
-
-  // ---------- ১. এসএমএস ----------
-  let mobile = data.mobile;
-  if (mobile) {
-    if (mobile.startsWith('0')) mobile = '88' + mobile.substring(1);
-    else if (!mobile.startsWith('88')) mobile = '88' + mobile;
-
-    const smsSent = await sendSMS(mobile, smsText);
-    if (smsSent) {
-      console.log(`📱 এসএমএস পাঠানো হয়েছে ${mobile} নম্বরে`);
-    } else {
-      console.log(`⚠️ এসএমএস পাঠানো সম্ভব হয়নি ${mobile} নম্বরে`);
-    }
+async function sendHospitalNotification(data, appointmentId) {
+  if (!isConnected || !sock) {
+    console.log(
+      `⚠️ WhatsApp কানেক্টেড নেই! isConnected=${isConnected}, sock=${!!sock}`
+    );
+    return;
   }
 
-  // ---------- ২. ইমেইল ----------
-  if (data.email) {
-    try {
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: data.email,
-        subject: `✅ আপনার সিরিয়াল নিশ্চিত - ${data.serialNo}`,
-        html: emailHtml,
-      });
-      console.log(`📧 ইমেইল পাঠানো হয়েছে ${data.email} এ`);
-    } catch (err) {
-      console.error('❌ ইমেইল পাঠাতে ব্যর্থ:', err.message);
-    }
+  const jid = HOSPITAL_WHATSAPP + '@s.whatsapp.net';
+
+  const msg = `🩺 *নতুন সিরিয়াল বুকিং!*
+
+👤 *রোগীর নাম:* ${data.name || '-'}
+📱 *মোবাইল:* ${data.mobile || '-'}
+🎂 *বয়স:* ${data.age || '-'}
+⚧ *লিঙ্গ:* ${data.gender || '-'}
+
+🎫 *সিরিয়াল:* ${data.serialNo || '-'}
+👨‍⚕️ *ডাক্তার:* ${data.doctorName || '-'}
+🏥 *বিভাগ:* ${data.doctorDept || '-'}
+📅 *তারিখ:* ${data.bookingDate || '-'} (${data.bookingDay || '-'})
+⏰ *সময়:* ${data.doctorTime || 'উল্লেখিত সময়ে'}
+
+📍 *ঠিকানা:* ${data.address || '-'}
+📢 *রেফারেল:* ${data.referralSource || '-'}
+
+━━━━━━━━━━━━━━━━━
+🆕 Booking ID: ${appointmentId}
+🕒 ${new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka' })}`;
+
+  try {
+    await sock.sendMessage(jid, { text: msg });
+    console.log(`📨 হাসপাতালের WhatsApp-এ নতুন বুকিং নোটিফিকেশন পাঠানো হয়েছে।\n`);
+  } catch (err) {
+    console.error('❌ WhatsApp নোটিফিকেশন পাঠাতে ব্যর্থ:', err.message);
   }
 }
 
