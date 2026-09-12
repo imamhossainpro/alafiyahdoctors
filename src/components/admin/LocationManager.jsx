@@ -1,19 +1,16 @@
 // src/components/admin/LocationManager.jsx
 import React, { useState, useEffect } from 'react';
-import { 
-  MapPin, Edit2, Trash2, Merge, Search, RefreshCw, 
-  AlertCircle, CheckCircle, X, Loader2, Calculator, Move
+import {
+  MapPin, Edit2, Trash2, Merge, Search, RefreshCw,
+  AlertCircle, CheckCircle, X, Loader2, Move
 } from 'lucide-react';
 import { useHospital } from '../../context/HospitalContext';
 import { usePermission } from '../../context/PermissionContext';
-import { 
-  getAllLocations, 
-  updateLocation, 
-  deleteLocation, 
-  mergeLocations, 
+import {
+  getAllLocations,
+  deleteLocation,
+  mergeLocations,
   detectDuplicateLocations,
-  recalculateAllCounts,
-  migrateAppointmentsToLocations
 } from '../../services/locationService';
 import LocationEditModal from './LocationEditModal';
 import LocationMergeModal from './LocationMergeModal';
@@ -29,7 +26,6 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
 
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [migrating, setMigrating] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
   const [showMergeModal, setShowMergeModal] = useState(false);
@@ -40,13 +36,11 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [message, setMessage] = useState({ type: '', text: '' });
-  const [recalculating, setRecalculating] = useState(false);
 
   // ==================================================
   // ✅ Permission shortcuts
   // ==================================================
   const canView = can('location.view');
-  const canCreate = can('location.create');
   const canEdit = can('location.edit');
   const canDelete = can('location.delete');
   const canMerge = can('location.merge');
@@ -67,7 +61,10 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
         const locs = await getAllLocations(hospitalId);
         setLocations(locs || []);
         if (!locs || locs.length === 0) {
-          showMessage('info', 'কোনো লোকেশন পাওয়া যায়নি। নতুন বুকিং করলে লোকেশন স্বয়ংক্রিয়ভাবে তৈরি হবে।');
+          showMessage(
+            'info',
+            'কোনো লোকেশন পাওয়া যায়নি। নতুন বুকিং করলে লোকেশন স্বয়ংক্রিয়ভাবে তৈরি হবে।'
+          );
         }
       } catch (error) {
         console.error('❌ লোকেশন লোড এরর:', error);
@@ -79,55 +76,6 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
     };
     loadLocations();
   }, [hospitalId, refreshKey]);
-
-  // ==================================================
-  // ✅ Migrate Handler + Activity Log
-  // ==================================================
-  const handleMigrate = async () => {
-    if (!hospitalId) {
-      showMessage('error', 'হাসপাতাল আইডি পাওয়া যায়নি!');
-      return;
-    }
-    if (!canCreate) {
-      showMessage('error', '❌ আপনার লোকেশন তৈরি করার permission নেই।');
-      return;
-    }
-    if (!confirm('অ্যাপয়েন্টমেন্ট থেকে লোকেশন ডেটা মাইগ্রেট করতে চান? এটি নতুন লোকেশন তৈরি করবে এবং কাউন্ট আপডেট করবে।')) return;
-
-    setMigrating(true);
-    try {
-      const result = await migrateAppointmentsToLocations(hospitalId);
-      if (result) {
-        showMessage('success', `${result.created} টি নতুন লোকেশন তৈরি হয়েছে, ${result.updated} টি আপডেট হয়েছে!`);
-        setRefreshKey((prev) => prev + 1);
-
-        // Activity Log
-        try {
-          await logActivity({
-            hospitalId,
-            module: LOG_MODULES.LOCATION,
-            action: LOG_ACTIONS.UPDATE,
-            recordId: null,
-            description: `লোকেশন মাইগ্রেশন: ${result.created} টি নতুন তৈরি, ${result.updated} টি আপডেট`,
-            oldValue: null,
-            newValue: { created: result.created, updated: result.updated },
-            user,
-          });
-        } catch (logErr) {
-          console.error('Migration log error:', logErr);
-        }
-
-        if (onAppointmentsChange) await onAppointmentsChange();
-      } else {
-        showMessage('error', 'মাইগ্রেশন ব্যর্থ হয়েছে!');
-      }
-    } catch (error) {
-      console.error('❌ মাইগ্রেশন error:', error);
-      showMessage('error', 'মাইগ্রেশন করতে সমস্যা হয়েছে: ' + error.message);
-    } finally {
-      setMigrating(false);
-    }
-  };
 
   // ==================================================
   // ✅ Get Actual Patient Count
@@ -171,11 +119,15 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
       return;
     }
     if (actualCount > 0) {
-      showMessage('error', `এই লোকেশনে ${actualCount} জন রোগী আছে, আগে রোগী মুভ করুন!`);
+      showMessage(
+        'error',
+        `এই লোকেশনে ${actualCount} জন রোগী আছে, আগে রোগী মুভ করুন!`
+      );
       return;
     }
 
-    if (!confirm(`"${loc.name}" লোকেশনটি ডিলিট করতে চান? এটি স্থায়ীভাবে মুছে যাবে।`)) return;
+    if (!confirm(`"${loc.name}" লোকেশনটি ডিলিট করতে চান? এটি স্থায়ীভাবে মুছে যাবে।`))
+      return;
     try {
       await deleteLocation(hospitalId, id, true);
 
@@ -204,54 +156,7 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
   };
 
   // ==================================================
-  // ✅ Recalculate + Permission + Activity Log
-  // ==================================================
-  const handleRecalculateCounts = async () => {
-    if (!canEdit) {
-      showMessage('error', '❌ আপনার কাউন্ট রিক্যালকুলেট করার permission নেই।');
-      return;
-    }
-    if (!hospitalId) {
-      showMessage('error', 'হাসপাতাল আইডি পাওয়া যায়নি!');
-      return;
-    }
-    if (!confirm('সব লোকেশনের রোগী সংখ্যা পুনঃগণনা করতে চান?')) return;
-    setRecalculating(true);
-    try {
-      const result = await recalculateAllCounts(hospitalId);
-      if (result && result.success) {
-        showMessage('success', 'সব লোকেশনের কাউন্ট আপডেট করা হয়েছে!');
-        setRefreshKey((prev) => prev + 1);
-
-        try {
-          await logActivity({
-            hospitalId,
-            module: LOG_MODULES.LOCATION,
-            action: LOG_ACTIONS.UPDATE,
-            recordId: null,
-            description: `লোকেশন কাউন্ট পুনঃগণনা করা হয়েছে`,
-            oldValue: null,
-            newValue: { updated: result.updated || 0, deleted: result.deleted || 0 },
-            user,
-          });
-        } catch (logErr) {
-          console.error('Recalculate log error:', logErr);
-        }
-
-        if (onAppointmentsChange) await onAppointmentsChange();
-      } else {
-        showMessage('error', 'কাউন্ট রিক্যালকুলেট ব্যর্থ হয়েছে!');
-      }
-    } catch (error) {
-      console.error('❌ রিক্যালকুলেট error:', error);
-      showMessage('error', 'রিক্যালকুলেট করতে সমস্যা হয়েছে: ' + error.message);
-    } finally {
-      setRecalculating(false);
-    }
-  };
-
-  // ==================================================
-  // ✅ Edit – Permission check
+  // ✅ Edit
   // ==================================================
   const handleEdit = (location) => {
     if (!canEdit) {
@@ -263,7 +168,7 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
   };
 
   // ==================================================
-  // ✅ Move – Permission check
+  // ✅ Move
   // ==================================================
   const handleOpenMoveModal = (location) => {
     if (!canMovePatient) {
@@ -307,7 +212,7 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
   };
 
   // ==================================================
-  // ✅ Direct Merge + Permission + Activity Log
+  // ✅ Direct Merge
   // ==================================================
   const handleDirectMerge = async (master, slaves) => {
     if (!canMerge) {
@@ -327,7 +232,14 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
       showMessage('error', 'কোনো স্লেভ লোকেশন নেই!');
       return;
     }
-    if (!confirm(`"${master.name}" (মাস্টার) ← ${slaves.map((s) => `"${s.name}"`).join(', ')} মার্জ করতে চান?`)) return;
+    if (
+      !confirm(
+        `"${master.name}" (মাস্টার) ← ${slaves
+          .map((s) => `"${s.name}"`)
+          .join(', ')} মার্জ করতে চান?`
+      )
+    )
+      return;
 
     try {
       const result = await mergeLocations(hospitalId, master.id, slaveIds);
@@ -343,9 +255,18 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
             module: LOG_MODULES.LOCATION,
             action: LOG_ACTIONS.UPDATE,
             recordId: master.id,
-            description: `লোকেশন মার্জ: ${slaves.map((s) => s.name).join(', ')} → ${master.name}`,
-            oldValue: { master: master.name, slaves: slaves.map((s) => ({ id: s.id, name: s.name })) },
-            newValue: { master: master.name, masterId: master.id, totalPatients: result.totalPatients || 0 },
+            description: `লোকেশন মার্জ: ${slaves
+              .map((s) => s.name)
+              .join(', ')} → ${master.name}`,
+            oldValue: {
+              master: master.name,
+              slaves: slaves.map((s) => ({ id: s.id, name: s.name })),
+            },
+            newValue: {
+              master: master.name,
+              masterId: master.id,
+              totalPatients: result.totalPatients || 0,
+            },
             user,
           });
         } catch (logErr) {
@@ -363,7 +284,7 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
   };
 
   // ==================================================
-  // ✅ Merge Modal – Permission check
+  // ✅ Merge Modal
   // ==================================================
   const handleMerge = () => {
     if (!canMerge) {
@@ -387,8 +308,13 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
           module: LOG_MODULES.LOCATION,
           action: LOG_ACTIONS.UPDATE,
           recordId: master.id,
-          description: `লোকেশন মার্জ: ${slaves.map((s) => s.name).join(', ')} → ${master.name}`,
-          oldValue: { master: master.name, slaves: slaves.map((s) => ({ id: s.id, name: s.name })) },
+          description: `লোকেশন মার্জ: ${slaves
+            .map((s) => s.name)
+            .join(', ')} → ${master.name}`,
+          oldValue: {
+            master: master.name,
+            slaves: slaves.map((s) => ({ id: s.id, name: s.name })),
+          },
           newValue: { master: master.name, masterId: master.id },
           user,
         });
@@ -418,7 +344,15 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
   // ==================================================
   if (!canView) {
     return (
-      <div style={{ background: '#fff', padding: '60px 20px', borderRadius: '10px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+      <div
+        style={{
+          background: '#fff',
+          padding: '60px 20px',
+          borderRadius: '10px',
+          border: '1px solid #e2e8f0',
+          textAlign: 'center',
+        }}
+      >
         <div style={{ fontSize: '64px', marginBottom: '16px' }}>🚫</div>
         <h3 style={{ color: '#dc2626', marginBottom: '8px' }}>Access Denied</h3>
         <p style={{ color: '#64748b' }}>আপনার লোকেশন ম্যানেজার দেখার permission নেই।</p>
@@ -428,7 +362,14 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
 
   if (!hospitalId) {
     return (
-      <div style={{ background: '#fff', padding: '20px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+      <div
+        style={{
+          background: '#fff',
+          padding: '20px',
+          borderRadius: '10px',
+          border: '1px solid #e2e8f0',
+        }}
+      >
         <p style={{ color: '#64748b' }}>হাসপাতাল আইডি পাওয়া যায়নি।</p>
       </div>
     );
@@ -438,70 +379,36 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
   // ✅ RENDER
   // ==================================================
   return (
-    <div style={{ background: '#fff', padding: '20px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-
+    <div
+      style={{
+        background: '#fff',
+        padding: '20px',
+        borderRadius: '10px',
+        border: '1px solid #e2e8f0',
+      }}
+    >
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '20px',
+          flexWrap: 'wrap',
+          gap: '10px',
+        }}
+      >
         <div>
           <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
             <MapPin size={20} color="#1c5fa8" /> 📍 লোকেশন ম্যানেজার
           </h3>
           <p style={{ margin: '5px 0 0 0', fontSize: '13px', color: '#64748b' }}>
-            মোট {locations.length} টি লোকেশন · {locations.reduce((sum, l) => sum + (l.patientCount || 0), 0)} জন রোগী
+            মোট {locations.length} টি লোকেশন ·{' '}
+            {locations.reduce((sum, l) => sum + (l.patientCount || 0), 0)} জন রোগী
           </p>
         </div>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-
-          {/* ✅ Migrate – canCreate */}
-          {canCreate && (
-            <button
-              onClick={handleMigrate}
-              disabled={migrating || loading}
-              style={{
-                padding: '8px 16px',
-                background: '#d97706',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: migrating || loading ? 'not-allowed' : 'pointer',
-                fontSize: '13px',
-                fontWeight: '600',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                opacity: migrating || loading ? 0.6 : 1,
-              }}
-            >
-              <RefreshCw size={16} className={migrating ? 'spin' : ''} />
-              {migrating ? 'মাইগ্রেট হচ্ছে...' : '🔁 লোকেশন মাইগ্রেট করুন'}
-            </button>
-          )}
-
-          {/* ✅ Recalculate – canEdit */}
-          {canEdit && (
-            <button
-              onClick={handleRecalculateCounts}
-              disabled={recalculating || loading}
-              style={{
-                padding: '8px 16px',
-                background: '#0d9488',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: recalculating || loading ? 'not-allowed' : 'pointer',
-                fontSize: '13px',
-                fontWeight: '600',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                opacity: recalculating || loading ? 0.6 : 1,
-              }}
-            >
-              <Calculator size={16} /> {recalculating ? 'গণনা হচ্ছে...' : 'কাউন্ট রিক্যালকুলেট'}
-            </button>
-          )}
-
-          {/* Find duplicates – সবসময় দেখা যাবে (read-only operation) */}
+          {/* Find duplicates */}
           <button
             onClick={handleFindDuplicates}
             disabled={loading}
@@ -523,7 +430,7 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
             <Search size={16} /> ডুপ্লিকেট খুঁজুন
           </button>
 
-          {/* ✅ Merge – canMerge */}
+          {/* Merge */}
           {canMerge && (
             <button
               onClick={handleMerge}
@@ -574,21 +481,44 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
             padding: '10px 14px',
             borderRadius: '8px',
             marginBottom: '16px',
-            background: message.type === 'success' ? '#dcfce7' : message.type === 'info' ? '#dbeafe' : '#fee2e2',
-            color: message.type === 'success' ? '#166534' : message.type === 'info' ? '#1e40af' : '#991b1b',
+            background:
+              message.type === 'success'
+                ? '#dcfce7'
+                : message.type === 'info'
+                ? '#dbeafe'
+                : '#fee2e2',
+            color:
+              message.type === 'success'
+                ? '#166534'
+                : message.type === 'info'
+                ? '#1e40af'
+                : '#991b1b',
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
           }}
         >
-          {message.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+          {message.type === 'success' ? (
+            <CheckCircle size={16} />
+          ) : (
+            <AlertCircle size={16} />
+          )}
           {message.text}
         </div>
       )}
 
       {/* Search */}
       <div style={{ marginBottom: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', background: '#f1f5f9', borderRadius: '8px', padding: '4px 12px', maxWidth: '300px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            background: '#f1f5f9',
+            borderRadius: '8px',
+            padding: '4px 12px',
+            maxWidth: '300px',
+          }}
+        >
           <Search size={16} color="#64748b" />
           <input
             type="text"
@@ -609,14 +539,34 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
 
       {/* Duplicates banner */}
       {showDuplicates && duplicates.length > 0 && (
-        <div style={{ background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div
+          style={{
+            background: '#fef3c7',
+            border: '1px solid #fcd34d',
+            borderRadius: '8px',
+            padding: '12px 16px',
+            marginBottom: '16px',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+            }}
+          >
             <span style={{ fontWeight: '600', color: '#92400e' }}>
               ⚠️ {duplicates.length} টি ডুপ্লিকেট গ্রুপ পাওয়া গেছে!
             </span>
             <button
               onClick={() => setShowDuplicates(false)}
-              style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#92400e' }}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                color: '#92400e',
+              }}
             >
               <X size={18} />
             </button>
@@ -636,7 +586,8 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
                 }}
               >
                 <span style={{ fontSize: '14px' }}>
-                  <strong>{group.master.name}</strong> ← {group.slaves.map((s) => `"${s.name}"`).join(', ')}
+                  <strong>{group.master.name}</strong> ←{' '}
+                  {group.slaves.map((s) => `"${s.name}"`).join(', ')}
                 </span>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   {canMerge && (
@@ -686,7 +637,12 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
       {/* Table */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: '40px' }}>
-          <Loader2 className="spin" size={24} color="#64748b" style={{ animation: 'spin 1s linear infinite' }} />
+          <Loader2
+            className="spin"
+            size={24}
+            color="#64748b"
+            style={{ animation: 'spin 1s linear infinite' }}
+          />
           <p style={{ color: '#64748b', marginTop: '10px' }}>লোড হচ্ছে...</p>
         </div>
       ) : (
@@ -703,11 +659,16 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
             <tbody>
               {filteredLocations.length === 0 ? (
                 <tr>
-                  <td colSpan="4" style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>
+                  <td
+                    colSpan="4"
+                    style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}
+                  >
                     {locations.length === 0 ? (
                       <div>
                         <p>📍 কোনো লোকেশন পাওয়া যায়নি</p>
-                        <p style={{ fontSize: '12px', color: '#94a3b8' }}>নতুন বুকিং করলে লোকেশন স্বয়ংক্রিয়ভাবে তৈরি হবে।</p>
+                        <p style={{ fontSize: '12px', color: '#94a3b8' }}>
+                          নতুন বুকিং করলে লোকেশন স্বয়ংক্রিয়ভাবে তৈরি হবে।
+                        </p>
                       </div>
                     ) : (
                       'কোনো লোকেশন পাওয়া যায়নি'
@@ -719,7 +680,9 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
                   const patientCount = loc.patientCount || 0;
                   return (
                     <tr key={loc.id} style={{ borderBottom: '1px solid #eee' }}>
-                      <td style={{ padding: '12px', fontWeight: '600' }}>{loc.name || '(নাম নেই)'}</td>
+                      <td style={{ padding: '12px', fontWeight: '600' }}>
+                        {loc.name || '(নাম নেই)'}
+                      </td>
                       <td style={{ padding: '12px', textAlign: 'center' }}>
                         <span
                           style={{
@@ -734,13 +697,22 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
                           {patientCount}
                         </span>
                       </td>
-                      <td style={{ padding: '12px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
-                        {loc.updatedAt ? new Date(loc.updatedAt).toLocaleDateString('bn-BD') : '-'}
+                      <td
+                        style={{
+                          padding: '12px',
+                          textAlign: 'center',
+                          color: '#64748b',
+                          fontSize: '13px',
+                        }}
+                      >
+                        {loc.updatedAt
+                          ? new Date(loc.updatedAt).toLocaleDateString('bn-BD')
+                          : '-'}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'center' }}>
-                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
-
-                          {/* ✅ Edit – canEdit */}
+                        <div
+                          style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}
+                        >
                           {canEdit && (
                             <button
                               onClick={() => handleEdit(loc)}
@@ -758,7 +730,6 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
                             </button>
                           )}
 
-                          {/* ✅ Move – canMovePatient */}
                           {canMovePatient && (
                             <button
                               onClick={() => handleOpenMoveModal(loc)}
@@ -776,7 +747,6 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
                             </button>
                           )}
 
-                          {/* ✅ Delete – canDelete */}
                           {canDelete && (
                             <button
                               onClick={() => handleDelete(loc.id)}
@@ -794,9 +764,10 @@ const LocationManager = ({ appointments, user, onAppointmentsChange }) => {
                             </button>
                           )}
 
-                          {/* যদি কোনো action না থাকে */}
                           {!canEdit && !canMovePatient && !canDelete && (
-                            <span style={{ fontSize: '12px', color: '#94a3b8' }}>(View Only)</span>
+                            <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+                              (View Only)
+                            </span>
                           )}
                         </div>
                       </td>

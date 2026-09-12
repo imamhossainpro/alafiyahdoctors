@@ -1,49 +1,108 @@
 // src/services/locationService.js
-import { db, collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, writeBatch, query, where } from '../firebase';
+import {
+  db,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  writeBatch,
+  query,
+  where,
+} from '../firebase';
 
-// ---------- সব লোকেশন (শুধু Active) ----------
+// ==================================================
+// ✅ সব লোকেশন (শুধু Active) — Multi-field matching
+// ==================================================
 export const getAllLocations = async (hospitalId, includeInactive = false) => {
   if (!hospitalId) {
     console.warn('⚠️ getAllLocations: hospitalId নেই');
     return [];
   }
   try {
-    let q = collection(db, 'hospitals', hospitalId, 'locations');
+    // ---------- ১. Locations load ----------
+    let locQuery = collection(db, 'hospitals', hospitalId, 'locations');
     if (!includeInactive) {
-      q = query(q, where('isActive', '==', true));
+      locQuery = query(locQuery, where('isActive', '==', true));
     }
-    const locSnapshot = await getDocs(q);
+    const locSnapshot = await getDocs(locQuery);
     const locations = [];
-    locSnapshot.forEach((doc) => {
-      locations.push({ id: doc.id, ...doc.data() });
+    locSnapshot.forEach((d) => {
+      locations.push({ id: d.id, ...d.data() });
     });
 
     if (locations.length === 0) return [];
 
-    // অ্যাপয়েন্টমেন্ট থেকে কাউন্ট
-    const apptSnapshot = await getDocs(collection(db, 'hospitals', hospitalId, 'appointments'));
-    const countMap = {};
-
-    apptSnapshot.forEach((doc) => {
-      const data = doc.data();
-      if (data.locationId && locations.some(l => l.id === data.locationId)) {
-        countMap[data.locationId] = (countMap[data.locationId] || 0) + 1;
+    // ---------- ২. Location name → id map (case-insensitive) ----------
+    const nameToIdMap = {};
+    locations.forEach((loc) => {
+      if (loc.name) {
+        nameToIdMap[loc.name.toLowerCase().trim()] = loc.id;
+      }
+      if (loc.normalized) {
+        nameToIdMap[loc.normalized.toLowerCase().trim()] = loc.id;
       }
     });
 
-    const updatedLocations = locations.map(loc => ({
+    // ---------- ৩. সব appointments load ----------
+    const apptSnapshot = await getDocs(
+      collection(db, 'hospitals', hospitalId, 'appointments')
+    );
+
+    // ---------- ৪. প্রতিটি appointment এর location নির্ধারণ ----------
+    const countMap = {};
+    apptSnapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+
+      // ❌ Archived booking count এ ধরা হবে না
+      if (data.isArchived === true) return;
+
+      let matchedLocId = null;
+
+      // ✅ Priority 1: locationId (সবচেয়ে নির্ভরযোগ্য)
+      if (data.locationId) {
+        const found = locations.find((l) => l.id === data.locationId);
+        if (found) matchedLocId = found.id;
+      }
+
+      // ✅ Priority 2: locationName (case-insensitive)
+      if (!matchedLocId && data.locationName) {
+        const key = String(data.locationName).toLowerCase().trim();
+        if (nameToIdMap[key]) matchedLocId = nameToIdMap[key];
+      }
+
+      // ✅ Priority 3: address (case-insensitive)
+      if (!matchedLocId && data.address) {
+        const key = String(data.address).toLowerCase().trim();
+        if (nameToIdMap[key]) matchedLocId = nameToIdMap[key];
+      }
+
+      if (matchedLocId) {
+        countMap[matchedLocId] = (countMap[matchedLocId] || 0) + 1;
+      }
+    });
+
+    // ---------- ৫. Real count merge ----------
+    const updatedLocations = locations.map((loc) => ({
       ...loc,
-      patientCount: countMap[loc.id] || 0
+      patientCount: countMap[loc.id] || 0,
     }));
 
-    return updatedLocations.sort((a, b) => (b.patientCount || 0) - (a.patientCount || 0));
+    // ---------- ৬. Sort by patient count ----------
+    return updatedLocations.sort(
+      (a, b) => (b.patientCount || 0) - (a.patientCount || 0)
+    );
   } catch (error) {
     console.error('❌ getAllLocations error:', error);
     return [];
   }
 };
 
-// ---------- লোকেশন তৈরি ----------
+// ==================================================
+// ✅ লোকেশন তৈরি
+// ==================================================
 export const createLocation = async (hospitalId, name) => {
   if (!hospitalId) return null;
   try {
@@ -63,9 +122,12 @@ export const createLocation = async (hospitalId, name) => {
       patientCount: 0,
       isActive: true,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     };
-    const docRef = await addDoc(collection(db, 'hospitals', hospitalId, 'locations'), newLocation);
+    const docRef = await addDoc(
+      collection(db, 'hospitals', hospitalId, 'locations'),
+      newLocation
+    );
     return { id: docRef.id, ...newLocation };
   } catch (error) {
     console.error('❌ createLocation error:', error);
@@ -73,8 +135,14 @@ export const createLocation = async (hospitalId, name) => {
   }
 };
 
-// ---------- বুকিং থেকে লোকেশন যোগ/আপডেট ----------
-export const addLocationFromBooking = async (hospitalId, address, appointmentId) => {
+// ==================================================
+// ✅ বুকিং থেকে লোকেশন যোগ/আপডেট
+// ==================================================
+export const addLocationFromBooking = async (
+  hospitalId,
+  address,
+  appointmentId
+) => {
   if (!hospitalId || !address || !address.trim()) return null;
   try {
     const name = address.trim();
@@ -93,23 +161,32 @@ export const addLocationFromBooking = async (hospitalId, address, appointmentId)
         patientCount: 1,
         isActive: true,
         createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
       };
-      const docRef = await addDoc(collection(db, 'hospitals', hospitalId, 'locations'), newLocation);
+      const docRef = await addDoc(
+        collection(db, 'hospitals', hospitalId, 'locations'),
+        newLocation
+      );
       locationId = docRef.id;
     } else {
       const locDoc = snapshot.docs[0];
       locationId = locDoc.id;
       const currentCount = locDoc.data().patientCount || 0;
-      await updateDoc(doc(db, 'hospitals', hospitalId, 'locations', locationId), {
-        patientCount: currentCount + 1,
-        updatedAt: new Date().toISOString()
-      });
+      await updateDoc(
+        doc(db, 'hospitals', hospitalId, 'locations', locationId),
+        {
+          patientCount: currentCount + 1,
+          updatedAt: new Date().toISOString(),
+        }
+      );
     }
-    await updateDoc(doc(db, 'hospitals', hospitalId, 'appointments', appointmentId), {
-      locationId: locationId,
-      locationName: name
-    });
+    await updateDoc(
+      doc(db, 'hospitals', hospitalId, 'appointments', appointmentId),
+      {
+        locationId: locationId,
+        locationName: name,
+      }
+    );
     return { id: locationId, name };
   } catch (error) {
     console.error('❌ addLocationFromBooking error:', error);
@@ -117,7 +194,9 @@ export const addLocationFromBooking = async (hospitalId, address, appointmentId)
   }
 };
 
-// ---------- লোকেশন আপডেট ----------
+// ==================================================
+// ✅ লোকেশন আপডেট (name change + appointments sync)
+// ==================================================
 export const updateLocation = async (hospitalId, id, newName) => {
   if (!hospitalId || !id) return;
   try {
@@ -125,21 +204,34 @@ export const updateLocation = async (hospitalId, id, newName) => {
     const docSnap = await getDoc(docRef);
     if (!docSnap.exists()) throw new Error('Location not found');
     const oldName = docSnap.data().name;
+
     await updateDoc(docRef, {
       name: newName.trim(),
       normalized: newName.trim().toLowerCase(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     });
-    // অ্যাপয়েন্টমেন্ট আপডেট
+
+    // Appointments এ locationName update
     const apptQuery = query(
       collection(db, 'hospitals', hospitalId, 'appointments'),
       where('locationName', '==', oldName)
     );
     const apptSnapshot = await getDocs(apptQuery);
     const batch = writeBatch(db);
-    apptSnapshot.forEach((doc) => {
-      batch.update(doc.ref, { locationName: newName.trim() });
+    apptSnapshot.forEach((d) => {
+      batch.update(d.ref, { locationName: newName.trim() });
     });
+
+    // ✅ address matching appointmentsও update
+    const apptQuery2 = query(
+      collection(db, 'hospitals', hospitalId, 'appointments'),
+      where('address', '==', oldName)
+    );
+    const apptSnapshot2 = await getDocs(apptQuery2);
+    apptSnapshot2.forEach((d) => {
+      batch.update(d.ref, { address: newName.trim() });
+    });
+
     await batch.commit();
     return true;
   } catch (error) {
@@ -148,7 +240,9 @@ export const updateLocation = async (hospitalId, id, newName) => {
   }
 };
 
-// ---------- লোকেশন ডিলিট (Soft Delete + Appointment Cleanup) ----------
+// ==================================================
+// ✅ লোকেশন ডিলিট (Soft Delete + Appointment Cleanup)
+// ==================================================
 export const deleteLocation = async (hospitalId, id, force = false) => {
   if (!hospitalId || !id) return;
   try {
@@ -164,20 +258,20 @@ export const deleteLocation = async (hospitalId, id, force = false) => {
     await updateDoc(docRef, {
       isActive: false,
       deletedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     });
 
-    // অ্যাপয়েন্টমেন্ট থেকে location reference সরান
+    // Appointments থেকে reference সরান
     const apptQuery = query(
       collection(db, 'hospitals', hospitalId, 'appointments'),
       where('locationId', '==', id)
     );
     const apptSnapshot = await getDocs(apptQuery);
     const batch = writeBatch(db);
-    apptSnapshot.forEach((doc) => {
-      batch.update(doc.ref, {
+    apptSnapshot.forEach((d) => {
+      batch.update(d.ref, {
         locationId: null,
-        locationName: null
+        locationName: null,
       });
     });
     await batch.commit();
@@ -189,7 +283,9 @@ export const deleteLocation = async (hospitalId, id, force = false) => {
   }
 };
 
-// ---------- লোকেশন মার্জ ----------
+// ==================================================
+// ✅ লোকেশন মার্জ
+// ==================================================
 export const mergeLocations = async (hospitalId, masterId, slaveIds) => {
   if (!hospitalId || !masterId || !slaveIds || slaveIds.length === 0) return;
   try {
@@ -209,8 +305,11 @@ export const mergeLocations = async (hospitalId, masterId, slaveIds) => {
         where('locationId', '==', slaveId)
       );
       const apptSnapshot = await getDocs(apptQuery);
-      apptSnapshot.forEach((doc) => {
-        batch.update(doc.ref, { locationId: masterId, locationName: master.name });
+      apptSnapshot.forEach((d) => {
+        batch.update(d.ref, {
+          locationId: masterId,
+          locationName: master.name,
+        });
       });
       totalPatients += apptSnapshot.size;
 
@@ -218,14 +317,14 @@ export const mergeLocations = async (hospitalId, masterId, slaveIds) => {
       batch.update(slaveRef, {
         isActive: false,
         deletedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
       });
       deletedSlaves++;
     }
 
     batch.update(doc(db, 'hospitals', hospitalId, 'locations', masterId), {
       patientCount: totalPatients,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     });
 
     await batch.commit();
@@ -236,7 +335,9 @@ export const mergeLocations = async (hospitalId, masterId, slaveIds) => {
   }
 };
 
-// ---------- ডুপ্লিকেট ডিটেক্ট ----------
+// ==================================================
+// ✅ ডুপ্লিকেট ডিটেক্ট
+// ==================================================
 const levenshteinDistance = (a, b) => {
   if (a.length === 0) return b.length;
   if (b.length === 0) return a.length;
@@ -245,27 +346,35 @@ const levenshteinDistance = (a, b) => {
   for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
   for (let i = 1; i <= b.length; i++) {
     for (let j = 1; j <= a.length; j++) {
-      if (b[i-1] === a[j-1]) matrix[i][j] = matrix[i-1][j-1];
-      else matrix[i][j] = Math.min(matrix[i-1][j-1] + 1, matrix[i][j-1] + 1, matrix[i-1][j] + 1);
+      if (b[i - 1] === a[j - 1]) matrix[i][j] = matrix[i - 1][j - 1];
+      else
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
     }
   }
   return matrix[b.length][a.length];
 };
 
 const getStringSimilarity = (str1, str2) => {
-  const s1 = str1.toLowerCase(), s2 = str2.toLowerCase();
+  const s1 = str1.toLowerCase(),
+    s2 = str2.toLowerCase();
   const getBigrams = (str) => {
     const bigrams = [];
-    for (let i = 0; i < str.length - 1; i++) bigrams.push(str.substring(i, i + 2));
+    for (let i = 0; i < str.length - 1; i++)
+      bigrams.push(str.substring(i, i + 2));
     return bigrams;
   };
-  const b1 = new Set(getBigrams(s1)), b2 = new Set(getBigrams(s2));
-  const inter = new Set([...b1].filter(x => b2.has(x)));
+  const b1 = new Set(getBigrams(s1)),
+    b2 = new Set(getBigrams(s2));
+  const inter = new Set([...b1].filter((x) => b2.has(x)));
   const union = new Set([...b1, ...b2]);
   const jaccard = union.size > 0 ? inter.size / union.size : 0;
   const maxLen = Math.max(s1.length, s2.length);
   const levDist = levenshteinDistance(s1, s2);
-  const levSim = maxLen > 0 ? 1 - (levDist / maxLen) : 0;
+  const levSim = maxLen > 0 ? 1 - levDist / maxLen : 0;
   return (jaccard + levSim) / 2;
 };
 
@@ -281,15 +390,20 @@ export const detectDuplicateLocations = async (hospitalId) => {
       used.add(i);
       for (let j = i + 1; j < locations.length; j++) {
         if (used.has(j)) continue;
-        const sim = getStringSimilarity(locations[i].normalized, locations[j].normalized);
+        const sim = getStringSimilarity(
+          locations[i].normalized || locations[i].name.toLowerCase(),
+          locations[j].normalized || locations[j].name.toLowerCase()
+        );
         if (sim > 0.65) {
           group.push(locations[j]);
           used.add(j);
         }
       }
       if (group.length > 1) {
-        const master = group.reduce((a, b) => (a.patientCount || 0) > (b.patientCount || 0) ? a : b);
-        const slaves = group.filter(l => l.id !== master.id);
+        const master = group.reduce((a, b) =>
+          (a.patientCount || 0) > (b.patientCount || 0) ? a : b
+        );
+        const slaves = group.filter((l) => l.id !== master.id);
         duplicates.push({ master, slaves });
       }
     }
@@ -300,19 +414,24 @@ export const detectDuplicateLocations = async (hospitalId) => {
   }
 };
 
-// ---------- মাইগ্রেশন ----------
+// ==================================================
+// ✅ মাইগ্রেশন (legacy support)
+// ==================================================
 export const migrateAppointmentsToLocations = async (hospitalId) => {
   if (!hospitalId) return null;
   try {
     console.log('🔄 মাইগ্রেশন শুরু...');
-    const apptSnapshot = await getDocs(collection(db, 'hospitals', hospitalId, 'appointments'));
+    const apptSnapshot = await getDocs(
+      collection(db, 'hospitals', hospitalId, 'appointments')
+    );
     const appointments = [];
-    apptSnapshot.forEach(doc => appointments.push({ id: doc.id, ...doc.data() }));
+    apptSnapshot.forEach((d) => appointments.push({ id: d.id, ...d.data() }));
 
     if (appointments.length === 0) return { created: 0, updated: 0 };
 
     const locationMap = new Map();
-    appointments.forEach(appt => {
+    appointments.forEach((appt) => {
+      if (appt.isArchived === true) return;
       if (!appt.address || !appt.address.trim()) return;
       const rawName = appt.address.trim();
       const normalized = rawName.toLowerCase();
@@ -321,7 +440,11 @@ export const migrateAppointmentsToLocations = async (hospitalId) => {
         existing.count += 1;
         existing.appointmentIds.push(appt.id);
       } else {
-        locationMap.set(normalized, { name: rawName, count: 1, appointmentIds: [appt.id] });
+        locationMap.set(normalized, {
+          name: rawName,
+          count: 1,
+          appointmentIds: [appt.id],
+        });
       }
     });
 
@@ -347,19 +470,25 @@ export const migrateAppointmentsToLocations = async (hospitalId) => {
           patientCount: data.count,
           isActive: true,
           createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          updatedAt: new Date().toISOString(),
         };
-        const docRef = await addDoc(collection(db, 'hospitals', hospitalId, 'locations'), newLocation);
+        const docRef = await addDoc(
+          collection(db, 'hospitals', hospitalId, 'locations'),
+          newLocation
+        );
         locationId = docRef.id;
         createdCount++;
       } else {
         const locDoc = snapshot.docs[0];
         locationId = locDoc.id;
         const currentCount = locDoc.data().patientCount || 0;
-        await updateDoc(doc(db, 'hospitals', hospitalId, 'locations', locationId), {
-          patientCount: currentCount + data.count,
-          updatedAt: new Date().toISOString()
-        });
+        await updateDoc(
+          doc(db, 'hospitals', hospitalId, 'locations', locationId),
+          {
+            patientCount: currentCount + data.count,
+            updatedAt: new Date().toISOString(),
+          }
+        );
         updatedCount++;
       }
 
@@ -378,32 +507,43 @@ export const migrateAppointmentsToLocations = async (hospitalId) => {
   }
 };
 
-// ---------- কাউন্ট রিক্যালকুলেট ----------
+// ==================================================
+// ✅ কাউন্ট রিক্যালকুলেট
+// ==================================================
 export const recalculateAllCounts = async (hospitalId) => {
   if (!hospitalId) return null;
   try {
     console.log('🔄 রিক্যালকুলেট শুরু...');
-    const apptSnapshot = await getDocs(collection(db, 'hospitals', hospitalId, 'appointments'));
+    const apptSnapshot = await getDocs(
+      collection(db, 'hospitals', hospitalId, 'appointments')
+    );
     const countMap = {};
-    apptSnapshot.forEach((doc) => {
-      const data = doc.data();
+    apptSnapshot.forEach((d) => {
+      const data = d.data();
+      if (data.isArchived === true) return;
       if (data.locationId) {
         countMap[data.locationId] = (countMap[data.locationId] || 0) + 1;
       }
     });
 
     const locSnapshot = await getDocs(
-      query(collection(db, 'hospitals', hospitalId, 'locations'), where('isActive', '==', true))
+      query(
+        collection(db, 'hospitals', hospitalId, 'locations'),
+        where('isActive', '==', true)
+      )
     );
     const batch = writeBatch(db);
     let updatedCount = 0;
 
-    locSnapshot.forEach((doc) => {
-      const locId = doc.id;
-      const locData = doc.data();
+    locSnapshot.forEach((d) => {
+      const locId = d.id;
+      const locData = d.data();
       const realCount = countMap[locId] || 0;
       if (locData.patientCount !== realCount) {
-        batch.update(doc.ref, { patientCount: realCount, updatedAt: new Date().toISOString() });
+        batch.update(d.ref, {
+          patientCount: realCount,
+          updatedAt: new Date().toISOString(),
+        });
         updatedCount++;
       }
     });
@@ -417,7 +557,9 @@ export const recalculateAllCounts = async (hospitalId) => {
   }
 };
 
-// ---------- লোকেশন পাওয়া ----------
+// ==================================================
+// ✅ লোকেশন পাওয়া
+// ==================================================
 export const getLocationById = async (hospitalId, id) => {
   if (!hospitalId || !id) return null;
   try {
@@ -443,5 +585,5 @@ export default {
   detectDuplicateLocations,
   migrateAppointmentsToLocations,
   recalculateAllCounts,
-  getLocationById
+  getLocationById,
 };
