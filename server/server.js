@@ -13,6 +13,7 @@ import axios from 'axios';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { createRequire } from 'module';
+import fs from 'fs'; // ✅ নতুন যোগ করা হয়েছে (সেশন ফোল্ডার মুছতে)
 
 const require = createRequire(import.meta.url);
 
@@ -136,7 +137,8 @@ async function connectToWhatsApp() {
     sock = makeWASocket({
       version,
       auth: state,
-      logger: pino({ level: 'silent' }),
+      logger: pino({ level: 'debug' }), // ✅ silent থেকে debug করা হয়েছে
+      browser: ["Ubuntu", "Chrome", "20.0.04"], // ✅ নতুন যোগ করা হয়েছে
       connectTimeoutMs: 60000,
       keepAliveIntervalMs: 10000,
     });
@@ -172,20 +174,29 @@ async function connectToWhatsApp() {
         isConnected = false;
         currentQRDataUrl = null;
 
-        const statusCode = lastDisconnect?.error?.output?.statusCode;
-        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+        const statusCode = lastDisconnect?.error?.output?.statusCode || 
+                           lastDisconnect?.error?.statusCode;
 
-        console.log(`\n🔌 সংযোগ বন্ধ | statusCode: ${statusCode} | reconnect: ${shouldReconnect}`);
+        console.log(`\n🔌 সংযোগ বন্ধ | statusCode: ${statusCode}`);
 
-        if (shouldReconnect) {
+        // ✅ 401 (Logged Out) হলে সেশন ফোল্ডার মুছে ফ্রেশ স্টার্ট নিতে হবে
+        if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
+          console.log('❌ WhatsApp থেকে লগআউট! auth_info_baileys ফোল্ডার মুছে ফেলা হচ্ছে...');
+          try {
+            fs.rmSync('auth_info_baileys', { recursive: true, force: true });
+            console.log('✅ ফোল্ডার মুছে ফেলা হয়েছে। নতুন করে QR তৈরি হবে...');
+          } catch (err) {
+            console.error('❌ ফোল্ডার মোছার সময় সমস্যা:', err.message);
+          }
+          setTimeout(() => connectToWhatsApp(), 3000); // ফ্রেশ স্টার্ট
+        } else {
+          // সাধারণ রিকানেক্ট লজিক
           reconnectAttempts++;
           if (reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
             const delay = Math.min(3000 * reconnectAttempts, 15000);
             console.log(`🔄 ${delay / 1000} সেকেন্ড পরে পুনরায় সংযোগ...`);
             setTimeout(() => connectToWhatsApp(), delay);
           }
-        } else {
-          console.log('\n❌ WhatsApp লগআউট হয়েছে! নতুন QR scan করতে হবে।\n');
         }
       } else if (connection === 'open') {
         isConnected = true;
@@ -203,7 +214,6 @@ async function connectToWhatsApp() {
 
 // ==================================================
 // 🆕 TRIGGER 1: হাসপাতালের WhatsApp-এ নতুন বুকিং notification
-// (রোগী form submit করলেই চলবে)
 // ==================================================
 async function sendHospitalNotification(data, appointmentId) {
   if (!isConnected || !sock) {
@@ -248,7 +258,6 @@ async function sendHospitalNotification(data, appointmentId) {
 
 // ==================================================
 // 🆕 TRIGGER 2: Admin Confirm করলে রোগীকে SMS + Email
-// (pending → confirmed হলে চলবে)
 // ==================================================
 async function sendPatientConfirmation(data, appointmentId) {
   const baseUrl = process.env.BASE_URL || 'https://your-hospital.com';
@@ -305,6 +314,7 @@ ${serviceMessage}
   // ---------- ১. এসএমএস ----------
   let mobile = data.mobile;
   if (mobile) {
+    mobile = mobile.replace(/[^0-9]/g, '');
     if (mobile.startsWith('0')) mobile = '88' + mobile.substring(1);
     else if (!mobile.startsWith('88')) mobile = '88' + mobile;
 
@@ -500,43 +510,41 @@ db.collection(appointmentsPath).onSnapshot(
       // ==================================================
       // 🆕 TRIGGER 1: NEW BOOKING → হাসপাতালের WhatsApp
       // ==================================================
-      // =================================================
-        if (change.type === 'added') {
-          previousStatuses.set(docId, currentStatus);
+      if (change.type === 'added') {
+        previousStatuses.set(docId, currentStatus);
 
-          // ✅ createdAt অথবা timestamp — যেটা আছে সেটা check
-          const rawDate = data.createdAt || data.timestamp;
+        const rawDate = data.createdAt || data.timestamp;
 
-          const createdAt = rawDate?.toDate
-            ? rawDate.toDate()
-            : rawDate?.seconds
-            ? new Date(rawDate.seconds * 1000)
-            : rawDate
-            ? new Date(rawDate)
-            : null;
+        const createdAt = rawDate?.toDate
+          ? rawDate.toDate()
+          : rawDate?.seconds
+          ? new Date(rawDate.seconds * 1000)
+          : rawDate
+          ? new Date(rawDate)
+          : null;
 
-          const now = new Date();
-          const secondsSinceCreation = createdAt
-            ? (now.getTime() - createdAt.getTime()) / 1000
-            : 999;
+        const now = new Date();
+        const secondsSinceCreation = createdAt
+          ? (now.getTime() - createdAt.getTime()) / 1000
+          : 999;
 
-          const isFreshBooking = secondsSinceCreation < 300; // 5 মিনিট
+        const isFreshBooking = secondsSinceCreation < 300; // 5 মিনিট
 
-          console.log(
-            `➕ নতুন appointment: ${docId} | status: ${currentStatus} | age: ${Math.round(secondsSinceCreation)}s | fresh: ${isFreshBooking}`
-          );
+        console.log(
+          `➕ নতুন appointment: ${docId} | status: ${currentStatus} | age: ${Math.round(secondsSinceCreation)}s | fresh: ${isFreshBooking}`
+        );
 
-          if (isFreshBooking) {
-            console.log(`\n✅ নতুন বুকিং → হাসপাতালের WhatsApp এ পাঠাচ্ছি...`);
-            try {
-              await sendHospitalNotification(data, docId);
-            } catch (err) {
-              console.error('❌ sendHospitalNotification error:', err.message);
-            }
-          } else {
-            console.log(`⏭️ পুরোনো booking (${Math.round(secondsSinceCreation)}s), skip\n`);
+        if (isFreshBooking) {
+          console.log(`\n✅ নতুন বুকিং → হাসপাতালের WhatsApp এ পাঠাচ্ছি...`);
+          try {
+            await sendHospitalNotification(data, docId);
+          } catch (err) {
+            console.error('❌ sendHospitalNotification error:', err.message);
           }
+        } else {
+          console.log(`⏭️ পুরোনো booking (${Math.round(secondsSinceCreation)}s), skip\n`);
         }
+      }
 
       // ==================================================
       // ✅ TRIGGER 2: PENDING → CONFIRMED → রোগীকে SMS + Email
@@ -547,7 +555,6 @@ db.collection(appointmentsPath).onSnapshot(
           `🔄 Modified: ${docId} | prev: ${previousStatus} → curr: ${currentStatus}`
         );
 
-        // শুধু pending → confirmed হলে
         if (previousStatus === 'pending' && currentStatus === 'confirmed') {
           console.log(
             `\n✅ Admin booking confirm করেছে! রোগীকে SMS + Email পাঠাচ্ছি...`
