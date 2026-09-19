@@ -227,16 +227,21 @@ const CSS = `
 .dpb .color-choice{width:30px;height:30px;border-radius:50%;border:2px solid transparent;padding:0;}
 .dpb .color-choice.selected{border-color:#1f2937;box-shadow:0 0 0 2px #fff inset;}
 
-.dpb .preview-wrap{max-width:1000px;margin:0 auto;padding:20px;}
+/* ==================== PREVIEW / POSTER ==================== */
+.dpb .preview-wrap{max-width:1200px;margin:0 auto;padding:20px;}
 .dpb .preview-toolbar{display:flex;justify-content:flex-end;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
 .dpb .preview-toolbar .btn{font-size:13px;padding:8px 16px;}
 .dpb .poster-page{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 18px rgba(15,23,42,0.08);border:1px solid #e2e6ee;}
-.dpb .poster-header{background:linear-gradient(120deg,#4fa3d1,#1c5fa8);padding:22px 20px;text-align:center;}
-.dpb .poster-header h1{color:#fff;font-size:26px;font-weight:800;letter-spacing:0.3px;}
+
+/* ✅ শিরোনাম — বড় */
+.dpb .poster-header{background:linear-gradient(120deg,#4fa3d1,#1c5fa8);padding:32px 20px;text-align:center;}
+.dpb .poster-header h1{color:#fff;font-size:42px;font-weight:800;letter-spacing:0.6px;line-height:1.2;}
+
+/* ✅ Poster body — ৩ কলাম */
 .dpb .poster-body {
   column-count: 3;
-  column-gap: 26px;
-  padding: 22px;
+  column-gap: 28px;
+  padding: 26px;
   text-align: left;
 }
 @media (max-width: 820px) {
@@ -259,49 +264,58 @@ const CSS = `
   width: 100%;
   height: auto;
 }
-.dpb .dept-header-wrap{display:flex;align-items:center;margin-bottom:10px;}
-.dpb .dept-icon-box{width:34px;height:34px;background:#fff;border:2px solid;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;position:relative;z-index:2;box-shadow:0 1px 3px rgba(0,0,0,0.15);}
-.dpb .dept-ribbon{flex:1;margin-left:-12px;padding:7px 14px 7px 22px;color:#fff;font-weight:700;font-size:18px;clip-path:polygon(0 0,94% 0,100% 50%,94% 100%,0 100%);min-height:34px;display:flex;align-items:center;}
 
-.dpb .doctor-entry{margin-bottom:18px;padding:1px 0 1px 10px;border-left:3px solid #ccc; text-align: left;}
-.dpb .doctor-name{color:#1c5fa8;font-weight:700;font-size:22px;margin-bottom:1px;}
-.dpb .doctor-quals{color:#333;font-size:12px;line-height:1.45;white-space:pre-line;}
-.dpb .doctor-specialty{color:#9c2a7e;font-weight:700;font-size:15px;white-space:pre-line;margin-top:2px;}
-.dpb .doctor-workplace{color:#333;font-size:12px;line-height:1.4;white-space:pre-line;margin-top:1px;}
+/* ✅ Department Header — বড় */
+.dpb .dept-header-wrap{display:flex;align-items:center;margin-bottom:16px;}
+.dpb .dept-icon-box{width:48px;height:48px;background:#fff;border:2.5px solid;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;position:relative;z-index:2;box-shadow:0 2px 6px rgba(0,0,0,0.15);}
+.dpb .dept-ribbon{flex:1;margin-left:-16px;padding:11px 20px 11px 30px;color:#fff;font-weight:800;font-size:26px;clip-path:polygon(0 0,94% 0,100% 50%,94% 100%,0 100%);min-height:48px;display:flex;align-items:center;letter-spacing:0.4px;}
+
+/* ✅ Doctor Entry — সব বড় */
+.dpb .doctor-entry{margin-bottom:32px;padding:4px 0 4px 16px;border-left:5px solid #ccc;text-align:left;}
+.dpb .doctor-name{color:#1c5fa8;font-weight:800;font-size:34px;margin-bottom:6px;line-height:1.2;}
+.dpb .doctor-quals{color:#333;font-size:18px;line-height:1.55;white-space:pre-line;font-weight:500;}
+.dpb .doctor-specialty{color:#9c2a7e;font-weight:800;font-size:24px;white-space:pre-line;margin-top:6px;line-height:1.3;}
+.dpb .doctor-workplace{color:#333;font-size:17px;line-height:1.55;white-space:pre-line;margin-top:3px;}
+
+/* ✅ Time Slots — বড় */
 .dpb .doctor-time-slots {
-  margin-top: 6px;
+  margin-top: 12px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
 }
 .dpb .doctor-time-slot-item {
   background: #fef3c7;
-  padding: 2px 14px;
-  border-radius: 20px;
-  font-size: 13px;
+  padding: 7px 22px;
+  border-radius: 26px;
+  font-size: 20px;
   color: #b45309;
-  font-weight: 600;
-  display: inline-block;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   width: fit-content;
+  border: 1.5px solid #fcd34d;
 }
 .dpb .doctor-time-label {
-  font-weight: 700;
+  font-weight: 800;
   color: #b45309;
-  font-size: 13px;
-  margin-right: 2px;
+  font-size: 20px;
   white-space: nowrap;
 }
+
 .dpb .empty-dept-note{font-size:11.5px;color:#6b7280;font-style:italic;}
 
-.dpb .poster-footer{display:flex;align-items:center;justify-content:space-between;background:#eef4fb;padding:16px 22px;flex-wrap:wrap;gap:14px;border-top:3px solid #1c5fa8;}
-.dpb .footer-col{display:flex;flex-direction:column;gap:5px;font-size:11.5px;color:#333;}
-.dpb .footer-line{display:flex;align-items:center;gap:6px;white-space:pre-line; font-size:16px;}
+/* ✅ Poster Footer — বড় */
+.dpb .poster-footer{display:flex;align-items:center;justify-content:space-between;background:#eef4fb;padding:24px 28px;flex-wrap:wrap;gap:20px;border-top:4px solid #1c5fa8;}
+.dpb .footer-col{display:flex;flex-direction:column;gap:8px;font-size:14px;color:#333;}
+.dpb .footer-line{display:flex;align-items:center;gap:10px;white-space:pre-line;font-size:24px;font-weight:600;}
 .dpb .footer-center{align-items:center;text-align:center;}
-.dpb .hospital-name{font-size:19px;font-weight:800;color:#1c5fa8;letter-spacing:0.5px;}
-.dpb .hospital-subtitle{font-size:20.5px;color:#555;font-weight:600;letter-spacing:0.5px;}
+.dpb .hospital-name{font-size:26px;font-weight:800;color:#1c5fa8;letter-spacing:0.5px;}
+.dpb .hospital-subtitle{font-size:30px;color:#555;font-weight:700;letter-spacing:0.5px;}
 .dpb .footer-right{align-items:flex-end;text-align:right;}
-.dpb .footer-contact-label{font-weight:700;color:#1c5fa8;font-size:16px;}
-.dpb .footer-phone{display:flex;align-items:center;gap:6px;font-weight:700; font-size:20px;}
+.dpb .footer-contact-label{font-weight:800;color:#1c5fa8;font-size:24px;}
+.dpb .footer-phone{display:flex;align-items:center;gap:10px;font-weight:800;font-size:32px;color:#1f2937;}
 
 .dpb .doctor-entry,.dpb .doctor-row,.dpb .doctor-name,.dpb .doctor-quals,.dpb .doctor-specialty,.dpb .doctor-workplace,.dpb .doctor-time-slots,.dpb .doctor-row-name,.dpb .doctor-row-specialty { text-align: left !important; }
 
@@ -779,8 +793,22 @@ function EditPanel({ panel, departments, footer, checkedIds, allChecked, onUpdat
   );
 }
 
-function DeptHeader({ dept }) { const Icon = ICONS[dept.icon] || ICONS.Stethoscope; return (<div className="dept-header-wrap"><span className="dept-icon-box" style={{ borderColor: dept.color }}><Icon size={19} color={dept.color} /></span><div className="dept-ribbon" style={{ background: dept.color }}><span>{dept.name}</span></div></div>); }
+// ✅ Department Header — বড় icon size
+function DeptHeader({ dept }) {
+  const Icon = ICONS[dept.icon] || ICONS.Stethoscope;
+  return (
+    <div className="dept-header-wrap">
+      <span className="dept-icon-box" style={{ borderColor: dept.color }}>
+        <Icon size={26} color={dept.color} />
+      </span>
+      <div className="dept-ribbon" style={{ background: dept.color }}>
+        <span>{dept.name}</span>
+      </div>
+    </div>
+  );
+}
 
+// ✅ Doctor Entry — "সাক্ষাতের সময়ঃ" label with bold
 function DoctorEntry({ doc, accentColor }) {
   return (
     <div className="doctor-entry" style={{ borderLeftColor: accentColor }}>
@@ -792,8 +820,8 @@ function DoctorEntry({ doc, accentColor }) {
         <div className="doctor-time-slots">
           {doc.timeSlots.map((slot, idx) => (
             <span key={idx} className="doctor-time-slot-item">
-              <span className="doctor-time-label">⏱ সাক্ষাতের সময়ঃ</span>
-               {slot.start} - {slot.end}
+              <span className="doctor-time-label">সাক্ষাতের সময়ঃ</span>
+              <span>⏱ {slot.start} - {slot.end}</span>
             </span>
           ))}
         </div>
@@ -802,15 +830,43 @@ function DoctorEntry({ doc, accentColor }) {
   );
 }
 
+// ==================================================
+// ✅ PreviewPanel — HD Download (scale: 3)
+// ==================================================
 function PreviewPanel({ panel, departments, checkedIds, footer, onBack }) {
   const printRef = useRef(null);
   const handlePrint = () => window.print();
-  const downloadPNG = async () => { const element = printRef.current; if (!element) return; try { const canvas = await html2canvas(element, { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' }); const link = document.createElement('a'); link.download = `${panel?.title || 'poster'}.png`; link.href = canvas.toDataURL('image/png'); link.click(); } catch (error) { alert('PNG ডাউনলোড করতে সমস্যা হয়েছে।'); } };
+
+  const downloadPNG = async () => {
+    const element = printRef.current;
+    if (!element) return;
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 3,               // ⭐ আগে ছিল 2 → এখন 3 (HD quality)
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+      });
+      const link = document.createElement('a');
+      link.download = `${panel?.title || 'poster'}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch (error) {
+      console.error('PNG download error:', error);
+      alert('PNG ডাউনলোড করতে সমস্যা হয়েছে।');
+    }
+  };
+
   const downloadPDF = async () => {
     const element = printRef.current;
     if (!element) return;
     try {
-      const canvas = await html2canvas(element, { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' });
+      const canvas = await html2canvas(element, {
+        scale: 3,               // ⭐ 2 → 3
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+      });
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -827,7 +883,10 @@ function PreviewPanel({ panel, departments, checkedIds, footer, onBack }) {
         heightLeft -= pdfPageHeight;
       }
       pdf.save(`${panel?.title || 'poster'}.pdf`);
-    } catch (error) { alert('PDF ডাউনলোড করতে সমস্যা হয়েছে।'); }
+    } catch (error) {
+      console.error('PDF download error:', error);
+      alert('PDF ডাউনলোড করতে সমস্যা হয়েছে।');
+    }
   };
 
   const hasChecked = checkedIds && checkedIds.size > 0;
@@ -862,16 +921,16 @@ function PreviewPanel({ panel, departments, checkedIds, footer, onBack }) {
         )}
         <div className="poster-footer">
           <div className="footer-col footer-left">
-            <div className="footer-line"><MapPin size={13} /> <span>{footer.address}</span></div>
-            <div className="footer-line"><Globe size={13} /> <span>{footer.website}</span></div>
+            <div className="footer-line"><MapPin size={20} /> <span>{footer.address}</span></div>
+            <div className="footer-line"><Globe size={20} /> <span>{footer.website}</span></div>
           </div>
           <div className="footer-col footer-center">
-            <img src={footer.logo} alt="Logo" style={{ height: '160px', width: 'auto', objectFit: 'contain' }} />
+            <img src={footer.logo} alt="Logo" style={{ height: '170px', width: 'auto', objectFit: 'contain' }} />
             <div className="hospital-subtitle">{footer.hospitalSubtitle}</div>
           </div>
           <div className="footer-col footer-right">
             <div className="footer-contact-label">{footer.contactLabel}</div>
-            {footer.phones.map((p, i) => <div className="footer-phone" key={i}><Phone size={13} /> {p}</div>)}
+            {footer.phones.map((p, i) => <div className="footer-phone" key={i}><Phone size={22} /> {p}</div>)}
           </div>
         </div>
       </div>
