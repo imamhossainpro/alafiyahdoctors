@@ -25,6 +25,38 @@ const ICONS = { Stethoscope, Scissors, Heart, Baby, Bone, Syringe, Pill, Activit
 const ICON_KEYS = Object.keys(ICONS);
 const COLOR_THEMES = ['#1c5fa8', '#2f9e52', '#9c3a9c', '#d1392f', '#0e8ca3', '#e0653a', '#2b3f8f', '#159a72', '#8a6a2e', '#7a2d5c', '#4438ab', '#475569'];
 
+// ==================================================
+// ✅ Time Utilities (for manual input)
+// ==================================================
+const TIME_REGEX = /^(0?[1-9]|1[0-2]):([0-5][0-9])\s?(AM|PM|am|pm)$/;
+
+const validateTimeFormat = (timeStr) => {
+  if (!timeStr || !timeStr.trim()) return false;
+  return TIME_REGEX.test(timeStr.trim());
+};
+
+const standardizeTime = (timeStr) => {
+  if (!timeStr || !timeStr.trim()) return '';
+  const match = timeStr.trim().match(TIME_REGEX);
+  if (!match) return timeStr.trim();
+  const [, hour, minute, period] = match;
+  const h = hour.padStart(2, '0');
+  const p = period.toUpperCase();
+  return `${h}:${minute} ${p}`;
+};
+
+const timeToMinutes = (timeStr) => {
+  const match = timeStr?.trim().match(TIME_REGEX);
+  if (!match) return null;
+  let [, hour, minute, period] = match;
+  let h = parseInt(hour, 10);
+  const m = parseInt(minute, 10);
+  const p = period.toUpperCase();
+  if (p === 'PM' && h !== 12) h += 12;
+  if (p === 'AM' && h === 12) h = 0;
+  return h * 60 + m;
+};
+
 function makeDoctor(overrides) {
   return {
     id: uid(),
@@ -38,13 +70,13 @@ function makeDoctor(overrides) {
 }
 function makeDepartment(overrides) { return { id: uid(), name: '', icon: 'Stethoscope', color: COLOR_THEMES[0], doctors: [], ...(overrides || {}) }; }
 
-const DEFAULT_FOOTER = { 
-  address: 'বাকলিয়া এক্সেস রোড,\nবাকলিয়া, চট্টগ্রাম।', 
-  website: 'alafiyahhospital.com', 
-  logo: '/logo.png', 
-  contactLabel: 'সিরিয়ালের এবং তথ্যের জন্যে যোগাযোগ', 
+const DEFAULT_FOOTER = {
+  address: 'বাকলিয়া এক্সেস রোড,\nবাকলিয়া, চট্টগ্রাম।',
+  website: 'alafiyahhospital.com',
+  logo: '/logo.png',
+  contactLabel: 'সিরিয়ালের এবং তথ্যের জন্যে যোগাযোগ',
   phones: ['01886 776 512', '01886 776 513'],
-  hospitalName: 'আল-আফিয়া হাসপাতাল',
+  hospitalName: 'আল-আফিয়া হাসপাতাল',
   hospitalSubtitle: 'স্বাস্থ্যসেবায় বিশ্বাস'
 };
 
@@ -201,7 +233,6 @@ const CSS = `
 .dpb .poster-page{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 18px rgba(15,23,42,0.08);border:1px solid #e2e6ee;}
 .dpb .poster-header{background:linear-gradient(120deg,#4fa3d1,#1c5fa8);padding:22px 20px;text-align:center;}
 .dpb .poster-header h1{color:#fff;font-size:26px;font-weight:800;letter-spacing:0.3px;}
-/* ✅ প্রিভিউ – ৩ কলাম, ব্লকগুলো নিজস্ব উচ্চতা নেবে */
 .dpb .poster-body {
   column-count: 3;
   column-gap: 26px;
@@ -220,11 +251,11 @@ const CSS = `
 }
 
 .dpb .dept-block {
-  break-inside: avoid;          /* ✅ বিভাগ ভেঙে যাবে না */
+  break-inside: avoid;
   -webkit-column-break-inside: avoid;
   page-break-inside: avoid;
-  margin-bottom: 0;             /* ✅ কোনো অতিরিক্ত মার্জিন নেই */
-  display: inline-block;        /* ✅ কলামের ভেতর সঠিকভাবে ফিট */
+  margin-bottom: 0;
+  display: inline-block;
   width: 100%;
   height: auto;
 }
@@ -400,16 +431,20 @@ function DepartmentModal({ initial, onSave, onClose }) {
   );
 }
 
+// ==================================================
+// ✅ DoctorModal — Manual Time Input with Validation
+// ==================================================
 function DoctorModal({ initial, onSave, onClose }) {
   const [name, setName] = useState(initial ? initial.name : '');
   const [quals, setQuals] = useState(initial ? initial.quals : '');
   const [specialty, setSpecialty] = useState(initial ? initial.specialty : '');
   const [workplace, setWorkplace] = useState(initial ? initial.workplace : '');
   const [timeSlots, setTimeSlots] = useState(
-    initial?.timeSlots && initial.timeSlots.length > 0 
-      ? initial.timeSlots 
+    initial?.timeSlots && initial.timeSlots.length > 0
+      ? initial.timeSlots
       : [{ start: '09:00 AM', end: '11:00 AM' }]
   );
+  const [slotErrors, setSlotErrors] = useState({});
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -417,46 +452,122 @@ function DoctorModal({ initial, onSave, onClose }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const generateTimeOptions = () => {
-    const options = [];
-    for (let h = 6; h <= 11; h++) {
-      for (let m = 0; m < 60; m += 30) {
-        const hour = h < 10 ? `0${h}` : `${h}`;
-        const minute = m === 0 ? '00' : '30';
-        options.push(`${hour}:${minute} AM`);
-      }
-    }
-    for (let h = 12; h <= 11; h++) {
-      for (let m = 0; m < 60; m += 30) {
-        const hour = h < 10 ? `0${h}` : `${h}`;
-        const minute = m === 0 ? '00' : '30';
-        options.push(`${hour}:${minute} PM`);
-      }
-    }
-    options.push('12:00 PM');
-    options.push('12:30 PM');
-    return options.sort((a, b) => {
-      const timeA = new Date(`1970-01-01 ${a}`);
-      const timeB = new Date(`1970-01-01 ${b}`);
-      return timeA - timeB;
-    });
+  const handleAddSlot = () => {
+    setTimeSlots([...timeSlots, { start: '09:00 AM', end: '11:00 AM' }]);
   };
 
-  const timeOptions = generateTimeOptions();
-
-  const handleAddSlot = () => setTimeSlots([...timeSlots, { start: '09:00 AM', end: '11:00 AM' }]);
   const handleRemoveSlot = (index) => {
-    if (timeSlots.length <= 1) { alert('কমপক্ষে একটি সময় স্লট থাকতে হবে!'); return; }
-    setTimeSlots(timeSlots.filter((_, i) => i !== index));
+    if (timeSlots.length <= 1) {
+      alert('কমপক্ষে একটি সময় স্লট থাকতে হবে!');
+      return;
+    }
+    const newSlots = timeSlots.filter((_, i) => i !== index);
+    setTimeSlots(newSlots);
+    const newErrors = { ...slotErrors };
+    delete newErrors[`${index}-start`];
+    delete newErrors[`${index}-end`];
+    setSlotErrors(newErrors);
   };
+
   const handleSlotChange = (index, field, value) => {
-    setTimeSlots(timeSlots.map((slot, i) => i === index ? { ...slot, [field]: value } : slot));
+    const updated = timeSlots.map((slot, i) =>
+      i === index ? { ...slot, [field]: value } : slot
+    );
+    setTimeSlots(updated);
+
+    const errorKey = `${index}-${field}`;
+    const newErrors = { ...slotErrors };
+    if (value.trim() && !validateTimeFormat(value)) {
+      newErrors[errorKey] = 'ফরম্যাট: 09:00 AM বা 11:30 PM';
+    } else {
+      delete newErrors[errorKey];
+    }
+    setSlotErrors(newErrors);
+  };
+
+  const handleSlotBlur = (index, field) => {
+    const value = timeSlots[index][field];
+    if (value.trim() && validateTimeFormat(value)) {
+      const standardized = standardizeTime(value);
+      const updated = timeSlots.map((slot, i) =>
+        i === index ? { ...slot, [field]: standardized } : slot
+      );
+      setTimeSlots(updated);
+    }
   };
 
   const handleSave = () => {
-    if (!name.trim()) { alert('ডাক্তারের নাম লিখুন!'); return; }
-    if (timeSlots.some(slot => !slot.start || !slot.end)) { alert('সব সময় স্লটে শুরু ও শেষ সময় সেট করুন!'); return; }
-    onSave({ name: name.trim(), quals, specialty, workplace, timeSlots });
+    if (!name.trim()) {
+      alert('ডাক্তারের নাম লিখুন!');
+      return;
+    }
+
+    const errors = {};
+    let hasError = false;
+
+    timeSlots.forEach((slot, i) => {
+      if (!slot.start || !slot.start.trim()) {
+        errors[`${i}-start`] = 'শুরুর সময় লিখুন';
+        hasError = true;
+      } else if (!validateTimeFormat(slot.start)) {
+        errors[`${i}-start`] = 'ফরম্যাট: 09:00 AM বা 11:30 PM';
+        hasError = true;
+      }
+
+      if (!slot.end || !slot.end.trim()) {
+        errors[`${i}-end`] = 'শেষ সময় লিখুন';
+        hasError = true;
+      } else if (!validateTimeFormat(slot.end)) {
+        errors[`${i}-end`] = 'ফরম্যাট: 09:00 AM বা 11:30 PM';
+        hasError = true;
+      }
+
+      if (
+        slot.start && slot.end &&
+        validateTimeFormat(slot.start) &&
+        validateTimeFormat(slot.end)
+      ) {
+        const startMin = timeToMinutes(slot.start);
+        const endMin = timeToMinutes(slot.end);
+        if (startMin !== null && endMin !== null && startMin >= endMin) {
+          errors[`${i}-end`] = 'শেষ সময় অবশ্যই শুরুর সময়ের পরে হতে হবে';
+          hasError = true;
+        }
+      }
+    });
+
+    if (hasError) {
+      setSlotErrors(errors);
+      alert('সময় স্লটে ত্রুটি আছে। অনুগ্রহ করে ঠিক করুন।');
+      return;
+    }
+
+    const cleanedSlots = timeSlots.map((slot) => ({
+      start: standardizeTime(slot.start),
+      end: standardizeTime(slot.end),
+    }));
+
+    onSave({
+      name: name.trim(),
+      quals,
+      specialty,
+      workplace,
+      timeSlots: cleanedSlots,
+    });
+  };
+
+  const inputBaseStyle = {
+    padding: '9px 12px',
+    border: '1px solid #cbd5e1',
+    borderRadius: '6px',
+    fontSize: '14px',
+    fontFamily: 'inherit',
+    outline: 'none',
+    width: '100%',
+    textAlign: 'center',
+    fontWeight: '600',
+    letterSpacing: '0.5px',
+    background: '#fff',
   };
 
   return (
@@ -475,26 +586,102 @@ function DoctorModal({ initial, onSave, onClose }) {
           <textarea className="textarea" rows={2} value={specialty} onChange={(e) => setSpecialty(e.target.value)} placeholder="যেমনঃ মেডিসিন বিশেষজ্ঞ" />
           <label>কর্মস্থল / পদবী</label>
           <textarea className="textarea" rows={2} value={workplace} onChange={(e) => setWorkplace(e.target.value)} placeholder="যেমনঃ চট্টগ্রাম মেডিকেল কলেজ হাসপাতাল" />
+
+          {/* ================================================
+              ⏰ Time Slots Section — Manual Input
+              ================================================ */}
           <div style={{ marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
-            <label style={{ fontWeight: '700', display: 'block', marginBottom: '8px' }}>⏰ সাক্ষাতের সময় (একাধিক স্লট যোগ করুন)</label>
-            {timeSlots.map((slot, index) => (
-              <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', background: '#f8fafc', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ fontWeight: '600', fontSize: '13px' }}>শুরু:</span>
-                  <select value={slot.start} onChange={(e) => handleSlotChange(index, 'start', e.target.value)} style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
-                    {timeOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                  </select>
+            <label style={{ fontWeight: '700', display: 'block', marginBottom: '4px' }}>
+              ⏰ সাক্ষাতের সময় (একাধিক স্লট যোগ করুন)
+            </label>
+            <p style={{ fontSize: '12px', color: '#64748b', margin: '4px 0 12px 0', lineHeight: '1.5' }}>
+              ফরম্যাট: <code style={{ background: '#f1f5f9', padding: '1px 6px', borderRadius: '4px', fontSize: '11.5px' }}>HH:MM AM</code> অথবা <code style={{ background: '#f1f5f9', padding: '1px 6px', borderRadius: '4px', fontSize: '11.5px' }}>HH:MM PM</code>
+              <br />
+              উদাহরণ: <strong>09:00 AM</strong>, <strong>02:30 PM</strong>, <strong>11:45 PM</strong>
+            </p>
+
+            {timeSlots.map((slot, index) => {
+              const startError = slotErrors[`${index}-start`];
+              const endError = slotErrors[`${index}-end`];
+
+              return (
+                <div
+                  key={index}
+                  style={{
+                    marginBottom: '12px',
+                    background: '#f8fafc',
+                    padding: '12px',
+                    borderRadius: '10px',
+                    border: startError || endError ? '1.5px solid #dc2626' : '1px solid #e2e8f0',
+                  }}
+                >
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                    <div style={{ flex: '1 1 140px' }}>
+                      <label style={{ fontSize: '11.5px', fontWeight: '600', color: '#475569', display: 'block', marginBottom: '4px' }}>শুরু</label>
+                      <input
+                        type="text"
+                        value={slot.start}
+                        onChange={(e) => handleSlotChange(index, 'start', e.target.value)}
+                        onBlur={() => handleSlotBlur(index, 'start')}
+                        placeholder="09:00 AM"
+                        maxLength={8}
+                        autoComplete="off"
+                        style={{ ...inputBaseStyle, borderColor: startError ? '#dc2626' : '#cbd5e1' }}
+                      />
+                      {startError && (
+                        <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '4px', fontWeight: '500' }}>
+                          ⚠️ {startError}
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ flex: '1 1 140px' }}>
+                      <label style={{ fontSize: '11.5px', fontWeight: '600', color: '#475569', display: 'block', marginBottom: '4px' }}>শেষ</label>
+                      <input
+                        type="text"
+                        value={slot.end}
+                        onChange={(e) => handleSlotChange(index, 'end', e.target.value)}
+                        onBlur={() => handleSlotBlur(index, 'end')}
+                        placeholder="11:00 AM"
+                        maxLength={8}
+                        autoComplete="off"
+                        style={{ ...inputBaseStyle, borderColor: endError ? '#dc2626' : '#cbd5e1' }}
+                      />
+                      {endError && (
+                        <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '4px', fontWeight: '500' }}>
+                          ⚠️ {endError}
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ paddingTop: '22px' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSlot(index)}
+                        title="স্লট মুছুন"
+                        style={{
+                          background: '#fee2e2',
+                          color: '#dc2626',
+                          border: 'none',
+                          borderRadius: '6px',
+                          padding: '9px 10px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ fontWeight: '600', fontSize: '13px' }}>শেষ:</span>
-                  <select value={slot.end} onChange={(e) => handleSlotChange(index, 'end', e.target.value)} style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
-                    {timeOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                  </select>
-                </div>
-                <button className="icon-btn" onClick={() => handleRemoveSlot(index)} style={{ color: '#dc2626' }}><Trash2 size={16} /></button>
-              </div>
-            ))}
-            <button className="btn btn-secondary" onClick={handleAddSlot} style={{ marginTop: '6px' }}><Plus size={14} /> আরও সময় যোগ করুন</button>
+              );
+            })}
+
+            <button className="btn btn-secondary" onClick={handleAddSlot} style={{ marginTop: '6px' }}>
+              <Plus size={14} /> আরও সময় যোগ করুন
+            </button>
           </div>
         </div>
         <div className="modal-footer">
@@ -752,18 +939,18 @@ export default function DoctorPanelBuilder() {
     setTimeout(() => window.location.reload(), 100);
   };
 
-  // ডেটা লোড (লগইন ছাড়াই)
+  // ডেটা লোড (লগইন ছাড়াই)
   useEffect(() => {
     const loadData = async () => {
       const hid = hospitalId || 'alafiyah_main';
       console.log('🏥 হাসপাতাল আইডি:', hid);
-      
+
       setLoading(true);
       try {
         // ডিপার্টমেন্ট লোড
         const deptSnapshot = await getDocs(collection(db, 'hospitals', hid, 'departments'));
         const depts = deptSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        console.log('📂 ডিপার্টমেন্ট পাওয়া গেছে:', depts.length);
+        console.log('📂 ডিপার্টমেন্ট পাওয়া গেছে:', depts.length);
         setDepartments(depts);
 
         // প্যানেল লোড
@@ -824,7 +1011,7 @@ export default function DoctorPanelBuilder() {
             designation: data.designation || data.role || '',
           };
         });
-        console.log("✅ ইউজার পাওয়া গেছে:", usersList.length);
+        console.log("✅ ইউজার পাওয়া গেছে:", usersList.length);
         setAllUsers(usersList);
       } catch (error) {
         console.error('❌ ইউজার লোড error:', error);
@@ -921,13 +1108,19 @@ export default function DoctorPanelBuilder() {
     else { const deptId = deptModal.dept.id; updateDepartments(d => d.map(dept => dept.id === deptId ? { ...dept, ...fields } : dept), true); }
     setDeptModal(null);
   };
+
+  // ✅ FIX: Null-safe activeDoctorIds in handleDeleteDept
   const handleDeleteDept = (deptId) => {
     const removedIds = departments.find(d => d.id === deptId)?.doctors?.map(doc => doc.id) || [];
     updateDepartments(d => d.filter(dept => dept.id !== deptId), true);
-    const newPanels = panels.map(p => ({ ...p, activeDoctorIds: p.activeDoctorIds.filter(id => !removedIds.includes(id)) }));
+    const newPanels = panels.map(p => ({
+      ...p,
+      activeDoctorIds: (p.activeDoctorIds || []).filter(id => !removedIds.includes(id)),
+    }));
     setPanels(newPanels);
     newPanels.forEach(p => savePanelToFirebase(p));
   };
+
   const handleMoveDept = (deptId, dir) => {
     const idx = departments.findIndex(d => d.id === deptId);
     const ni = idx + dir;
@@ -957,15 +1150,21 @@ export default function DoctorPanelBuilder() {
     }
     setDoctorModal(null);
   };
+
+  // ✅ FIX: Null-safe activeDoctorIds in handleDeleteDoctor
   const handleDeleteDoctor = (deptId, doctorId) => {
     const updatedDepts = departments.map(dept => dept.id === deptId ? { ...dept, doctors: dept.doctors.filter(doc => doc.id !== doctorId) } : dept);
     setDepartments(updatedDepts);
     saveDepartments(updatedDepts);
-    const newPanels = panels.map(p => ({ ...p, activeDoctorIds: p.activeDoctorIds.filter(id => id !== doctorId) }));
+    const newPanels = panels.map(p => ({
+      ...p,
+      activeDoctorIds: (p.activeDoctorIds || []).filter(id => id !== doctorId),
+    }));
     setPanels(newPanels);
     newPanels.forEach(p => savePanelToFirebase(p));
     setCheckedIds(prev => { const newSet = new Set(prev); newSet.delete(doctorId); return newSet; });
   };
+
   const handleMoveDoctor = (deptId, doctorId, dir) => {
     const dept = departments.find(d => d.id === deptId);
     if (!dept) return;
@@ -989,9 +1188,9 @@ export default function DoctorPanelBuilder() {
     const dept = departments.find(d => d.id === deptId);
     if (!dept) return;
     const deptIds = dept.doctors.map(doc => doc.id);
-    const allChecked = deptIds.every(id => checkedIds.has(id));
+    const allCheckedDept = deptIds.every(id => checkedIds.has(id));
     let newIds;
-    if (allChecked) newIds = [...checkedIds].filter(id => !deptIds.includes(id));
+    if (allCheckedDept) newIds = [...checkedIds].filter(id => !deptIds.includes(id));
     else newIds = [...checkedIds].filter(id => !deptIds.includes(id)).concat(deptIds);
     setCheckedIds(new Set(newIds));
     updatePanel(p => ({ ...p, activeDoctorIds: newIds }), true);
@@ -1008,7 +1207,7 @@ export default function DoctorPanelBuilder() {
     if (panel) { setActivePanelId(panelId); setCheckedIds(new Set(panel.activeDoctorIds || [])); }
   };
   const handleAddPanel = async (fields) => {
-    const newPanel = { id: fields.name, name: fields.name, title: fields.title, activeDoctorIds: fields.duplicate ? [...activePanel.activeDoctorIds] : (fields.selectedIds || []) };
+    const newPanel = { id: fields.name, name: fields.name, title: fields.title, activeDoctorIds: fields.duplicate ? [...(activePanel.activeDoctorIds || [])] : (fields.selectedIds || []) };
     await savePanelToFirebase(newPanel);
     setPanels([...panels, newPanel]);
     setActivePanelId(newPanel.id);
