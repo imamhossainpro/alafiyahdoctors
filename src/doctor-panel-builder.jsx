@@ -284,6 +284,13 @@ const CSS = `
   display: inline-block;
   width: fit-content;
 }
+.dpb .doctor-time-label {
+  font-weight: 700;
+  color: #b45309;
+  font-size: 13px;
+  margin-right: 2px;
+  white-space: nowrap;
+}
 .dpb .empty-dept-note{font-size:11.5px;color:#6b7280;font-style:italic;}
 
 .dpb .poster-footer{display:flex;align-items:center;justify-content:space-between;background:#eef4fb;padding:16px 22px;flex-wrap:wrap;gap:14px;border-top:3px solid #1c5fa8;}
@@ -784,7 +791,10 @@ function DoctorEntry({ doc, accentColor }) {
       {doc.timeSlots && doc.timeSlots.length > 0 && (
         <div className="doctor-time-slots">
           {doc.timeSlots.map((slot, idx) => (
-            <span key={idx} className="doctor-time-slot-item">⏱ {slot.start} - {slot.end}</span>
+            <span key={idx} className="doctor-time-slot-item">
+              <span className="doctor-time-label">সাক্ষাতের সময়ঃ</span>
+              ⏱ {slot.start} - {slot.end}
+            </span>
           ))}
         </div>
       )}
