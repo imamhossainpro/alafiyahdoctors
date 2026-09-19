@@ -792,8 +792,8 @@ function DoctorEntry({ doc, accentColor }) {
         <div className="doctor-time-slots">
           {doc.timeSlots.map((slot, idx) => (
             <span key={idx} className="doctor-time-slot-item">
-              <span className="doctor-time-label">সাক্ষাতের সময়ঃ</span>
-              ⏱ {slot.start} - {slot.end}
+              <span className="doctor-time-label">⏱ সাক্ষাতের সময়ঃ</span>
+               {slot.start} - {slot.end}
             </span>
           ))}
         </div>
