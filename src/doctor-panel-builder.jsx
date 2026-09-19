@@ -957,16 +957,19 @@ export default function DoctorPanelBuilder() {
 
       setLoading(true);
       try {
-        // ডিপার্টমেন্ট লোড
+        // ডিপার্টমেন্ট লোড (sorted by order)
         const deptSnapshot = await getDocs(collection(db, 'hospitals', hid, 'departments'));
-        const depts = deptSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const depts = deptSnapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         console.log('📂 ডিপার্টমেন্ট পাওয়া গেছে:', depts.length);
         setDepartments(depts);
 
-        // প্যানেল লোড
-        const panelSnapshot = await getDocs(collection(db, 'hospitals', hid, 'panels'));
-        let panelList = panelSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        if (panelList.length === 0) {
+       // প্যানেল লোড (sorted by order)
+          const panelSnapshot = await getDocs(collection(db, 'hospitals', hid, 'panels'));
+          let panelList = panelSnapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)); {
           const defaultPanel = { id: 'শনিবার', name: 'শনিবার', title: 'শনিবারের ডক্টরস প্যানেল', activeDoctorIds: [] };
           await setDoc(doc(db, 'hospitals', hid, 'panels', 'শনিবার'), defaultPanel);
           panelList = [defaultPanel];
@@ -1038,18 +1041,35 @@ export default function DoctorPanelBuilder() {
       const oldSnapshot = await getDocs(collection(db, 'hospitals', hospitalId, 'departments'));
       const batch = writeBatch(db);
       oldSnapshot.forEach(doc => batch.delete(doc.ref));
-      newDepts.forEach(dept => {
-        const ref = doc(db, 'hospitals', hospitalId, 'departments', dept.id || uid());
-        batch.set(ref, dept);
+      // ✅ Save order field so sequence persists after reload
+      newDepts.forEach((dept, index) => {
+        const { id, ...deptData } = dept;
+        const ref = doc(db, 'hospitals', hospitalId, 'departments', id || uid());
+        batch.set(ref, { ...deptData, order: index });
       });
       await batch.commit();
+      console.log('✅ Departments saved with order:', newDepts.length);
     } catch (error) { console.error('saveDepartments error:', error); }
-  };
+};
 
-  const savePanelToFirebase = async (panel) => {
-    if (!hospitalId) return;
-    try { await setDoc(doc(db, 'hospitals', hospitalId, 'panels', panel.id), panel); } catch (error) { console.error('savePanel error:', error); }
-  };
+    const savePanelToFirebase = async (panel) => {
+        if (!hospitalId) return;
+        try { await setDoc(doc(db, 'hospitals', hospitalId, 'panels', panel.id), panel); } catch (error) { console.error('savePanel error:', error); }
+    };
+
+    // ✅ Save all panels with order fields
+    const saveAllPanels = async (panelList) => {
+        if (!hospitalId) return;
+        try {
+          const batch = writeBatch(db);
+          panelList.forEach((panel, index) => {
+            const { id, ...panelData } = panel;
+            const ref = doc(db, 'hospitals', hospitalId, 'panels', id);
+            batch.set(ref, { ...panelData, order: index }, { merge: true });
+          });
+          await batch.commit();
+        } catch (error) { console.error('saveAllPanels error:', error); }
+    };
 
   const deletePanelFromFirebase = async (panelId) => {
     if (!hospitalId) return;
