@@ -195,6 +195,42 @@ const LocationDrillModal = ({ location, patients, onClose }) => {
   );
 };
 
+// ==================================================
+// ✅ Helper: Determine patient type (override first)
+// ==================================================
+const getPatientTypeForOverview = (appt, patientMap) => {
+  // Priority 1: Manual override on appointment
+  if (appt.patientTypeOverride) {
+    return appt.patientTypeOverride;
+  }
+
+  // Priority 2: Compute from patient visits
+  const patientId = appt.patientId;
+  if (!patientId) return null;
+  const patient = patientMap[patientId];
+  if (!patient) return null;
+  const doctorName = appt.doctorName;
+  if (!doctorName) return null;
+
+  const visits = patient.visits || [];
+  const doctorVisits = visits.filter(
+    (v) => v.doctorName === doctorName && v.date && v.date < appt.bookingDate
+  );
+
+  if (doctorVisits.length === 0) return 'নতুন';
+
+  const sorted = [...doctorVisits].sort(
+    (a, b) => new Date(b.date) - new Date(a.date)
+  );
+  const lastVisit = sorted[0];
+  const diffDays = Math.ceil(
+    Math.abs(new Date(lastVisit.date) - new Date(appt.bookingDate)) /
+      (1000 * 60 * 60 * 24)
+  );
+
+  return diffDays <= 7 ? 'রিপোর্ট' : 'ফলোআপ';
+};
+
 // ---------- মূল কম্পোনেন্ট ----------
 export default function Overview({ appointments }) {
   const { currentHospital } = useHospital();
@@ -207,7 +243,7 @@ export default function Overview({ appointments }) {
   const [drillPatients, setDrillPatients] = useState([]);
   const [trendDays, setTrendDays] = useState(7);
 
-  // ✅ Real-time Patient Subscription (Patient type change instantly reflected)
+  // ✅ Real-time Patient Subscription
   useEffect(() => {
     if (!hospitalId) {
       setLoading(false);
@@ -215,15 +251,13 @@ export default function Overview({ appointments }) {
     }
     setLoading(true);
 
-    // Locations - একবারই লোড (এগুলো পরিবর্তন হলে আরেকবার লোড হবে)
     getAllLocations(hospitalId)
-      .then(locs => setLocations(locs || []))
-      .catch(err => {
+      .then((locs) => setLocations(locs || []))
+      .catch((err) => {
         console.error('❌ Locations load error:', err);
         setLocations([]);
       });
 
-    // Patients - real-time subscription
     const unsubscribe = subscribeToPatients(
       hospitalId,
       (patientsData) => {
@@ -242,82 +276,67 @@ export default function Overview({ appointments }) {
     };
   }, [hospitalId]);
 
-  // ---------- রোগীর ক্যাটাগরি নির্ধারণ ----------
+  // ==================================================
+  // ✅ রোগীর ক্যাটাগরি নির্ধারণ (override priority)
+  // ==================================================
   const categorizedCounts = useMemo(() => {
-    if (!appointments.length || !patients.length) {
-      return { new: 0, report: 0, followup: 0, total: appointments.length };
+    if (!appointments.length) {
+      return { new: 0, report: 0, followup: 0, total: 0 };
     }
 
     const patientMap = {};
-    patients.forEach(p => { patientMap[p.id] = p; });
+    patients.forEach((p) => {
+      patientMap[p.id] = p;
+    });
 
     let newCount = 0;
     let reportCount = 0;
     let followupCount = 0;
 
-    appointments.forEach(appt => {
-      const patientId = appt.patientId;
-      if (!patientId) return;
-      const patient = patientMap[patientId];
-      if (!patient) return;
-      const doctorName = appt.doctorName;
-      if (!doctorName) return;
-
-      const visits = patient.visits || [];
-      const doctorVisits = visits.filter(v => 
-        v.doctorName === doctorName && 
-        v.date && 
-        v.date < appt.bookingDate
-      );
-
-      if (doctorVisits.length === 0) {
-        newCount++;
-      } else {
-        const sorted = [...doctorVisits].sort((a, b) => new Date(b.date) - new Date(a.date));
-        const lastVisit = sorted[0];
-        const diffDays = Math.ceil(
-          Math.abs(new Date(lastVisit.date) - new Date(appt.bookingDate)) / (1000 * 60 * 60 * 24)
-        );
-        if (diffDays <= 7) {
-          reportCount++;
-        } else {
-          followupCount++;
-        }
-      }
+    appointments.forEach((appt) => {
+      const type = getPatientTypeForOverview(appt, patientMap);
+      if (type === 'নতুন') newCount++;
+      else if (type === 'রিপোর্ট') reportCount++;
+      else if (type === 'ফলোআপ') followupCount++;
     });
 
-    return { new: newCount, report: reportCount, followup: followupCount, total: appointments.length };
+    return {
+      new: newCount,
+      report: reportCount,
+      followup: followupCount,
+      total: appointments.length,
+    };
   }, [appointments, patients]);
 
-  // ---------- লোকেশন ডেটা (শুধু Active Locations) ----------
+  // ---------- লোকেশন ডেটা ----------
   const locationData = useMemo(() => {
-    const activeLocationNames = new Set(locations.map(loc => loc.name));
+    const activeLocationNames = new Set(locations.map((loc) => loc.name));
     const map = {};
-    
-    appointments.forEach(appt => {
+
+    appointments.forEach((appt) => {
       let locKey = appt.locationName || appt.address || appt.locationId || 'অজানা';
-      
+
       if (locKey === 'অজানা' || locKey === appt.locationId) {
-        const matchedLoc = locations.find(l => l.id === appt.locationId);
+        const matchedLoc = locations.find((l) => l.id === appt.locationId);
         if (matchedLoc) locKey = matchedLoc.name;
         else return;
       }
-      
+
       if (locKey !== 'অজানা' && !activeLocationNames.has(locKey)) return;
-      
+
       if (!map[locKey]) {
-        map[locKey] = { 
-          name: locKey, 
+        map[locKey] = {
+          name: locKey,
           count: 0,
-          patients: []
+          patients: [],
         };
       }
       map[locKey].count += 1;
       map[locKey].patients.push(appt);
     });
-    
+
     return Object.values(map)
-      .filter(loc => loc.count > 0)
+      .filter((loc) => loc.count > 0)
       .sort((a, b) => b.count - a.count);
   }, [appointments, locations]);
 
@@ -334,18 +353,18 @@ export default function Overview({ appointments }) {
       dateArray.push(dateStr);
     }
 
-    const locationNames = locationData.map(loc => loc.name);
+    const locationNames = locationData.map((loc) => loc.name);
 
-    const result = dateArray.map(dateStr => {
+    const result = dateArray.map((dateStr) => {
       const dayData = { date: dateStr };
       let totalCount = 0;
-      locationNames.forEach(locName => {
-        const count = appointments.filter(a => {
+      locationNames.forEach((locName) => {
+        const count = appointments.filter((a) => {
           const apptDate = a.bookingDate ? a.bookingDate.split('T')[0] : '';
           const locKey = a.locationName || a.address || a.locationId || 'অজানা';
           let match = false;
           if (locKey === a.locationId) {
-            const loc = locations.find(l => l.id === a.locationId);
+            const loc = locations.find((l) => l.id === a.locationId);
             match = loc && loc.name === locName;
           } else {
             match = locKey === locName;
@@ -362,31 +381,42 @@ export default function Overview({ appointments }) {
     return result;
   }, [appointments, locationData, trendDays, locations]);
 
-  // ---------- বাকি ডেটা প্রসেসিং ----------
+  // ---------- Status Counts ----------
   const total = appointments.length;
-
-  const pending = appointments.filter(a => a.status === 'pending').length;
-  const confirmed = appointments.filter(a => a.status === 'confirmed').length;
-  const checkedIn = appointments.filter(a => a.status === 'checked-in').length;
-  const completed = appointments.filter(a => a.status === 'completed').length;
-  const cancelled = appointments.filter(a => a.status === 'cancelled').length;
-  const noShow = appointments.filter(a => a.status === 'no-show').length;
+  const pending = appointments.filter((a) => a.status === 'pending').length;
+  const confirmed = appointments.filter((a) => a.status === 'confirmed').length;
+  const checkedIn = appointments.filter((a) => a.status === 'checked-in').length;
+  const completed = appointments.filter((a) => a.status === 'completed').length;
+  const cancelled = appointments.filter((a) => a.status === 'cancelled').length;
+  const noShow = appointments.filter((a) => a.status === 'no-show').length;
 
   const bookingToVisit = total > 0 ? ((completed + checkedIn) / total) * 100 : 0;
   const checkedInRate = total > 0 ? (checkedIn / total) * 100 : 0;
   const noShowRate = total > 0 ? (noShow / total) * 100 : 0;
   const cancellationRate = total > 0 ? (cancelled / total) * 100 : 0;
 
+  // ---------- Doctor Data ----------
   const doctorCounts = {};
-  appointments.forEach(a => { doctorCounts[a.doctorName] = (doctorCounts[a.doctorName] || 0) + 1; });
-  const doctorData = Object.entries(doctorCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+  appointments.forEach((a) => {
+    doctorCounts[a.doctorName] = (doctorCounts[a.doctorName] || 0) + 1;
+  });
+  const doctorData = Object.entries(doctorCounts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
 
+  // ---------- Department Data ----------
   const departmentCounts = {};
-  appointments.forEach(a => { departmentCounts[a.doctorDept || 'Unknown'] = (departmentCounts[a.doctorDept || 'Unknown'] || 0) + 1; });
-  const departmentData = Object.entries(departmentCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+  appointments.forEach((a) => {
+    departmentCounts[a.doctorDept || 'Unknown'] =
+      (departmentCounts[a.doctorDept || 'Unknown'] || 0) + 1;
+  });
+  const departmentData = Object.entries(departmentCounts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
 
+  // ---------- Age Data ----------
   const ageGroups = { '০-১২': 0, '১৩-২০': 0, '২১-৩০': 0, '৩১-৪০': 0, '৪১-৫০': 0, '৫০+': 0 };
-  appointments.forEach(a => {
+  appointments.forEach((a) => {
     if (a.age) {
       const age = Number(a.age);
       if (age <= 12) ageGroups['০-১২']++;
@@ -399,53 +429,85 @@ export default function Overview({ appointments }) {
   });
   const ageData = Object.entries(ageGroups).map(([name, count]) => ({ name, count }));
 
+  // ---------- Referral Data ----------
   const referralCounts = {};
-  appointments.forEach(a => { const src = a.referralSource || 'Unknown'; referralCounts[src] = (referralCounts[src] || 0) + 1; });
+  appointments.forEach((a) => {
+    const src = a.referralSource || 'Unknown';
+    referralCounts[src] = (referralCounts[src] || 0) + 1;
+  });
   const referralData = Object.entries(referralCounts).map(([name, value]) => ({ name, value }));
 
   const handleLocationClick = (locationName) => {
-    const locEntry = locationData.find(l => l.name === locationName);
+    const locEntry = locationData.find((l) => l.name === locationName);
     if (locEntry) {
       setDrillLocation(locationName);
       setDrillPatients(locEntry.patients || []);
     }
   };
 
-  const statusData = [
-    { name: 'Pending', value: pending },
-    { name: 'Confirmed', value: confirmed },
-    { name: 'Checked-in', value: checkedIn },
-    { name: 'Completed', value: completed },
-    { name: 'Cancelled', value: cancelled },
-    { name: 'No-show', value: noShow }
-  ];
+  // ✅ Status Data — stable with useMemo
+  const statusData = useMemo(
+    () => [
+      { name: 'Pending', value: pending },
+      { name: 'Confirmed', value: confirmed },
+      { name: 'Checked-in', value: checkedIn },
+      { name: 'Completed', value: completed },
+      { name: 'Cancelled', value: cancelled },
+      { name: 'No-show', value: noShow },
+    ],
+    [pending, confirmed, checkedIn, completed, cancelled, noShow]
+  );
+
+  // ✅ Category Data
+  const categoryPieData = useMemo(
+    () => [
+      { name: 'নতুন রোগী', value: categorizedCounts.new },
+      { name: 'রিপোর্ট (৭ দিন)', value: categorizedCounts.report },
+      { name: 'ফলোআপ (>৭ দিন)', value: categorizedCounts.followup },
+    ],
+    [categorizedCounts]
+  );
+
+  // ✅ Stable keys for Pie re-render (Recharts caching workaround)
+  const statusPieKey = useMemo(
+    () => `status-${statusData.map((d) => d.value).join('-')}`,
+    [statusData]
+  );
+  const referralPieKey = useMemo(
+    () => `ref-${referralData.map((d) => d.value).join('-')}`,
+    [referralData]
+  );
+  const categoryPieKey = useMemo(
+    () => `cat-${categorizedCounts.new}-${categorizedCounts.report}-${categorizedCounts.followup}`,
+    [categorizedCounts]
+  );
 
   const getLast7Days = () => {
     const days = [];
     const today = new Date();
     const banglaDays = ['রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহঃ', 'শুক্র', 'শনি'];
-    
+
     for (let i = 6; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(d.getDate() - i);
-      
+
       const year = d.getFullYear();
       const month = String(d.getMonth() + 1).padStart(2, '0');
       const day = String(d.getDate()).padStart(2, '0');
       const dateStr = `${year}-${month}-${day}`;
-      
+
       const dayIndex = d.getDay();
       const dayName = banglaDays[dayIndex === 0 ? 6 : dayIndex - 1];
-      
-      const count = appointments.filter(a => {
+
+      const count = appointments.filter((a) => {
         const apptDate = a.bookingDate ? a.bookingDate.split('T')[0] : '';
         return apptDate === dateStr;
       }).length;
-      
-      days.push({ 
-        name: dayName, 
+
+      days.push({
+        name: dayName,
         date: dateStr,
-        count: count 
+        count: count,
       });
     }
     return days;
@@ -456,7 +518,8 @@ export default function Overview({ appointments }) {
   const renderLegend = (value, entry) => {
     const totalValue = entry.payload.value;
     const percentage = total > 0 ? ((totalValue / total) * 100).toFixed(0) : 0;
-    const color = entry.payload.fill || STATUS_COLORS[entry.payload.name?.toLowerCase()] || '#64748b';
+    const color =
+      entry.payload.fill || STATUS_COLORS[entry.payload.name?.toLowerCase()] || '#64748b';
     return (
       <span style={{ color: '#475569', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}>
         <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', background: color }} />
@@ -476,21 +539,21 @@ export default function Overview({ appointments }) {
     { label: 'নতুন রোগী', value: categorizedCounts.new, color: '#22c55e', bg: 'rgba(34, 197, 94, 0.1)' },
     { label: 'রিপোর্ট (৭ দিন)', value: categorizedCounts.report, color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' },
     { label: 'ফলোআপ (>৭ দিন)', value: categorizedCounts.followup, color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.1)' },
-    { 
-      label: 'রিপিট রেট', 
-      value: total > 0 
-        ? (((categorizedCounts.report + categorizedCounts.followup) / total) * 100).toFixed(1) + '%' 
-        : '0%', 
-      color: '#8b5cf6', 
-      bg: 'rgba(139, 92, 246, 0.1)' 
-    }
+    {
+      label: 'রিপিট রেট',
+      value: total > 0
+        ? (((categorizedCounts.report + categorizedCounts.followup) / total) * 100).toFixed(1) + '%'
+        : '0%',
+      color: '#8b5cf6',
+      bg: 'rgba(139, 92, 246, 0.1)',
+    },
   ];
 
   const conversions = [
     { label: 'Booking to Visit', value: bookingToVisit.toFixed(1), color: '#22c55e', prefix: '%' },
     { label: 'Checked-in Rate', value: checkedInRate.toFixed(1), color: '#8b5cf6', prefix: '%' },
     { label: 'No-show Rate', value: noShowRate.toFixed(1), color: '#6b7280', prefix: '%' },
-    { label: 'Cancellation Rate', value: cancellationRate.toFixed(1), color: '#ef4444', prefix: '%' }
+    { label: 'Cancellation Rate', value: cancellationRate.toFixed(1), color: '#ef4444', prefix: '%' },
   ];
 
   if (loading) return <div style={{ padding: '20px', textAlign: 'center' }}>লোড হচ্ছে...</div>;
@@ -499,6 +562,7 @@ export default function Overview({ appointments }) {
     <div style={styles.dashboardContainer}>
       <style>{CSSString}</style>
 
+      {/* KPI Grid */}
       <div style={styles.kpiGrid}>
         {kpis.map((kpi, index) => (
           <div key={index} style={styles.kpiCard}>
@@ -513,21 +577,24 @@ export default function Overview({ appointments }) {
         ))}
       </div>
 
+      {/* Conversion Metrics */}
       <div style={styles.conversionCard}>
         <h4 style={styles.chartTitle}>কনভার্সন মেট্রিক্স</h4>
         <div style={styles.conversionGrid}>
           {conversions.map((conv, index) => (
             <div key={index} style={{ borderLeft: `4px solid ${conv.color}`, paddingLeft: '10px' }}>
               <strong style={{ color: '#475569', fontSize: '13px' }}>{conv.label}</strong>
-              <br/>
+              <br />
               <span style={{ fontSize: '24px', fontWeight: '800', color: conv.color }}>
-                {conv.value}{conv.prefix}
+                {conv.value}
+                {conv.prefix}
               </span>
             </div>
           ))}
         </div>
       </div>
 
+      {/* Row 1: Trend + Status Pie */}
       <div className="overview-main-grid">
         <div style={styles.chartCard}>
           <h4 style={styles.chartTitle}>সিরিয়াল ট্রেন্ড (গত ৭ দিন)</h4>
@@ -535,8 +602,8 @@ export default function Overview({ appointments }) {
             <AreaChart data={last7Days}>
               <defs>
                 <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#1c5fa8" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#1c5fa8" stopOpacity={0}/>
+                  <stop offset="5%" stopColor="#1c5fa8" stopOpacity={0.8} />
+                  <stop offset="95%" stopColor="#1c5fa8" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -548,11 +615,21 @@ export default function Overview({ appointments }) {
           </ResponsiveContainer>
         </div>
 
+        {/* ✅ Status Pie Chart — with dynamic KEY for reactivity */}
         <div style={styles.chartCard}>
           <h4 style={styles.chartTitle}>স্ট্যাটাস ডিস্ট্রিবিউশন</h4>
           <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie data={statusData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={5}>
+            <PieChart key={statusPieKey}>
+              <Pie
+                data={statusData}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius={50}
+                outerRadius={80}
+                paddingAngle={5}
+              >
                 {statusData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                 ))}
@@ -564,13 +641,25 @@ export default function Overview({ appointments }) {
         </div>
       </div>
 
+      {/* Row 2: Referral + Location */}
       <div className="overview-main-grid">
         <div style={styles.chartCard}>
           <h4 style={styles.chartTitle}>রেফারেল সোর্স</h4>
           <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie data={referralData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={5}>
-                {referralData.map((entry, index) => <Cell key={`cell-${index}`} fill={OTHER_COLORS[index % OTHER_COLORS.length]} />)}
+            <PieChart key={referralPieKey}>
+              <Pie
+                data={referralData}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius={50}
+                outerRadius={80}
+                paddingAngle={5}
+              >
+                {referralData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={OTHER_COLORS[index % OTHER_COLORS.length]} />
+                ))}
               </Pie>
               <Tooltip />
               <Legend verticalAlign="bottom" height={36} />
@@ -589,10 +678,10 @@ export default function Overview({ appointments }) {
               <XAxis type="number" tick={{ fontSize: 12 }} allowDecimals={false} />
               <YAxis type="category" dataKey="name" width={150} interval={0} tick={{ fontSize: 12, fill: '#334155' }} />
               <Tooltip />
-              <Bar 
-                dataKey="count" 
-                fill="#d97706" 
-                radius={[0, 5, 5, 0]} 
+              <Bar
+                dataKey="count"
+                fill="#d97706"
+                radius={[0, 5, 5, 0]}
                 barSize={20}
                 onClick={(data) => handleLocationClick(data.name)}
                 style={{ cursor: 'pointer' }}
@@ -607,7 +696,39 @@ export default function Overview({ appointments }) {
         </div>
       </div>
 
-      {/* লোকেশন ট্রেন্ড অ্যানালাইসিস */}
+      {/* ✅ NEW: Patient Category Pie Chart */}
+      <div style={styles.chartCard}>
+        <h4 style={styles.chartTitle}>রোগীর ক্যাটাগরি বিশ্লেষণ</h4>
+        <ResponsiveContainer width="100%" height={280}>
+          <PieChart key={categoryPieKey}>
+            <Pie
+              data={categoryPieData}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              innerRadius={55}
+              outerRadius={90}
+              paddingAngle={5}
+              label={({ name, value }) => `${name}: ${value}`}
+            >
+              {categoryPieData.map((entry, index) => (
+                <Cell
+                  key={`cell-${index}`}
+                  fill={['#22c55e', '#f59e0b', '#8b5cf6'][index % 3]}
+                />
+              ))}
+            </Pie>
+            <Tooltip />
+            <Legend verticalAlign="bottom" height={36} />
+          </PieChart>
+        </ResponsiveContainer>
+        <div style={{ fontSize: '12px', color: '#94a3b8', textAlign: 'center', marginTop: '8px' }}>
+          মোট {total} টি booking এর মধ্যে {categorizedCounts.new} নতুন, {categorizedCounts.report} রিপোর্ট, {categorizedCounts.followup} ফলোআপ
+        </div>
+      </div>
+
+      {/* Location Trend Analysis */}
       <div style={styles.chartCard}>
         <h4 style={styles.chartTitle}>
           <TrendingUp size={18} color="#1c5fa8" />
@@ -632,24 +753,24 @@ export default function Overview({ appointments }) {
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={trendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis 
-                dataKey="date" 
-                tick={{ fontSize: 12 }} 
-                interval={0} 
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 12 }}
+                interval={0}
                 tickFormatter={(value) => {
                   const d = new Date(value + 'T00:00:00');
                   return `${d.getDate().toString().padStart(2, '0')} ${d.toLocaleString('default', { month: 'short' })}`;
                 }}
               />
-              <YAxis 
-                tick={{ fontSize: 12 }} 
-                domain={[0, 'auto']} 
-                tickCount={6} 
+              <YAxis
+                tick={{ fontSize: 12 }}
+                domain={[0, 'auto']}
+                tickCount={6}
                 allowDecimals={false}
                 tickFormatter={(value) => Math.round(value).toString()}
                 label={{ value: 'রোগীর সংখ্যা', angle: -90, position: 'insideLeft', style: { fontSize: 13, fill: '#475569' } }}
               />
-              <Tooltip 
+              <Tooltip
                 content={({ active, payload, label }) => {
                   if (active && payload && payload.length) {
                     const dateObj = new Date(label + 'T00:00:00');
@@ -659,7 +780,10 @@ export default function Overview({ appointments }) {
                         <div style={{ fontWeight: '700', marginBottom: '8px', color: '#1e293b' }}>{dateStr}</div>
                         {payload.map((entry, idx) => (
                           <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', gap: '20px', fontSize: '13px', color: '#475569' }}>
-                            <span><span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', background: entry.color, marginRight: '6px' }} />{entry.name}:</span>
+                            <span>
+                              <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', background: entry.color, marginRight: '6px' }} />
+                              {entry.name}:
+                            </span>
                             <span style={{ fontWeight: '600', color: '#1e293b' }}>{Math.round(entry.value)} জন</span>
                           </div>
                         ))}
@@ -671,24 +795,17 @@ export default function Overview({ appointments }) {
               />
               <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '12px' }} />
               {locationData.slice(0, 5).map((loc, idx) => (
-                <Line 
-                  key={idx} 
-                  type="monotone" 
-                  dataKey={loc.name} 
-                  stroke={OTHER_COLORS[idx % OTHER_COLORS.length]} 
+                <Line
+                  key={idx}
+                  type="monotone"
+                  dataKey={loc.name}
+                  stroke={OTHER_COLORS[idx % OTHER_COLORS.length]}
                   strokeWidth={2}
                   dot={{ r: 3 }}
                   name={loc.name}
                 />
               ))}
-              <Line 
-                type="monotone" 
-                dataKey="total" 
-                stroke="#1c5fa8" 
-                strokeWidth={3} 
-                dot={{ r: 4 }}
-                name="সব"
-              />
+              <Line type="monotone" dataKey="total" stroke="#1c5fa8" strokeWidth={3} dot={{ r: 4 }} name="সব" />
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -697,6 +814,7 @@ export default function Overview({ appointments }) {
         </div>
       </div>
 
+      {/* Department + Age + Doctor */}
       <div className="overview-main-grid">
         <div style={styles.chartCard}>
           <h4 style={styles.chartTitle}>বিভাগভিত্তিক রোগী</h4>
@@ -745,10 +863,10 @@ export default function Overview({ appointments }) {
       </div>
 
       {drillLocation && (
-        <LocationDrillModal 
-          location={drillLocation} 
-          patients={drillPatients} 
-          onClose={() => setDrillLocation(null)} 
+        <LocationDrillModal
+          location={drillLocation}
+          patients={drillPatients}
+          onClose={() => setDrillLocation(null)}
         />
       )}
     </div>

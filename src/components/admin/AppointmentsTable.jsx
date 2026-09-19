@@ -1,5 +1,5 @@
 // src/components/admin/AppointmentsTable.jsx
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   CheckCircle,
   XCircle,
@@ -23,8 +23,10 @@ import {
 import { db, doc, getDoc, updateDoc } from '../../firebase';
 import { useHospital } from '../../context/HospitalContext';
 import { usePermission } from '../../context/PermissionContext';
-import { getAllPatients } from '../../services/patientService';
-import { updateAppointmentStatus } from '../../services/appointmentService';
+import {
+  invalidatePatientsCache,
+  subscribeToPatients,
+} from '../../services/patientService';
 import { logActivity, LOG_MODULES, LOG_ACTIONS } from '../../services/activityLogService';
 
 // ==================================================
@@ -106,6 +108,43 @@ const REFERRAL_SOURCES = [
 ];
 
 // ==================================================
+// ✅ Patient Type Calculator (Priority: Override → Computed)
+// ==================================================
+const calculatePatientType = (patient, appointment) => {
+  if (!appointment) return 'অজানা';
+
+  // ✅ Priority 1: Manual override stored on appointment
+  if (appointment.patientTypeOverride) {
+    return appointment.patientTypeOverride;
+  }
+
+  // Priority 2: Compute from patient visits
+  if (!patient) return 'অজানা';
+
+  const visits = patient.visits || [];
+  const doctorName = appointment.doctorName;
+
+  if (!doctorName) return 'অজানা';
+
+  const doctorVisits = visits.filter(
+    (v) => v.doctorName === doctorName && v.date < appointment.bookingDate
+  );
+
+  if (doctorVisits.length === 0) return 'নতুন';
+
+  const sorted = [...doctorVisits].sort(
+    (a, b) => new Date(b.date) - new Date(a.date)
+  );
+  const last = sorted[0];
+  const diffDays = Math.ceil(
+    Math.abs(new Date(last.date) - new Date(appointment.bookingDate)) /
+      (1000 * 60 * 60 * 24)
+  );
+
+  return diffDays <= 7 ? 'রিপোর্ট' : 'ফলোআপ';
+};
+
+// ==================================================
 // ✅ MAIN COMPONENT
 // ==================================================
 export default function AppointmentsTable({
@@ -129,9 +168,12 @@ export default function AppointmentsTable({
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({});
   const [patientTypes, setPatientTypes] = useState({});
+  const [allPatients, setAllPatients] = useState({});
   const [updatingPatient, setUpdatingPatient] = useState(null);
   const [updatingHighlight, setUpdatingHighlight] = useState(null);
   const [sortOrder, setSortOrder] = useState('desc');
+
+  const userModifiedRef = useRef(new Set());
 
   const [filterOfficer, setFilterOfficer] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -201,7 +243,6 @@ export default function AppointmentsTable({
     }
 
     filtered = [...filtered].sort((a, b) => {
-      // Archived view: sort by archivedAt
       if (isArchivedView) {
         const timeA =
           a.archivedAt?.toDate?.().getTime?.() ||
@@ -211,7 +252,6 @@ export default function AppointmentsTable({
           (b.archivedAt ? new Date(b.archivedAt).getTime() : 0);
         return sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
       }
-      // Active view: sort by createdAt
       const timeA = a.createdAt?.toDate
         ? a.createdAt.toDate().getTime()
         : a.timestamp
@@ -229,53 +269,58 @@ export default function AppointmentsTable({
   }, [appointments, searchTerm, filterOfficer, filterStatus, filterDoctor, sortOrder, isArchivedView]);
 
   // ==================================================
-  // ✅ Load Patient Types
+  // ✅ Real-time Patients Subscription
   // ==================================================
   useEffect(() => {
-    const loadPatientTypes = async () => {
-      if (!hospitalId) return;
-      try {
-        const allPatients = await getAllPatients(hospitalId);
-        const patientMap = {};
-        allPatients.forEach((p) => {
-          patientMap[p.id] = p;
-        });
+    if (!hospitalId) return;
 
-        const types = {};
-        for (const appt of filteredAppointments) {
-          if (appt.patientId && !types[appt.id]) {
-            const patient = patientMap[appt.patientId];
-            if (patient) {
-              const visits = patient.visits || [];
-              const doctorVisits = visits.filter(
-                (v) => v.doctorName === appt.doctorName && v.date < appt.bookingDate
-              );
-              if (doctorVisits.length === 0) types[appt.id] = 'নতুন';
-              else {
-                const sorted = [...doctorVisits].sort(
-                  (a, b) => new Date(b.date) - new Date(a.date)
-                );
-                const last = sorted[0];
-                const diffDays = Math.ceil(
-                  Math.abs(new Date(last.date) - new Date(appt.bookingDate)) /
-                    (1000 * 60 * 60 * 24)
-                );
-                types[appt.id] = diffDays <= 7 ? 'রিপোর্ট' : 'ফলোআপ';
-              }
-            } else {
-              types[appt.id] = 'অজানা';
-            }
-          }
-        }
-        setPatientTypes(types);
-      } catch (error) {
-        console.error('Patient types load error:', error);
+    invalidatePatientsCache();
+
+    const unsub = subscribeToPatients(
+      hospitalId,
+      (patients) => {
+        const map = {};
+        (patients || []).forEach((p) => {
+          map[p.id] = p;
+        });
+        setAllPatients(map);
+      },
+      (error) => {
+        console.error('❌ Patients subscription error:', error);
       }
+    );
+
+    return () => {
+      if (typeof unsub === 'function') unsub();
     };
-    if (filteredAppointments.length > 0) {
-      loadPatientTypes();
+  }, [hospitalId]);
+
+  // ==================================================
+  // ✅ Compute Patient Types
+  // ==================================================
+  useEffect(() => {
+    if (!filteredAppointments.length) return;
+
+    const types = {};
+    for (const appt of filteredAppointments) {
+      // ✅ If override exists on appointment, ALWAYS use it (highest priority)
+      if (appt.patientTypeOverride) {
+        types[appt.id] = appt.patientTypeOverride;
+        continue;
+      }
+
+      // Skip recently modified (during 5-sec window)
+      if (userModifiedRef.current.has(appt.id)) continue;
+
+      // Otherwise compute from patient visits
+      if (appt.patientId && Object.keys(allPatients).length > 0) {
+        const patient = allPatients[appt.patientId];
+        types[appt.id] = calculatePatientType(patient, appt);
+      }
     }
-  }, [filteredAppointments, hospitalId]);
+
+    setPatientTypes((prev) => ({ ...prev, ...types }));
+  }, [filteredAppointments, allPatients]);
 
   // ==================================================
   // ✅ Row Highlight Click
@@ -297,15 +342,11 @@ export default function AppointmentsTable({
   };
 
   // ==================================================
-  // ✅ Patient Type Change
+  // ✅ Patient Type Change — SAVES TO BOTH patient AND appointment
   // ==================================================
   const handleManualCategoryChange = async (appointmentId, patientId, newCategory) => {
     if (!canPatientTypeChange) {
       alert('❌ আপনার রোগীর টাইপ পরিবর্তন করার permission নেই।');
-      return;
-    }
-    if (!patientId) {
-      alert('এই রোগীর জন্য patientId পাওয়া যায়নি।');
       return;
     }
     if (!hospitalId) {
@@ -316,75 +357,137 @@ export default function AppointmentsTable({
     const oldCategory = patientTypes[appointmentId] || '—';
     const appointment = appointments.find((a) => a.id === appointmentId);
 
+    if (!appointment) {
+      alert('অ্যাপয়েন্টমেন্ট পাওয়া যায়নি।');
+      return;
+    }
+
+    // ✅ Mark as user-modified
+    userModifiedRef.current.add(appointmentId);
+    setTimeout(() => {
+      userModifiedRef.current.delete(appointmentId);
+    }, 8000);
+
+    // ✅ Optimistic UI update
+    setPatientTypes((prev) => ({ ...prev, [appointmentId]: newCategory }));
+
     try {
       setUpdatingPatient(appointmentId);
 
-      const patientRef = doc(db, 'hospitals', hospitalId, 'patients', patientId);
-      const patientSnap = await getDoc(patientRef);
+      const now = new Date().toISOString();
 
-      if (!patientSnap.exists()) {
-        alert('রোগী পাওয়া যায়নি।');
-        return;
-      }
+      // ==================================================
+      // ✅ STEP 1: Save override ON THE APPOINTMENT (primary persistence)
+      // ==================================================
+      const appointmentRef = doc(
+        db,
+        'hospitals',
+        hospitalId,
+        'appointments',
+        appointmentId
+      );
 
-      const patient = patientSnap.data();
-      let visits = patient.visits || [];
-      if (!appointment) {
-        alert('অ্যাপয়েন্টমেন্ট পাওয়া যায়নি।');
-        return;
-      }
-      const doctorName = appointment.doctorName || '';
-
-      if (!doctorName) {
-        alert('ডাক্তারের নাম পাওয়া যায়নি।');
-        return;
-      }
-
-      if (newCategory === 'নতুন') {
-        visits = visits.filter((v) => v.doctorName !== doctorName);
-      } else if (newCategory === 'রিপোর্ট') {
-        const doctorVisits = visits.filter((v) => v.doctorName === doctorName);
-        if (doctorVisits.length === 0) {
-          const yesterday = new Date();
-          yesterday.setDate(yesterday.getDate() - 1);
-          visits.push({ doctorName, date: yesterday.toISOString().split('T')[0] });
-        } else {
-          const sorted = [...doctorVisits].sort((a, b) => new Date(b.date) - new Date(a.date));
-          const last = sorted[0];
-          const diffDays = Math.ceil(
-            Math.abs(new Date(last.date) - new Date()) / (1000 * 60 * 60 * 24)
-          );
-          if (diffDays > 7) {
-            const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
-            last.date = yesterday.toISOString().split('T')[0];
-          }
-        }
-      } else if (newCategory === 'ফলোআপ') {
-        const doctorVisits = visits.filter((v) => v.doctorName === doctorName);
-        if (doctorVisits.length === 0) {
-          const eightDaysAgo = new Date();
-          eightDaysAgo.setDate(eightDaysAgo.getDate() - 8);
-          visits.push({ doctorName, date: eightDaysAgo.toISOString().split('T')[0] });
-        } else {
-          const sorted = [...doctorVisits].sort((a, b) => new Date(b.date) - new Date(a.date));
-          const last = sorted[0];
-          const diffDays = Math.ceil(
-            Math.abs(new Date(last.date) - new Date()) / (1000 * 60 * 60 * 24)
-          );
-          if (diffDays <= 7) {
-            const eightDaysAgo = new Date();
-            eightDaysAgo.setDate(eightDaysAgo.getDate() - 8);
-            last.date = eightDaysAgo.toISOString().split('T')[0];
-          }
-        }
-      }
-
-      await updateDoc(patientRef, {
-        visits: visits,
-        updatedAt: new Date().toISOString(),
+      await updateDoc(appointmentRef, {
+        patientTypeOverride: newCategory,
+        patientTypeOverrideAt: now,
+        patientTypeOverrideBy: user?.uid || user?.id || null,
       });
 
+      console.log(`✅ Appointment override saved: ${appointmentId} → ${newCategory}`);
+
+      // ==================================================
+      // ✅ STEP 2: Also update patient's visits (for history) — best effort
+      // ==================================================
+      if (patientId) {
+        try {
+          const patientRef = doc(db, 'hospitals', hospitalId, 'patients', patientId);
+          const patientSnap = await getDoc(patientRef);
+
+          if (patientSnap.exists()) {
+            const patient = patientSnap.data();
+            let visits = Array.isArray(patient.visits) ? [...patient.visits] : [];
+            const doctorName = appointment.doctorName || '';
+
+            if (doctorName) {
+              if (newCategory === 'নতুন') {
+                visits = visits.filter((v) => v.doctorName !== doctorName);
+              } else if (newCategory === 'রিপোর্ট') {
+                const doctorVisits = visits.filter((v) => v.doctorName === doctorName);
+                if (doctorVisits.length === 0) {
+                  const yesterday = new Date();
+                  yesterday.setDate(yesterday.getDate() - 1);
+                  visits.push({
+                    doctorName,
+                    date: yesterday.toISOString().split('T')[0],
+                  });
+                } else {
+                  const sorted = [...doctorVisits].sort(
+                    (a, b) => new Date(b.date) - new Date(a.date)
+                  );
+                  const last = sorted[0];
+                  const diffDays = Math.ceil(
+                    Math.abs(new Date(last.date) - new Date()) / (1000 * 60 * 60 * 24)
+                  );
+                  if (diffDays > 7) {
+                    const yesterday = new Date();
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    last.date = yesterday.toISOString().split('T')[0];
+                  }
+                }
+              } else if (newCategory === 'ফলোআপ') {
+                const doctorVisits = visits.filter((v) => v.doctorName === doctorName);
+                if (doctorVisits.length === 0) {
+                  const eightDaysAgo = new Date();
+                  eightDaysAgo.setDate(eightDaysAgo.getDate() - 8);
+                  visits.push({
+                    doctorName,
+                    date: eightDaysAgo.toISOString().split('T')[0],
+                  });
+                } else {
+                  const sorted = [...doctorVisits].sort(
+                    (a, b) => new Date(b.date) - new Date(a.date)
+                  );
+                  const last = sorted[0];
+                  const diffDays = Math.ceil(
+                    Math.abs(new Date(last.date) - new Date()) / (1000 * 60 * 60 * 24)
+                  );
+                  if (diffDays <= 7) {
+                    const eightDaysAgo = new Date();
+                    eightDaysAgo.setDate(eightDaysAgo.getDate() - 8);
+                    last.date = eightDaysAgo.toISOString().split('T')[0];
+                  }
+                }
+              }
+
+              await updateDoc(patientRef, {
+                visits: visits,
+                updatedAt: now,
+              });
+
+              invalidatePatientsCache();
+
+              // Optimistic update
+              setAllPatients((prev) => ({
+                ...prev,
+                [patientId]: {
+                  ...prev[patientId],
+                  visits: visits,
+                  updatedAt: now,
+                },
+              }));
+
+              console.log(`✅ Patient visits updated: ${patientId}`);
+            }
+          }
+        } catch (patientErr) {
+          // Best-effort — override on appointment is the primary source of truth
+          console.warn('⚠️ Patient visits update failed (non-critical):', patientErr.message);
+        }
+      }
+
+      // ==================================================
+      // ✅ STEP 3: Activity Log
+      // ==================================================
       try {
         await logActivity({
           hospitalId,
@@ -400,8 +503,9 @@ export default function AppointmentsTable({
         console.error('Patient type log error:', logErr);
       }
 
-      setPatientTypes((prev) => ({ ...prev, [appointmentId]: newCategory }));
-
+      // ==================================================
+      // ✅ STEP 4: Parent refresh (optional)
+      // ==================================================
       if (onAppointmentsChange) {
         try {
           await onAppointmentsChange();
@@ -410,10 +514,12 @@ export default function AppointmentsTable({
         }
       }
 
-      alert(`রোগীর টাইপ "${newCategory}" এ পরিবর্তন করা হয়েছে।`);
+      console.log(`✅ Patient type change completed: ${appointmentId} → ${newCategory}`);
     } catch (error) {
-      console.error('Error updating patient category:', error);
-      alert('রোগীর টাইপ পরিবর্তন করতে সমস্যা হয়েছে।');
+      console.error('❌ Error updating patient category:', error);
+      alert('রোগীর টাইপ পরিবর্তন করতে সমস্যা হয়েছে: ' + (error.message || 'Unknown error'));
+      // Revert on error
+      setPatientTypes((prev) => ({ ...prev, [appointmentId]: oldCategory }));
     } finally {
       setUpdatingPatient(null);
     }
@@ -482,7 +588,6 @@ export default function AppointmentsTable({
 
       await updateDoc(doc(db, 'hospitals', hospitalId, 'appointments', id), updates);
 
-      // Marketing Officer change log
       const oldOffId = oldAppt.marketingOfficerId || '';
       const newOffId = editData.marketingOfficerId || '';
       if (canMarketingAssign && oldOffId !== newOffId) {
@@ -681,12 +786,11 @@ export default function AppointmentsTable({
   };
 
   // ==================================================
-  // ✅ Render Actions – Permission-based
+  // ✅ Render Actions
   // ==================================================
   const renderActions = (appt) => {
     const actions = [];
 
-    // ✅ View – সবসময় দেখাবে (booking.view থাকলে)
     actions.push(
       <ActionButton
         key="view"
@@ -697,7 +801,6 @@ export default function AppointmentsTable({
       />
     );
 
-    // ============ ARCHIVED VIEW ============
     if (isArchivedView) {
       if (canRestore) {
         actions.push(
@@ -724,11 +827,9 @@ export default function AppointmentsTable({
       return actions;
     }
 
-    // ============ ACTIVE VIEW ============
     const currentStatus = appt.status || 'pending';
     const nextStatuses = validTransitions[currentStatus] || [];
 
-    // QR – pending/confirmed + permission
     if ((currentStatus === 'pending' || currentStatus === 'confirmed') && canQR) {
       actions.push(
         <ActionButton
@@ -741,7 +842,6 @@ export default function AppointmentsTable({
       );
     }
 
-    // Status change buttons
     if (canStatusChange) {
       if (currentStatus === 'pending') {
         actions.push(
@@ -803,7 +903,6 @@ export default function AppointmentsTable({
       }
     }
 
-    // ✅ ARCHIVE button
     if (canArchive) {
       actions.push(
         <ActionButton
@@ -816,7 +915,6 @@ export default function AppointmentsTable({
       );
     }
 
-    // Manual status dropdown
     if (canStatusChange && nextStatuses.length > 0) {
       actions.push(
         <select
@@ -847,9 +945,6 @@ export default function AppointmentsTable({
     return actions;
   };
 
-  // ==================================================
-  // ✅ No Permission Block
-  // ==================================================
   if (!canView) {
     return (
       <div
@@ -931,7 +1026,6 @@ export default function AppointmentsTable({
             />
           </div>
 
-          {/* ✅ Officer filter – শুধু active view এ */}
           {!isArchivedView && (
             <select
               value={filterOfficer}
@@ -1034,7 +1128,6 @@ export default function AppointmentsTable({
             {sortOrder === 'asc' ? 'পুরনো→নতুন' : 'নতুন→পুরনো'}
           </button>
 
-          {/* ✅ View mode toggle – শুধু active view এ */}
           {!isArchivedView && (
             <div
               style={{
@@ -1170,7 +1263,7 @@ export default function AppointmentsTable({
           )}
         </div>
       ) : viewMode === 'list' || isArchivedView ? (
-        // ============ LIST VIEW (both active & archived) ============
+        // ============ LIST VIEW ============
         <div style={{ overflowX: 'auto' }}>
           <table
             style={{
@@ -1215,7 +1308,6 @@ export default function AppointmentsTable({
                 const isUpdating = updatingPatient === appt.id;
                 const isNew = appt.isNew === true && !isArchivedView;
 
-                // Archived date formatter
                 const archivedDate = appt.archivedAt?.toDate
                   ? appt.archivedAt.toDate().toLocaleDateString('bn-BD')
                   : appt.archivedAt
@@ -1270,7 +1362,6 @@ export default function AppointmentsTable({
                       )}
                     </td>
 
-                    {/* Referral */}
                     <td style={{ padding: '12px' }}>
                       {isEditing && canReferralEdit && !isArchivedView ? (
                         <select
@@ -1296,7 +1387,6 @@ export default function AppointmentsTable({
                       )}
                     </td>
 
-                    {/* Marketing Officer – শুধু active view এ */}
                     {!isArchivedView && (
                       <td style={{ padding: '12px' }}>
                         {isEditing && canMarketingAssign ? (
@@ -1348,7 +1438,7 @@ export default function AppointmentsTable({
                       </td>
                     )}
 
-                    {/* Patient Type */}
+                    {/* Patient Type — Now with override priority */}
                     <td style={{ padding: '12px' }}>
                       {canPatientTypeChange && appt.patientId && !isArchivedView ? (
                         <select
@@ -1420,13 +1510,14 @@ export default function AppointmentsTable({
                         </span>
                       )}
                       {isUpdating && (
-                        <span style={{ fontSize: '11px', color: '#64748b', marginLeft: '6px' }}>
+                        <span
+                          style={{ fontSize: '11px', color: '#64748b', marginLeft: '6px' }}
+                        >
                           ⏳
                         </span>
                       )}
                     </td>
 
-                    {/* Remarks – শুধু active view এ */}
                     {!isArchivedView && (
                       <td style={{ padding: '12px', minWidth: '150px' }}>
                         {isEditing && canReferralEdit ? (
@@ -1494,12 +1585,10 @@ export default function AppointmentsTable({
                       </td>
                     )}
 
-                    {/* Status */}
                     <td style={{ padding: '12px' }}>
                       <StatusBadge status={appt.status || 'pending'} />
                     </td>
 
-                    {/* Archived date – শুধু archived view এ */}
                     {isArchivedView && (
                       <td
                         style={{
@@ -1513,7 +1602,6 @@ export default function AppointmentsTable({
                       </td>
                     )}
 
-                    {/* Actions */}
                     <td
                       style={{
                         padding: '12px',
@@ -1532,7 +1620,7 @@ export default function AppointmentsTable({
           </table>
         </div>
       ) : (
-        // ============ DOCTOR-WISE VIEW (active only) ============
+        // ============ DOCTOR-WISE VIEW ============
         <div>
           {Object.keys(doctorWiseData).length === 0 ? (
             <div style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>
@@ -1865,7 +1953,7 @@ export default function AppointmentsTable({
                 <strong>রোগীর টাইপ:</strong>
                 <br />
                 <span style={{ fontWeight: '700' }}>
-                  {patientTypes[viewDetails.id] || 'অজানা'}
+                  {viewDetails.patientTypeOverride || patientTypes[viewDetails.id] || 'অজানা'}
                 </span>
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
@@ -1879,10 +1967,16 @@ export default function AppointmentsTable({
                 <StatusBadge status={viewDetails.status || 'pending'} />
               </div>
 
-              {/* ✅ Archived metadata – শুধু archived view এ */}
               {isArchivedView && (
                 <>
-                  <div style={{ gridColumn: '1 / -1', marginTop: '8px', borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
+                  <div
+                    style={{
+                      gridColumn: '1 / -1',
+                      marginTop: '8px',
+                      borderTop: '1px solid #e2e8f0',
+                      paddingTop: '12px',
+                    }}
+                  >
                     <strong style={{ color: '#d97706' }}>📦 আর্কাইভ তথ্য</strong>
                   </div>
                   <div>
