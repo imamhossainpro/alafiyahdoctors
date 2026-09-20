@@ -1,7 +1,7 @@
 // src/components/QueueDisplay.jsx
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { db, collection, onSnapshot, query, where, doc, getDoc, getDocs, setDoc } from '../firebase';
-import { QueueDisplaySkeleton } from '../ui/SkeletonScreens';
+import { QueueDisplaySkeleton } from './ui/SkeletonScreens';
 
 const HOSPITAL_PATH = 'hospitals/alafiyah_main';
 
