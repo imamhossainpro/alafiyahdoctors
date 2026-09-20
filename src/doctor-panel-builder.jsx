@@ -966,17 +966,45 @@ export default function DoctorPanelBuilder() {
         console.log('📂 ডিপার্টমেন্ট পাওয়া গেছে:', depts.length);
         setDepartments(depts);
 
-       // প্যানেল লোড (sorted by order)
-          const panelSnapshot = await getDocs(collection(db, 'hospitals', hid, 'panels'));
-          let panelList = panelSnapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() }))
-            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)); {
-          const defaultPanel = { id: 'শনিবার', name: 'শনিবার', title: 'শনিবারের ডক্টরস প্যানেল', activeDoctorIds: [] };
+       // ==================================================
+      // ✅ প্যানেল লোড (with detailed logging)
+      // ==================================================
+      console.log('📂 Panels লোড শুরু হচ্ছে...');
+      const panelSnapshot = await getDocs(collection(db, 'hospitals', hid, 'panels'));
+      console.log(`📂 Panel documents পাওয়া গেছে: ${panelSnapshot.size} টি`);
+
+      let panelList = panelSnapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data() 
+      }));
+
+      console.log('📂 Panel List:', panelList);
+
+      // যদি কোনো panel না থাকে — default তৈরি করি
+      if (panelList.length === 0) {
+        console.log('⚠️ কোনো panel নেই — default "শনিবার" তৈরি করছি...');
+        const defaultPanel = { 
+          id: 'শনিবার', 
+          name: 'শনিবার', 
+          title: 'শনিবারের ডক্টরস প্যানেল', 
+          activeDoctorIds: [] 
+        };
+        try {
           await setDoc(doc(db, 'hospitals', hid, 'panels', 'শনিবার'), defaultPanel);
+          console.log('✅ Default panel তৈরি হয়েছে');
+          panelList = [defaultPanel];
+        } catch (err) {
+          console.error('❌ Default panel তৈরিতে সমস্যা:', err);
+          // তবুও memory তে রাখি যাতে UI তে দেখায়
           panelList = [defaultPanel];
         }
-        setPanels(panelList);
+      }
 
+      // ✅ Sort by order (নতুন field)
+      panelList.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+      console.log(`✅ panels state এ setting: ${panelList.length} টি panel`);
+      setPanels(panelList);
         // ফুটার লোড
         const footerRef = doc(db, 'hospitals', hid, 'footer', 'data');
         const footerSnap = await getDoc(footerRef);
