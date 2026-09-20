@@ -281,7 +281,9 @@ const exportOfficerPDF = async (officer, filteredBookings, dateRange) => {
 
     const thead = document.createElement('thead');
     const headerRow = document.createElement('tr');
-    ['ক্রমিক নং', 'তারিখ', 'রোগীর নাম', 'ডাক্তার', 'মোবাইল', 'স্ট্যাটাস'].forEach((text) => {
+    
+    // ✅ হেডারে "রেফার" কলাম যুক্ত করা হয়েছে
+    ['ক্রমিক নং', 'তারিখ', 'রোগীর নাম', 'ডাক্তার', 'মোবাইল', 'রেফার', 'স্ট্যাটাস'].forEach((text) => {
       const th = document.createElement('th');
       th.textContent = text;
       th.style.padding = '10px';
@@ -303,12 +305,14 @@ const exportOfficerPDF = async (officer, filteredBookings, dateRange) => {
         : (a.status || '').toLowerCase() === 'completed' ? 'Completed'
         : a.status || '-';
 
+      // ✅ ডেটার মধ্যে "রেফার" (a.remarks) যুক্ত করা হয়েছে
       [
         (index + 1).toString(),
         isoToDisplay(normalizeBookingDate(a.bookingDate)),   // ✅ DD-MM-YYYY
         a.name || '-',
         a.doctorName || '-',
         a.mobile || '-',
+        a.remarks || '-',  // 👈 এখানে বুকিং লিস্টের রিমার্কস (remarks) বসবে
         statusText,
       ].forEach((text) => {
         const td = document.createElement('td');
