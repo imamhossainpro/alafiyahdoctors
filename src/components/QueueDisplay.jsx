@@ -1,6 +1,7 @@
 // src/components/QueueDisplay.jsx
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { db, collection, onSnapshot, query, where, doc, getDoc, getDocs, setDoc } from '../firebase';
+import { QueueDisplaySkeleton } from '../ui/SkeletonScreens';
 
 const HOSPITAL_PATH = 'hospitals/alafiyah_main';
 
@@ -803,24 +804,8 @@ useEffect(() => {
   // ✅ 11. Loading / Display-off / Empty states
   // ==========================================
   if (!settingsLoaded) {
-    return (
-      <div className="tv-display">
-        <style>{QueueCSS}</style>
-        <div className="tv-header">
-          <img src="/logo.png" alt="Logo" />
-          <div className="tv-datetime">
-            <span>{currentTime.toLocaleDateString('bn-BD', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
-            {' | '}
-            <span>{currentTime.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-          </div>
-        </div>
-        <div className="display-off-container">
-          <div className="display-off-icon">⏳</div>
-          <div className="display-off-title">লোড হচ্ছে...</div>
-        </div>
-      </div>
-    );
-  }
+  return <QueueDisplaySkeleton />;
+}
 
   if (!displayActive) {
     return (

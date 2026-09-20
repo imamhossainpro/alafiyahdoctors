@@ -1,5 +1,6 @@
 // src/components/admin/Overview.jsx
 import React, { useState, useEffect, useMemo } from 'react';
+import { OverviewSkeleton } from '../ui/SkeletonScreens';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, PieChart, Pie, Cell, Legend, LabelList,
@@ -139,6 +140,15 @@ const CSSString = `
   }
   .location-trend-selector button:hover:not(.active) {
     background: #f1f5f9;
+  }
+
+  /* ✅ Content fade-in animation */
+  @keyframes overview-fade-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .content-fade-in {
+    animation: overview-fade-in 0.5s ease both;
   }
 `;
 
@@ -556,10 +566,12 @@ export default function Overview({ appointments }) {
     { label: 'Cancellation Rate', value: cancellationRate.toFixed(1), color: '#ef4444', prefix: '%' },
   ];
 
-  if (loading) return <div style={{ padding: '20px', textAlign: 'center' }}>লোড হচ্ছে...</div>;
+  // ✅ Loading state — Skeleton Screen
+  if (loading) return <OverviewSkeleton />;
 
+  // ✅ Loaded state — content fade-in animation সহ
   return (
-    <div style={styles.dashboardContainer}>
+    <div style={styles.dashboardContainer} className="content-fade-in">
       <style>{CSSString}</style>
 
       {/* KPI Grid */}

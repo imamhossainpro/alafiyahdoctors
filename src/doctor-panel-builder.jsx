@@ -1,6 +1,7 @@
 // src/doctor-panel-builder.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { AppShellSkeleton } from './components/ui/SkeletonScreens';
 import {
   Plus, Ear, Trash2, Pencil, Printer, X, ChevronUp, ChevronDown, ChevronLeft, MapPin, Globe, Phone, Loader2,
   Stethoscope, Scissors, Heart, Baby, Bone, Syringe, Pill, Activity, Brain, Eye, Utensils, Smile, Sparkles, User, Droplet, Thermometer, LogOut,
@@ -317,7 +318,7 @@ function SaveIndicator({ status }) {
 
 function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
   return (
-    <div className="edit-panel">
+    <div className="edit-panel content-fade-in" style={styles.dashboardContainer}>
       <section className="panel-section">
         <div className="section-header"><label>ইউজার ম্যানেজমেন্ট</label></div>
         <div className="section-hint">রেজিস্ট্রেশন করা ইউজারদের এপ্রুভ, রোল সেট ও ডিলিট করুন।</div>
@@ -1274,12 +1275,13 @@ export default function DoctorPanelBuilder() {
   };
 
   if (loading) {
-    return (
-      <div className="dpb"><style>{CSS}</style>
-        <div className="loading-screen"><Loader2 className="spin" size={26} /><span>লোড হচ্ছে...</span></div>
-      </div>
-    );
-  }
+  return (
+    <>
+      <style>{CSS}</style>
+      <AppShellSkeleton />
+    </>
+  );
+}
 
   if (!getIsAuthorized()) return <NotFoundPage />;
 

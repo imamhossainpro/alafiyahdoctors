@@ -1,5 +1,6 @@
 // src/components/admin/PatientMoveModal.jsx
 import React, { useState, useEffect } from 'react';
+import { SimpleListSkeleton } from '../ui/SkeletonScreens';
 import {
   X,
   Loader2,
@@ -491,16 +492,10 @@ const PatientMoveModal = ({ isOpen, onClose, currentLocation, onSuccess }) => {
           </div>
 
           {/* List */}
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: '30px' }}>
-              <Loader2
-                size={24}
-                style={{ animation: 'spin 1s linear infinite', margin: '0 auto' }}
-              />
-              <p>Appointment লোড হচ্ছে...</p>
-            </div>
-          ) : appointments.length === 0 ? (
-            <div
+              {loading ? (
+                <SimpleListSkeleton rows={5} />
+              ) : appointments.length === 0 ? (
+                <div
               style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}
             >
               {allAppointments.length === 0 ? (

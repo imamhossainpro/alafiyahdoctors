@@ -1,5 +1,6 @@
 // src/components/AdminDashboard.jsx
 import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import { OverviewSkeleton } from './ui/SkeletonScreens';
 import { useHospital } from '../context/HospitalContext';
 import { useAuth } from '../context/AuthContext';
 import { usePermission } from '../context/PermissionContext';
@@ -426,25 +427,7 @@ export default function AdminDashboard({ user: propUser }) {
   // ==================================================
   // ✅ Loading State
   // ==================================================
-  if (loading) {
-    return (
-      <div style={{ padding: '60px 20px', textAlign: 'center', color: '#64748b' }}>
-        <div
-          style={{
-            display: 'inline-block',
-            width: '36px',
-            height: '36px',
-            border: '3px solid #e2e8f0',
-            borderTopColor: '#1c5fa8',
-            borderRadius: '50%',
-            animation: 'spin 0.8s linear infinite',
-          }}
-        />
-        <p style={{ marginTop: '12px', fontSize: '15px' }}>📊 ডেটা লোড হচ্ছে...</p>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
-  }
+  if (loading) return <OverviewSkeleton />;
 
   if (error) {
     return <div style={{ padding: '20px', color: '#dc2626' }}>❌ Error: {error}</div>;

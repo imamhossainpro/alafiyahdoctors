@@ -1,5 +1,6 @@
 // src/components/admin/AppointmentsTable.jsx
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { AppointmentsTableSkeleton } from '../ui/SkeletonScreens';
 import {
   CheckCircle,
   XCircle,
@@ -175,6 +176,9 @@ export default function AppointmentsTable({
 
   const userModifiedRef = useRef(new Set());
 
+  // ✅ Skeleton loading state
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
+
   const [filterOfficer, setFilterOfficer] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterDoctor, setFilterDoctor] = useState('all');
@@ -267,6 +271,20 @@ export default function AppointmentsTable({
 
     return filtered;
   }, [appointments, searchTerm, filterOfficer, filterStatus, filterDoctor, sortOrder, isArchivedView]);
+
+  // ==================================================
+  // ✅ Initial Load Detection (for skeleton)
+  // ==================================================
+  useEffect(() => {
+    // If data arrives → mark loaded
+    if (appointments.length > 0) {
+      setInitialLoadDone(true);
+      return;
+    }
+    // Otherwise, wait 800ms — if still empty, assume truly empty
+    const timer = setTimeout(() => setInitialLoadDone(true), 800);
+    return () => clearTimeout(timer);
+  }, [appointments]);
 
   // ==================================================
   // ✅ Real-time Patients Subscription
@@ -968,6 +986,7 @@ export default function AppointmentsTable({
   // ==================================================
   return (
     <div
+      className={initialLoadDone ? 'content-fade-in' : ''}
       style={{
         background: '#ffffff',
         borderRadius: '10px',
@@ -1240,8 +1259,10 @@ export default function AppointmentsTable({
         </div>
       )}
 
-      {/* Empty state */}
-      {appointments.length === 0 ? (
+      {/* ✅ Skeleton while loading, Empty state, or Table */}
+      {!initialLoadDone ? (
+        <AppointmentsTableSkeleton rows={isArchivedView ? 5 : 8} />
+      ) : appointments.length === 0 ? (
         <div style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
           {isArchivedView ? (
             <>
