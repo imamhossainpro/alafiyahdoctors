@@ -318,7 +318,7 @@ function SaveIndicator({ status }) {
 
 function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
   return (
-    <div className="edit-panel content-fade-in" style={styles.dashboardContainer}>
+    <div className="edit-panel content-fade-in" style={{ padding: '20px' }}>
       <section className="panel-section">
         <div className="section-header"><label>ইউজার ম্যানেজমেন্ট</label></div>
         <div className="section-hint">রেজিস্ট্রেশন করা ইউজারদের এপ্রুভ, রোল সেট ও ডিলিট করুন।</div>
