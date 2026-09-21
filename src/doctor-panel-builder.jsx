@@ -1307,12 +1307,10 @@ export default function DoctorPanelBuilder() {
   useEffect(() => {
     const loadData = async () => {
       const hid = hospitalId || 'alafiyah_main';
-      console.log('🏥 হাসপাতাল আইডি:', hid);
       setLoading(true);
       try {
         const deptSnapshot = await getDocs(collection(db, 'hospitals', hid, 'departments'));
         const depts = deptSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-        console.log('📂 ডিপার্টমেন্ট পাওয়া গেছে:', depts.length);
         setDepartments(depts);
 
         const panelSnapshot = await getDocs(collection(db, 'hospitals', hid, 'panels'));
@@ -1322,14 +1320,12 @@ export default function DoctorPanelBuilder() {
           const bi = DAY_NAMES.indexOf(b.name);
           return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
         });
-        console.log('📅 Sorted Panels:', panelList.map(p => p.name));
 
         if (panelList.length === 0) {
           const defaultPanel = { id: 'শনিবার', name: 'শনিবার', title: 'শনিবারের ডক্টরস প্যানেল', activeDoctorIds: [] };
           await setDoc(doc(db, 'hospitals', hid, 'panels', 'শনিবার'), defaultPanel);
           panelList = [defaultPanel];
         }
-        console.log(`✅ panels state এ setting: ${panelList.length} টি panel`);
         setPanels(panelList);
 
         const footerRef = doc(db, 'hospitals', hid, 'footer', 'data');
@@ -1360,14 +1356,12 @@ export default function DoctorPanelBuilder() {
     if (!isAdmin || !hospitalId) { setAllUsers([]); return; }
     const loadUsers = async () => {
       try {
-        console.log("🔄 অ্যাডমিন ইউজার লোড হচ্ছে, hospitalId:", hospitalId);
         const usersRef = collection(db, 'hospitals', hospitalId, 'users');
         const usersSnapshot = await getDocs(usersRef);
         const usersList = usersSnapshot.docs.map(doc => {
           const data = doc.data();
           return { id: doc.id, ...data, name: data.name || data.displayName || 'নাম নেই', designation: data.designation || data.role || '' };
         });
-        console.log("✅ ইউজার পাওয়া গেছে:", usersList.length);
         setAllUsers(usersList);
       } catch (error) {
         console.error('❌ ইউজার লোড error:', error);
@@ -1389,7 +1383,6 @@ export default function DoctorPanelBuilder() {
         batch.set(ref, { ...deptData, order: index });
       });
       await batch.commit();
-      console.log('✅ Departments saved with order:', newDepts.length);
     } catch (error) { console.error('saveDepartments error:', error); }
   };
 

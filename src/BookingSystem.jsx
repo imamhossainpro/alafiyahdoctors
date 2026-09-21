@@ -197,10 +197,6 @@ export default function BookingSystem({ departments, panels, onBack }) {
   const hospitalId = currentHospital?.id || DEFAULT_HOSPITAL_ID;
   const { user } = useAuth();
 
-  console.log('🏥 BookingSystem -> hospitalId:', hospitalId);
-  console.log('📂 Departments:', departments?.length || 0);
-  console.log('📂 Panels:', panels?.length || 0);
-
   const [formData, setFormData] = useState({
     name: '',
     age: '',
@@ -225,8 +221,6 @@ export default function BookingSystem({ departments, panels, onBack }) {
   const [bookedSerialNo, setBookedSerialNo] = useState(null);
 
   useEffect(() => {
-    console.log('🔄 useEffect চলছে... selectedDate:', selectedDate);
-
     if (!panels || panels.length === 0) {
       console.warn('⚠️ Panels খালি বা undefined');
       setAvailableDoctors([]);
@@ -386,9 +380,6 @@ export default function BookingSystem({ departments, panels, onBack }) {
         });
       }
 
-      console.log(
-        `🔢 Serial: ${serialNo} | Doctor: ${selectedDoctor.name} (${selectedDoctor.id}) | Date: ${bookingDateStr}`
-      );
 
       // ==================================================
       // ৩. Appointment তৈরি
@@ -420,7 +411,6 @@ export default function BookingSystem({ departments, panels, onBack }) {
       );
       setAppointmentId(docRef.id);
       setBookedSerialNo(serialNo);
-      console.log('✅ Appointment created:', docRef.id, '| Serial:', serialNo);
 
       // ---------- Location save ----------
       if (formData.address && formData.address.trim()) {
