@@ -309,6 +309,165 @@ const CSS = `
 
 .dpb .doctor-entry,.dpb .doctor-row,.dpb .doctor-name,.dpb .doctor-quals,.dpb .doctor-specialty,.dpb .doctor-workplace,.dpb .doctor-time-slots,.dpb .doctor-row-name,.dpb .doctor-row-specialty { text-align: left !important; }
 
+/* ==================================================
+   📱 MOBILE RESPONSIVE — Tabs পাশাপাশি দেখানোর জন্য
+   ================================================== */
+
+/* ---------- Tablet (max-width: 900px) ---------- */
+@media (max-width: 900px) {
+  .dpb .topbar {
+    padding: 10px 12px;
+    gap: 8px;
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+  .dpb .topbar-title {
+    font-size: 14px;
+    gap: 5px;
+    flex-shrink: 0;
+  }
+  .dpb .topbar-title svg {
+    width: 17px;
+    height: 17px;
+  }
+  .dpb .topbar-right {
+    gap: 8px;
+    flex-wrap: nowrap;
+    flex: 1;
+    min-width: 0;
+    justify-content: flex-end;
+  }
+
+  /* ✅ Tabs — এক লাইনে রাখার জন্য horizontal scroll */
+  .dpb .tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 3px;
+    gap: 2px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    flex-shrink: 1;
+    min-width: 0;
+    -webkit-overflow-scrolling: touch;
+  }
+  .dpb .tabs::-webkit-scrollbar { display: none; }
+
+  .dpb .tab {
+    padding: 6px 12px;
+    font-size: 12.5px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .dpb .tab.booking-tab { gap: 4px; }
+  .dpb .tab.booking-tab svg { width: 13px; height: 13px; }
+
+  .dpb .logout-btn {
+    padding: 6px 10px;
+    font-size: 11.5px;
+    gap: 3px;
+    flex-shrink: 0;
+  }
+
+  /* ✅ Panel switcher — single row scroll */
+  .dpb .panel-switcher {
+    padding: 8px 12px;
+    top: 52px;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+  .dpb .panel-switcher-scroll {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .dpb .panel-switcher-scroll::-webkit-scrollbar { display: none; }
+
+  .dpb .panel-pill { font-size: 12px; padding: 4px 10px; flex-shrink: 0; }
+  .dpb .panel-pill-icon { font-size: 10px; padding: 1px 4px; }
+  .dpb .panel-add-btn { padding: 6px 10px; font-size: 11.5px; flex-shrink: 0; }
+}
+
+/* ---------- Mobile (max-width: 768px) ---------- */
+@media (max-width: 768px) {
+  .dpb .topbar {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+  .dpb .topbar-title {
+    font-size: 12.5px;
+    gap: 4px;
+  }
+  .dpb .topbar-title svg { width: 15px; height: 15px; }
+
+  .dpb .topbar-right { gap: 5px; }
+
+  .dpb .tabs {
+    padding: 2px;
+    gap: 1px;
+  }
+  .dpb .tab {
+    padding: 5px 9px;
+    font-size: 11px;
+  }
+  .dpb .tab.booking-tab { gap: 3px; padding: 5px 9px; }
+  .dpb .tab.booking-tab svg { width: 12px; height: 12px; }
+
+  .dpb .logout-btn {
+    padding: 5px 8px;
+    font-size: 10.5px;
+    gap: 3px;
+  }
+  .dpb .logout-btn svg { width: 12px; height: 12px; }
+
+  /* Panel switcher mobile */
+  .dpb .panel-switcher {
+    padding: 6px 10px;
+    top: 44px;
+    gap: 6px;
+  }
+  .dpb .panel-pill {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+  .dpb .panel-pill-label { font-size: 11px; }
+  .dpb .panel-pill-icon { font-size: 9px; padding: 1px 3px; }
+  .dpb .panel-add-btn { padding: 5px 8px; font-size: 10.5px; }
+
+  /* Edit panel padding */
+  .dpb .edit-panel { padding: 10px; gap: 10px; }
+  .dpb .panel-section { padding: 12px; }
+
+  /* Preview panel */
+  .dpb .preview-wrap { padding: 8px; }
+  .dpb .preview-toolbar { gap: 5px; }
+  .dpb .preview-toolbar .btn { padding: 6px 10px; font-size: 11px; }
+}
+
+/* ---------- Small Mobile (max-width: 480px) ---------- */
+@media (max-width: 480px) {
+  .dpb .topbar { padding: 6px 8px; gap: 4px; }
+  .dpb .topbar-title { font-size: 11px; gap: 3px; }
+  .dpb .topbar-title svg { width: 13px; height: 13px; }
+
+  .dpb .tabs { padding: 1px; gap: 1px; }
+  .dpb .tab { padding: 4px 7px; font-size: 10px; }
+  .dpb .tab.booking-tab { padding: 4px 7px; gap: 2px; }
+  .dpb .tab.booking-tab svg { width: 11px; height: 11px; }
+
+  .dpb .logout-btn { padding: 4px 6px; font-size: 10px; }
+  .dpb .logout-btn svg { width: 11px; height: 11px; }
+
+  .dpb .panel-switcher { padding: 5px 8px; top: 38px; }
+  .dpb .panel-pill { font-size: 10px; padding: 2px 6px; }
+  .dpb .panel-pill-label { font-size: 10px; }
+
+  .dpb .edit-panel { padding: 8px; gap: 8px; }
+  .dpb .panel-section { padding: 10px; }
+}
+
 @media print{ .no-print{display:none !important;} .dpb{background:#fff;} .dpb .preview-wrap{max-width:100%;padding:0;margin:0;} .dpb .poster-page{box-shadow:none;border:none;border-radius:0;} .dpb .poster-body{display:grid !important; grid-template-columns: repeat(3, 1fr) !important;} .dpb *{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;} }
 @page{margin:10mm;}
 `;
