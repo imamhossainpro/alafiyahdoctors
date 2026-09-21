@@ -233,7 +233,7 @@ const CSS = `
 .dpb .preview-toolbar .btn{font-size:13px;padding:8px 16px;}
 .dpb .poster-page{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 18px rgba(15,23,42,0.08);border:1px solid #e2e6ee;}
 .dpb .poster-header{background:linear-gradient(120deg,#4fa3d1,#1c5fa8);padding:22px 20px;text-align:center;}
-.dpb .poster-header h1{color:#fff;font-size:26px;font-weight:800;letter-spacing:0.3px;}
+.dpb .poster-header h1{color:#fff;font-size:30px;font-weight:800;letter-spacing:0.3px; font-family:'Hind Siliguri','Noto Sans Bengali',Arial,sans-serif;}
 .dpb .poster-body {
   column-count: 3;
   column-gap: 26px;
@@ -243,6 +243,9 @@ const CSS = `
 @media (max-width: 820px) {
   .dpb .poster-body {
     column-count: 2;
+  }
+  .dpb .poster-header h1{
+    font-size: 20px;
   }
 }
 @media (max-width: 560px) {

@@ -6,6 +6,7 @@ import { AuthProvider } from './context/AuthContext';
 import { HospitalProvider } from './context/HospitalContext';
 import { PermissionProvider } from './context/PermissionContext';
 import './index.css';
+import './fonts.css';        // ✅ Font CSS import করুন
 
 ReactDOM.createRoot(document.getElementById('root')).render(
 
