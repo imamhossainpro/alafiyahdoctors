@@ -27,7 +27,7 @@ const ICON_KEYS = Object.keys(ICONS);
 const COLOR_THEMES = ['#1c5fa8', '#2f9e52', '#9c3a9c', '#d1392f', '#0e8ca3', '#e0653a', '#2b3f8f', '#159a72', '#8a6a2e', '#7a2d5c', '#4438ab', '#475569'];
 
 // ==================================================
-// ✅ Time Utilities (for manual input)
+// ✅ Time Utilities
 // ==================================================
 const TIME_REGEX = /^(0?[1-9]|1[0-2]):([0-5][0-9])\s?(AM|PM|am|pm)$/;
 
@@ -59,15 +59,7 @@ const timeToMinutes = (timeStr) => {
 };
 
 function makeDoctor(overrides) {
-  return {
-    id: uid(),
-    name: '',
-    quals: '',
-    specialty: '',
-    workplace: '',
-    timeSlots: [],
-    ...(overrides || {})
-  };
+  return { id: uid(), name: '', quals: '', specialty: '', workplace: '', timeSlots: [], ...(overrides || {}) };
 }
 function makeDepartment(overrides) { return { id: uid(), name: '', icon: 'Stethoscope', color: COLOR_THEMES[0], doctors: [], ...(overrides || {}) }; }
 
@@ -89,54 +81,162 @@ const CSS = `
 .dpb h1,.dpb h2,.dpb h3,.dpb p{margin:0;padding:0;}
 .dpb button{font-family:inherit;cursor:pointer;}
 
+/* ==================================================
+   TOPBAR
+   ================================================== */
 .dpb .topbar{display:flex;align-items:center;justify-content:space-between;background:#ffffff;border-bottom:1px solid #e2e6ee;padding:14px 20px;position:sticky;top:0;z-index:20;flex-wrap:wrap;gap:10px;width:100%;}
 .dpb .topbar-title{display:flex;align-items:center;gap:8px;font-weight:700;font-size:17px;color:#154a82;}
 .dpb .topbar-right{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
 .dpb .save-indicator{font-size:12.5px;color:#6b7280;white-space:nowrap;}
-.dpb .logout-btn{background:#dc2626;color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:4px;cursor:pointer;}
-.dpb .login-btn{background:#1c5fa8;color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:4px;cursor:pointer;}
-.dpb .tabs{display:flex;background:#eef1f7;border-radius:10px;padding:3px;gap:2px;flex-wrap:wrap;}
-.dpb .tab{border:none;background:transparent;padding:8px 16px;border-radius:8px;font-size:13.5px;font-weight:600;color:#6b7280;cursor:pointer;}
-.dpb .tab.active{background:#1c5fa8;color:#fff;}
-.dpb .tab.booking-tab {
-  background: linear-gradient(45deg, #0d9488, #14b8a6);
-  color: #fff;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border-radius: 8px;
-  box-shadow: 0 4px 10px rgba(13, 148, 136, 0.3);
-  transition: all 0.3s ease;
-}
-.dpb .tab.booking-tab:hover {
-  background: linear-gradient(45deg, #0f766e, #0d9488);
-  box-shadow: 0 6px 15px rgba(13, 148, 136, 0.4);
-  transform: translateY(-1px);
-}
-.dpb .tab.booking-tab.active {
-  background: linear-gradient(45deg, #0f766e, #14b8a6);
-  box-shadow: 0 6px 15px rgba(13, 148, 136, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-.dpb .tab.booking-tab svg { animation: pulse-booking 2s infinite; }
-@keyframes pulse-booking { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
 
-.dpb .panel-switcher{display:flex;align-items:center;gap:10px;padding:10px 20px;background:#fff;border-bottom:1px solid #e2e6ee;flex-wrap:wrap;position:sticky;top:57px;z-index:19;}
+/* ✅ Logout Button — Red with matching color shadow + radius */
+.dpb .logout-btn{
+  background:#dc2626;
+  color:#fff;
+  border:none;
+  border-radius:12px;
+  padding:8px 14px;
+  font-size:12.5px;
+  font-weight:600;
+  display:flex;
+  align-items:center;
+  gap:5px;
+  cursor:pointer;
+  box-shadow:0 3px 10px rgba(220,38,38,0.30);
+  transition:all 0.2s ease;
+}
+.dpb .logout-btn:hover{
+  background:#b91c1c;
+  transform:translateY(-1px);
+  box-shadow:0 5px 14px rgba(220,38,38,0.40);
+}
+
+/* ✅ Login Button — Blue with matching color shadow + radius */
+.dpb .login-btn{
+  background:#1c5fa8;
+  color:#fff;
+  border:none;
+  border-radius:12px;
+  padding:8px 14px;
+  font-size:12.5px;
+  font-weight:600;
+  display:flex;
+  align-items:center;
+  gap:5px;
+  cursor:pointer;
+  box-shadow:0 3px 10px rgba(28,95,168,0.30);
+  transition:all 0.2s ease;
+}
+.dpb .login-btn:hover{
+  background:#154a82;
+  transform:translateY(-1px);
+  box-shadow:0 5px 14px rgba(28,95,168,0.40);
+}
+
+/* ==================================================
+   TABS — Border Radius + Colored Shadow
+   ================================================== */
+.dpb .tabs{display:flex;background:transparent;border-radius:12px;padding:3px;gap:6px;flex-wrap:wrap;}
+.dpb .tab{
+  border:none;
+  background:#f1f5f9;
+  padding:9px 16px;
+  border-radius:12px;
+  font-size:13.5px;
+  font-weight:600;
+  color:#64748b;
+  cursor:pointer;
+  transition:all 0.2s ease;
+  box-shadow:0 1px 3px rgba(0,0,0,0.05);
+}
+.dpb .tab:hover{
+  background:#e2e8f0;
+  color:#334155;
+  box-shadow:0 2px 6px rgba(0,0,0,0.08);
+}
+
+/* ✅ Active tab — Blue with matching shadow */
+.dpb .tab.active{
+  background:#1c5fa8;
+  color:#fff;
+  box-shadow:0 4px 12px rgba(28,95,168,0.35);
+}
+
+/* ✅ Booking Tab — Teal gradient with matching shadow */
+.dpb .tab.booking-tab{
+  background:linear-gradient(45deg,#0d9488,#14b8a6);
+  color:#fff;
+  font-weight:700;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  border-radius:12px;
+  box-shadow:0 4px 12px rgba(13,148,136,0.35);
+  transition:all 0.3s ease;
+}
+.dpb .tab.booking-tab:hover{
+  background:linear-gradient(45deg,#0f766e,#0d9488);
+  box-shadow:0 6px 16px rgba(13,148,136,0.45);
+  transform:translateY(-1px);
+}
+.dpb .tab.booking-tab.active{
+  background:linear-gradient(45deg,#0f766e,#14b8a6);
+  box-shadow:0 6px 16px rgba(13,148,136,0.55);
+  border:1px solid rgba(255,255,255,0.2);
+}
+.dpb .tab.booking-tab svg{animation:pulse-booking 2s infinite;}
+@keyframes pulse-booking{0%,100%{transform:scale(1);}50%{transform:scale(1.1);}}
+
+/* ==================================================
+   PANEL SWITCHER — Normal flow (non-sticky)
+   ================================================== */
+.dpb .panel-switcher{display:flex;align-items:center;gap:10px;padding:10px 20px;background:#fff;border-bottom:1px solid #e2e6ee;flex-wrap:wrap;position:relative;z-index:18;}
 .dpb .panel-switcher-scroll{display:flex;gap:6px;flex-wrap:wrap;flex:1;min-width:0;}
-.dpb .panel-pill{display:flex;align-items:center;border:1px solid #e2e6ee;background:#fff;padding:4px 8px;border-radius:20px;font-size:13px;font-weight:600;color:#1f2937;cursor:pointer;transition:all 0.2s;gap:4px;}
-.dpb .panel-pill:hover{border-color:#1c5fa8;color:#1c5fa8;}
-.dpb .panel-pill.active{background:#1c5fa8;color:#fff;border-color:#1c5fa8;}
+
+/* ✅ Panel Pill — with radius + colored shadow when active */
+.dpb .panel-pill{
+  display:flex;
+  align-items:center;
+  border:1px solid #e2e6ee;
+  background:#fff;
+  padding:5px 10px;
+  border-radius:20px;
+  font-size:13px;
+  font-weight:600;
+  color:#1f2937;
+  cursor:pointer;
+  transition:all 0.2s ease;
+  gap:4px;
+  box-shadow:0 1px 3px rgba(0,0,0,0.04);
+}
+.dpb .panel-pill:hover{
+  border-color:#1c5fa8;
+  color:#1c5fa8;
+  transform:translateY(-1px);
+  box-shadow:0 3px 8px rgba(28,95,168,0.15);
+}
+.dpb .panel-pill.active{
+  background:#1c5fa8;
+  color:#fff;
+  border-color:#1c5fa8;
+  box-shadow:0 4px 10px rgba(28,95,168,0.35);
+}
 .dpb .panel-pill-label{background:transparent;border:none;font-weight:600;font-size:13px;color:inherit;cursor:pointer;}
-.dpb .panel-pill-icon{background:transparent;border:none;display:flex;align-items:center;gap:2px;color:inherit;cursor:pointer;font-size:11px;font-weight:600;padding:2px 4px;border-radius:8px;}
+.dpb .panel-pill-icon{background:transparent;border:none;display:flex;align-items:center;gap:2px;color:inherit;cursor:pointer;font-size:11px;font-weight:600;padding:2px 4px;border-radius:8px;transition:background 0.2s;}
 .dpb .panel-pill-icon:hover{background:rgba(28,95,168,0.15);}
 .dpb .panel-pill-icon.danger-confirm{color:#dc2626;font-weight:700;}
-.dpb .panel-add-btn{padding:6px 12px;font-size:12.5px;}
+.dpb .panel-add-btn{padding:7px 14px;font-size:12.5px;border-radius:12px;}
 
+/* ==================================================
+   LOADING
+   ================================================== */
 .dpb .loading-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:10px;color:#6b7280;}
 .dpb .spin{animation:dpb-spin 1s linear infinite;}
 @keyframes dpb-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 
+/* ==================================================
+   EDIT PANEL
+   ================================================== */
 .dpb .edit-panel{max-width:880px;margin:0 auto;padding:20px;display:flex;flex-direction:column;gap:18px;}
 .dpb .panel-section{background:#fff;border:1px solid #e2e6ee;border-radius:14px;padding:18px 20px;}
 .dpb .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;}
@@ -145,10 +245,27 @@ const CSS = `
 .dpb .section-hint{font-size:12.5px;color:#6b7280;margin:4px 0 10px;}
 
 .dpb .day-buttons{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 10px;}
-.dpb .day-btn{border:1px solid #e2e6ee;background:#fff;padding:6px 12px;border-radius:20px;font-size:12.5px;color:#1f2937;}
-.dpb .day-btn:hover{border-color:#1c5fa8;color:#1c5fa8;}
+.dpb .day-btn{
+  border:1px solid #e2e6ee;
+  background:#fff;
+  padding:7px 14px;
+  border-radius:20px;
+  font-size:12.5px;
+  color:#1f2937;
+  transition:all 0.2s ease;
+  box-shadow:0 1px 2px rgba(0,0,0,0.04);
+}
+.dpb .day-btn:hover{
+  border-color:#1c5fa8;
+  color:#1c5fa8;
+  transform:translateY(-1px);
+  box-shadow:0 3px 8px rgba(28,95,168,0.15);
+}
 
-.dpb .input,.dpb .textarea{width:100%;border:1px solid #e2e6ee;border-radius:9px;padding:9px 12px;font-size:14px;font-family:inherit;color:#1f2937;background:#fff;}
+/* ==================================================
+   INPUTS
+   ================================================== */
+.dpb .input,.dpb .textarea{width:100%;border:1px solid #e2e6ee;border-radius:10px;padding:10px 14px;font-size:14px;font-family:inherit;color:#1f2937;background:#fff;transition:all 0.2s;}
 .dpb .input:focus,.dpb .textarea:focus{outline:none;border-color:#1c5fa8;box-shadow:0 0 0 3px rgba(28,95,168,0.14);}
 .dpb .textarea{resize:vertical;line-height:1.5;}
 .dpb .field{margin-bottom:12px;}
@@ -157,317 +274,479 @@ const CSS = `
 .dpb .checkbox-row{display:flex;align-items:center;gap:8px;font-size:13px;color:#1f2937;cursor:pointer;font-weight:500;}
 .dpb .checkbox-row input{width:16px;height:16px;cursor:pointer;flex-shrink:0;}
 
-.dpb .btn{display:inline-flex;align-items:center;gap:6px;border:none;border-radius:9px;padding:8px 14px;font-size:13.5px;font-weight:600;white-space:nowrap;}
-.dpb .btn-primary{background:#1c5fa8;color:#fff;}
-.dpb .btn-primary:hover{background:#154a82;}
-.dpb .btn-primary:disabled{background:#b9c9dd;cursor:not-allowed;}
-.dpb .btn-secondary{background:#eef1f7;color:#1f2937;}
-.dpb .btn-secondary:hover{background:#e2e6ee;}
-.dpb .btn-danger{background:#dc2626;color:#fff;}
-.dpb .btn-outline{background:#fff;border:1px solid #e2e6ee;color:#1f2937;}
-.dpb .toggle-all-btn{background:#1c5fa8;color:#fff;border:none;border-radius:20px;padding:4px 14px;font-size:12px;font-weight:600;cursor:pointer;}
-.dpb .toggle-all-btn:hover{background:#154a82;}
-.dpb .dept-toggle-btn{background:transparent;border:1px solid #1c5fa8;color:#1c5fa8;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;cursor:pointer;}
-.dpb .dept-toggle-btn:hover{background:#eaf2fb;}
+/* ==================================================
+   BUTTONS — Consistent Radius + Colored Shadow
+   ================================================== */
+.dpb .btn{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  border:none;
+  border-radius:12px;
+  padding:9px 16px;
+  font-size:13.5px;
+  font-weight:600;
+  white-space:nowrap;
+  transition:all 0.2s ease;
+}
 
-.dpb .dept-card{border:1px solid #e2e6ee;border-left:5px solid #ccc;border-radius:12px;margin-bottom:14px;overflow:hidden;}
+/* ✅ Primary — Blue with matching shadow */
+.dpb .btn-primary{
+  background:#1c5fa8;
+  color:#fff;
+  box-shadow:0 3px 10px rgba(28,95,168,0.30);
+}
+.dpb .btn-primary:hover{
+  background:#154a82;
+  transform:translateY(-1px);
+  box-shadow:0 5px 14px rgba(28,95,168,0.40);
+}
+.dpb .btn-primary:disabled{
+  background:#b9c9dd;
+  cursor:not-allowed;
+  box-shadow:none;
+  transform:none;
+}
+
+/* ✅ Secondary — Gray with soft shadow */
+.dpb .btn-secondary{
+  background:#eef1f7;
+  color:#1f2937;
+  box-shadow:0 2px 6px rgba(0,0,0,0.06);
+}
+.dpb .btn-secondary:hover{
+  background:#e2e6ee;
+  transform:translateY(-1px);
+  box-shadow:0 4px 10px rgba(0,0,0,0.10);
+}
+
+/* ✅ Danger — Red with matching shadow */
+.dpb .btn-danger{
+  background:#dc2626;
+  color:#fff;
+  box-shadow:0 3px 10px rgba(220,38,38,0.30);
+}
+.dpb .btn-danger:hover{
+  background:#b91c1c;
+  transform:translateY(-1px);
+  box-shadow:0 5px 14px rgba(220,38,38,0.40);
+}
+
+/* ✅ Outline — White with subtle border */
+.dpb .btn-outline{
+  background:#fff;
+  border:1px solid #e2e6ee;
+  color:#1f2937;
+  box-shadow:0 1px 3px rgba(0,0,0,0.04);
+}
+.dpb .btn-outline:hover{
+  border-color:#cbd5e1;
+  box-shadow:0 3px 8px rgba(0,0,0,0.08);
+  transform:translateY(-1px);
+}
+
+/* ✅ Toggle All — Blue pill with matching shadow */
+.dpb .toggle-all-btn{
+  background:#1c5fa8;
+  color:#fff;
+  border:none;
+  border-radius:20px;
+  padding:5px 16px;
+  font-size:12px;
+  font-weight:600;
+  cursor:pointer;
+  transition:all 0.2s ease;
+  box-shadow:0 2px 8px rgba(28,95,168,0.30);
+}
+.dpb .toggle-all-btn:hover{
+  background:#154a82;
+  transform:translateY(-1px);
+  box-shadow:0 4px 12px rgba(28,95,168,0.40);
+}
+
+/* ✅ Dept Toggle — Outlined pill with matching hover */
+.dpb .dept-toggle-btn{
+  background:transparent;
+  border:1.5px solid #1c5fa8;
+  color:#1c5fa8;
+  border-radius:20px;
+  padding:3px 12px;
+  font-size:11px;
+  font-weight:600;
+  cursor:pointer;
+  transition:all 0.2s ease;
+}
+.dpb .dept-toggle-btn:hover{
+  background:#eaf2fb;
+  box-shadow:0 2px 6px rgba(28,95,168,0.15);
+}
+
+/* ==================================================
+   DEPARTMENT CARD
+   ================================================== */
+.dpb .dept-card{border:1px solid #e2e6ee;border-left:5px solid #ccc;border-radius:14px;margin-bottom:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.03);}
 .dpb .dept-card-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:#fafbfd;flex-wrap:wrap;gap:8px;}
 .dpb .dept-card-title{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
-.dpb .dept-card-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.dpb .dept-card-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .dpb .dept-card-title strong{font-size:14.5px;}
-.dpb .dept-doctor-count{font-size:11.5px;color:#6b7280;background:#eef1f7;padding:2px 8px;border-radius:20px;}
+.dpb .dept-doctor-count{font-size:11.5px;color:#6b7280;background:#eef1f7;padding:3px 10px;border-radius:20px;}
 .dpb .dept-card-actions{display:flex;gap:4px;}
-.dpb .icon-btn{background:transparent;border:1px solid transparent;border-radius:7px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;color:#6b7280;flex-shrink:0;}
-.dpb .icon-btn:hover{background:#eef1f7;color:#1f2937;}
-.dpb .icon-btn:disabled{opacity:0.35;cursor:not-allowed;}
-.dpb .icon-btn.danger-confirm{background:#dc2626;color:#fff;width:auto;padding:0 10px;font-size:11px;font-weight:700;}
 
+/* ✅ Icon Button — Radius + soft hover */
+.dpb .icon-btn{
+  background:transparent;
+  border:1px solid transparent;
+  border-radius:8px;
+  width:32px;
+  height:32px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#6b7280;
+  flex-shrink:0;
+  transition:all 0.2s ease;
+}
+.dpb .icon-btn:hover{
+  background:#eef1f7;
+  color:#1f2937;
+  box-shadow:0 2px 6px rgba(0,0,0,0.08);
+}
+.dpb .icon-btn:disabled{opacity:0.35;cursor:not-allowed;box-shadow:none;}
+
+/* ✅ Danger Confirm — Red with matching shadow */
+.dpb .icon-btn.danger-confirm{
+  background:#dc2626;
+  color:#fff;
+  width:auto;
+  padding:0 12px;
+  font-size:11px;
+  font-weight:700;
+  box-shadow:0 2px 8px rgba(220,38,38,0.30);
+}
+
+/* ==================================================
+   DOCTOR ROW
+   ================================================== */
 .dpb .doctor-mini-list{padding:4px 14px 12px;}
 .dpb .doctor-row{display:flex;align-items:center;justify-content:space-between;padding:9px 4px;border-top:1px dashed #e2e6ee;gap:10px;}
 .dpb .doctor-checkbox{width:18px;height:18px;flex-shrink:0;cursor:pointer;accent-color:#1c5fa8;margin-right:4px;}
 .dpb .doctor-row-info{min-width:0;flex:1;}
 .dpb .doctor-row-name{font-size:16px;font-weight:700;color:#1f2937;}
 .dpb .doctor-row-specialty{font-size:12px;color:#6b7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:280px;}
-.dpb .doctor-row-time-slots {
-  font-size: 12px;
-  color: #b45309;
-  margin-top: 4px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.dpb .doctor-row-time-slot-item {
-  background: #fef3c7;
-  padding: 2px 10px;
-  border-radius: 12px;
-  display: inline-block;
-  width: fit-content;
-}
+.dpb .doctor-row-time-slots{font-size:12px;color:#b45309;margin-top:4px;display:flex;flex-direction:column;gap:2px;}
+.dpb .doctor-row-time-slot-item{background:#fef3c7;padding:3px 12px;border-radius:12px;display:inline-block;width:fit-content;}
 .dpb .doctor-row-actions{display:flex;gap:2px;flex-shrink:0;}
-.dpb .add-doctor-btn{display:flex;align-items:center;gap:6px;width:100%;justify-content:center;border:1.5px dashed #e2e6ee;background:transparent;border-radius:9px;padding:8px;font-size:12.5px;color:#6b7280;margin-top:6px;}
-.dpb .add-doctor-btn:hover{border-color:#1c5fa8;color:#1c5fa8;}
+
+/* ✅ Add Doctor Button — Dashed with matching hover */
+.dpb .add-doctor-btn{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  width:100%;
+  justify-content:center;
+  border:1.5px dashed #e2e6ee;
+  background:transparent;
+  border-radius:10px;
+  padding:10px;
+  font-size:12.5px;
+  color:#6b7280;
+  margin-top:6px;
+  transition:all 0.2s ease;
+}
+.dpb .add-doctor-btn:hover{
+  border-color:#1c5fa8;
+  color:#1c5fa8;
+  background:#f0f7ff;
+  box-shadow:0 2px 8px rgba(28,95,168,0.10);
+}
 
 .dpb .empty-state{text-align:center;color:#6b7280;font-size:13px;padding:20px;}
 
+/* ==================================================
+   FOOTER FORM
+   ================================================== */
 .dpb .footer-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;}
 @media (max-width:600px){.dpb .footer-form-grid{grid-template-columns:1fr;}}
 .dpb .danger-zone{border:1px dashed #f0b4b4;background:#fff8f8;border-radius:12px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
 .dpb .danger-zone-title{font-weight:700;font-size:13.5px;margin-bottom:2px;}
 .dpb .danger-zone-text{font-size:12.5px;color:#8a3a3a;}
 
+/* ==================================================
+   MODAL
+   ================================================== */
 .dpb .modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,0.5);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px;}
-.dpb .modal-box{background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;}
+.dpb .modal-box{background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.25);}
 .dpb .modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #e2e6ee;}
 .dpb .modal-header h3{font-size:16px;}
 .dpb .modal-body{padding:16px 20px;overflow-y:auto;}
 .dpb .modal-footer{display:flex;justify-content:flex-end;gap:8px;padding:14px 20px;border-top:1px solid #e2e6ee;}
 
+/* ==================================================
+   ICON PICKER & COLOR PICKER
+   ================================================== */
 .dpb .icon-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;}
-.dpb .icon-choice{border:1.5px solid #e2e6ee;background:#fff;border-radius:9px;height:36px;display:flex;align-items:center;justify-content:center;}
+.dpb .icon-choice{
+  border:1.5px solid #e2e6ee;
+  background:#fff;
+  border-radius:10px;
+  height:38px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  transition:all 0.2s ease;
+}
+.dpb .icon-choice:hover{
+  transform:translateY(-1px);
+  box-shadow:0 3px 8px rgba(0,0,0,0.08);
+}
 .dpb .color-grid{display:flex;flex-wrap:wrap;gap:8px;}
-.dpb .color-choice{width:30px;height:30px;border-radius:50%;border:2px solid transparent;padding:0;}
+.dpb .color-choice{
+  width:34px;
+  height:34px;
+  border-radius:50%;
+  border:2px solid transparent;
+  padding:0;
+  transition:all 0.2s ease;
+}
+.dpb .color-choice:hover{transform:scale(1.08);}
 .dpb .color-choice.selected{border-color:#1f2937;box-shadow:0 0 0 2px #fff inset;}
 
+/* ==================================================
+   PREVIEW / POSTER
+   ================================================== */
 .dpb .preview-wrap{max-width:1000px;margin:0 auto;padding:20px;}
 .dpb .preview-toolbar{display:flex;justify-content:flex-end;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
-.dpb .preview-toolbar .btn{font-size:13px;padding:8px 16px;}
+.dpb .preview-toolbar .btn{font-size:13px;padding:9px 18px;border-radius:12px;}
 .dpb .poster-page{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 18px rgba(15,23,42,0.08);border:1px solid #e2e6ee;}
 .dpb .poster-header{background:linear-gradient(120deg,#4fa3d1,#1c5fa8);padding:22px 20px;text-align:center;}
-.dpb .poster-header h1{color:#fff;font-size:30px;font-weight:800;letter-spacing:0.3px; font-family:'Hind Siliguri','Noto Sans Bengali',Arial,sans-serif;}
-.dpb .poster-body {
-  column-count: 3;
-  column-gap: 26px;
-  padding: 22px;
-  text-align: left;
-}
-@media (max-width: 820px) {
-  .dpb .poster-body {
-    column-count: 2;
-  }
-  .dpb .poster-header h1{
-    font-size: 20px;
-  }
-}
-@media (max-width: 560px) {
-  .dpb .poster-body {
-    column-count: 1;
-  }
-}
+.dpb .poster-header h1{color:#fff;font-size:30px;font-weight:800;letter-spacing:0.3px;font-family:'Hind Siliguri','Noto Sans Bengali',Arial,sans-serif;}
+.dpb .poster-body{column-count:3;column-gap:26px;padding:22px;text-align:left;}
+@media (max-width:820px){.dpb .poster-body{column-count:2;}.dpb .poster-header h1{font-size:20px;}}
+@media (max-width:560px){.dpb .poster-body{column-count:1;}}
 
-.dpb .dept-block {
-  break-inside: avoid;
-  -webkit-column-break-inside: avoid;
-  page-break-inside: avoid;
-  margin-bottom: 0;
-  display: inline-block;
-  width: 100%;
-  height: auto;
-}
+.dpb .dept-block{break-inside:avoid;-webkit-column-break-inside:avoid;page-break-inside:avoid;margin-bottom:0;display:inline-block;width:100%;height:auto;}
 .dpb .dept-header-wrap{display:flex;align-items:center;margin-bottom:10px;}
-.dpb .dept-icon-box{width:34px;height:34px;background:#fff;border:2px solid;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;position:relative;z-index:2;box-shadow:0 1px 3px rgba(0,0,0,0.15);}
+.dpb .dept-icon-box{width:34px;height:34px;background:#fff;border:2px solid;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;position:relative;z-index:2;box-shadow:0 1px 3px rgba(0,0,0,0.15);}
 .dpb .dept-ribbon{flex:1;margin-left:-12px;padding:7px 14px 7px 22px;color:#fff;font-weight:700;font-size:18px;clip-path:polygon(0 0,94% 0,100% 50%,94% 100%,0 100%);min-height:34px;display:flex;align-items:center;}
 
-.dpb .doctor-entry{margin-bottom:18px;padding:1px 0 1px 10px;border-left:3px solid #ccc; text-align: left;}
+.dpb .doctor-entry{margin-bottom:18px;padding:1px 0 1px 10px;border-left:3px solid #ccc;text-align:left;}
 .dpb .doctor-name{color:#1c5fa8;font-weight:700;font-size:22px;margin-bottom:1px;}
 .dpb .doctor-quals{color:#333;font-size:12px;line-height:1.45;white-space:pre-line;}
 .dpb .doctor-specialty{color:#9c2a7e;font-weight:700;font-size:15px;white-space:pre-line;margin-top:2px;}
 .dpb .doctor-workplace{color:#333;font-size:12px;line-height:1.4;white-space:pre-line;margin-top:1px;}
-.dpb .doctor-time-slots {
-  margin-top: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.dpb .doctor-time-slot-item {
-  background: #fef3c7;
-  padding: 2px 14px;
-  border-radius: 20px;
-  font-size: 13px;
-  color: #b45309;
-  font-weight: 600;
-  display: inline-block;
-  width: fit-content;
-}
-.dpb .doctor-time-label {
-  font-weight: 700;
-  color: #b45309;
-  font-size: 13px;
-  margin-right: 2px;
-  white-space: nowrap;
-}
+.dpb .doctor-time-slots{margin-top:6px;display:flex;flex-direction:column;gap:4px;}
+.dpb .doctor-time-slot-item{background:#fef3c7;padding:4px 16px;border-radius:20px;font-size:13px;color:#b45309;font-weight:600;display:inline-block;width:fit-content;}
+.dpb .doctor-time-label{font-weight:700;color:#b45309;font-size:13px;margin-right:2px;white-space:nowrap;}
 .dpb .empty-dept-note{font-size:11.5px;color:#6b7280;font-style:italic;}
 
 .dpb .poster-footer{display:flex;align-items:center;justify-content:space-between;background:#eef4fb;padding:16px 22px;flex-wrap:wrap;gap:14px;border-top:3px solid #1c5fa8;}
 .dpb .footer-col{display:flex;flex-direction:column;gap:5px;font-size:11.5px;color:#333;}
-.dpb .footer-line{display:flex;align-items:center;gap:6px;white-space:pre-line; font-size:16px;}
+.dpb .footer-line{display:flex;align-items:center;gap:6px;white-space:pre-line;font-size:16px;}
 .dpb .footer-center{align-items:center;text-align:center;}
 .dpb .hospital-name{font-size:19px;font-weight:800;color:#1c5fa8;letter-spacing:0.5px;}
 .dpb .hospital-subtitle{font-size:20.5px;color:#555;font-weight:600;letter-spacing:0.5px;}
 .dpb .footer-right{align-items:flex-end;text-align:right;}
 .dpb .footer-contact-label{font-weight:700;color:#1c5fa8;font-size:16px;}
-.dpb .footer-phone{display:flex;align-items:center;gap:6px;font-weight:700; font-size:20px;}
+.dpb .footer-phone{display:flex;align-items:center;gap:6px;font-weight:700;font-size:20px;}
 
-.dpb .doctor-entry,.dpb .doctor-row,.dpb .doctor-name,.dpb .doctor-quals,.dpb .doctor-specialty,.dpb .doctor-workplace,.dpb .doctor-time-slots,.dpb .doctor-row-name,.dpb .doctor-row-specialty { text-align: left !important; }
+.dpb .doctor-entry,.dpb .doctor-row,.dpb .doctor-name,.dpb .doctor-quals,.dpb .doctor-specialty,.dpb .doctor-workplace,.dpb .doctor-time-slots,.dpb .doctor-row-name,.dpb .doctor-row-specialty{text-align:left !important;}
 
 /* ==================================================
-   📱 MOBILE RESPONSIVE — Tabs পাশাপাশি দেখানোর জন্য
+   📱 MOBILE RESPONSIVE — Standard Size Buttons
    ================================================== */
 
 /* ---------- Tablet (max-width: 900px) ---------- */
 @media (max-width: 900px) {
   .dpb .topbar {
-    padding: 10px 12px;
-    gap: 8px;
-    flex-wrap: nowrap;
+    padding: 12px 16px;
+    gap: 10px;
+    flex-wrap: wrap;
     align-items: center;
+    position: sticky;
   }
+
   .dpb .topbar-title {
-    font-size: 14px;
-    gap: 5px;
-    flex-shrink: 0;
-  }
-  .dpb .topbar-title svg {
-    width: 17px;
-    height: 17px;
-  }
-  .dpb .topbar-right {
-    gap: 8px;
-    flex-wrap: nowrap;
+    font-size: 16px;
+    gap: 6px;
     flex: 1;
     min-width: 0;
-    justify-content: flex-end;
+  }
+  .dpb .topbar-title svg { width: 20px; height: 20px; }
+
+  .dpb .topbar-right {
+    width: 100%;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 
-  /* ✅ Tabs — এক লাইনে রাখার জন্য horizontal scroll */
   .dpb .tabs {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding: 3px;
-    gap: 2px;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    flex-shrink: 1;
-    min-width: 0;
-    -webkit-overflow-scrolling: touch;
+    background: transparent;
+    padding: 0;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex: 1;
+    width: 100%;
+    overflow: visible;
   }
-  .dpb .tabs::-webkit-scrollbar { display: none; }
 
   .dpb .tab {
-    padding: 6px 12px;
-    font-size: 12.5px;
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    background: #f1f5f9;
+    border: none;
+    border-radius: 12px;
     white-space: nowrap;
     flex-shrink: 0;
+    color: #64748b;
+    transition: all 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
   }
-  .dpb .tab.booking-tab { gap: 4px; }
-  .dpb .tab.booking-tab svg { width: 13px; height: 13px; }
+  .dpb .tab:hover {
+    background: #e2e8f0;
+    color: #334155;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  }
+  .dpb .tab.active {
+    background: #1c5fa8;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(28,95,168,0.35);
+  }
+
+  .dpb .tab.booking-tab {
+    background: linear-gradient(45deg, #0d9488, #14b8a6);
+    color: #ffffff;
+    border: none;
+    padding: 10px 18px;
+    font-size: 14px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(13,148,136,0.35);
+  }
+  .dpb .tab.booking-tab.active {
+    background: linear-gradient(45deg, #0f766e, #14b8a6);
+    box-shadow: 0 6px 16px rgba(13,148,136,0.55);
+  }
+  .dpb .tab.booking-tab svg { width: 15px; height: 15px; }
 
   .dpb .logout-btn {
-    padding: 6px 10px;
-    font-size: 11.5px;
-    gap: 3px;
+    padding: 10px 16px;
+    font-size: 13px;
+    gap: 5px;
     flex-shrink: 0;
+    border-radius: 12px;
   }
+  .dpb .logout-btn svg { width: 14px; height: 14px; }
 
-  /* ✅ Panel switcher — single row scroll */
   .dpb .panel-switcher {
-    padding: 8px 12px;
-    top: 52px;
+    padding: 10px 16px;
+    position: relative;
+    top: auto;
     gap: 8px;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
   }
   .dpb .panel-switcher-scroll {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    -webkit-overflow-scrolling: touch;
+    flex-wrap: wrap;
+    gap: 8px;
   }
-  .dpb .panel-switcher-scroll::-webkit-scrollbar { display: none; }
 
-  .dpb .panel-pill { font-size: 12px; padding: 4px 10px; flex-shrink: 0; }
-  .dpb .panel-pill-icon { font-size: 10px; padding: 1px 4px; }
-  .dpb .panel-add-btn { padding: 6px 10px; font-size: 11.5px; flex-shrink: 0; }
+  .dpb .panel-pill {
+    font-size: 13px;
+    padding: 6px 12px;
+    flex-shrink: 0;
+  }
+  .dpb .panel-pill-label { font-size: 13px; }
+  .dpb .panel-pill-icon { font-size: 11px; padding: 2px 5px; }
+  .dpb .panel-add-btn { padding: 8px 12px; font-size: 12.5px; }
 }
 
-/* ---------- Mobile (max-width: 768px) ---------- */
-@media (max-width: 768px) {
+/* ---------- Mobile (max-width: 640px) ---------- */
+@media (max-width: 640px) {
   .dpb .topbar {
-    padding: 8px 10px;
-    gap: 6px;
+    padding: 12px 14px;
+    gap: 10px;
   }
   .dpb .topbar-title {
-    font-size: 12.5px;
-    gap: 4px;
+    font-size: 15px;
+    gap: 6px;
   }
-  .dpb .topbar-title svg { width: 15px; height: 15px; }
+  .dpb .topbar-title svg { width: 18px; height: 18px; }
 
-  .dpb .topbar-right { gap: 5px; }
+  .dpb .topbar-right { gap: 8px; }
 
-  .dpb .tabs {
-    padding: 2px;
-    gap: 1px;
-  }
+  .dpb .tabs { gap: 6px; padding: 0; }
+
   .dpb .tab {
-    padding: 5px 9px;
-    font-size: 11px;
+    padding: 9px 14px;
+    font-size: 13px;
+    border-radius: 12px;
   }
-  .dpb .tab.booking-tab { gap: 3px; padding: 5px 9px; }
-  .dpb .tab.booking-tab svg { width: 12px; height: 12px; }
+  .dpb .tab.booking-tab {
+    padding: 9px 14px;
+    font-size: 13px;
+  }
+  .dpb .tab.booking-tab svg { width: 14px; height: 14px; }
 
   .dpb .logout-btn {
-    padding: 5px 8px;
-    font-size: 10.5px;
-    gap: 3px;
+    padding: 9px 14px;
+    font-size: 12.5px;
+    border-radius: 12px;
   }
-  .dpb .logout-btn svg { width: 12px; height: 12px; }
+  .dpb .logout-btn svg { width: 13px; height: 13px; }
 
-  /* Panel switcher mobile */
   .dpb .panel-switcher {
-    padding: 6px 10px;
-    top: 44px;
+    padding: 8px 14px;
     gap: 6px;
   }
   .dpb .panel-pill {
+    font-size: 12px;
+    padding: 5px 10px;
+  }
+  .dpb .panel-pill-label { font-size: 12px; }
+  .dpb .panel-pill-icon { font-size: 10px; padding: 1px 4px; }
+  .dpb .panel-add-btn { padding: 7px 10px; font-size: 12px; }
+
+  .dpb .edit-panel { padding: 12px; gap: 12px; }
+  .dpb .panel-section { padding: 14px; }
+
+  .dpb .preview-wrap { padding: 10px; }
+  .dpb .preview-toolbar { gap: 6px; }
+  .dpb .preview-toolbar .btn { padding: 8px 12px; font-size: 12px; }
+}
+
+/* ---------- Small Mobile (max-width: 420px) ---------- */
+@media (max-width: 420px) {
+  .dpb .topbar { padding: 10px 12px; gap: 8px; }
+  .dpb .topbar-title { font-size: 14px; }
+
+  .dpb .tab {
+    padding: 8px 12px;
+    font-size: 12px;
+    border-radius: 12px;
+  }
+  .dpb .tab.booking-tab {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .dpb .logout-btn {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .dpb .panel-pill {
     font-size: 11px;
-    padding: 3px 8px;
+    padding: 4px 9px;
   }
   .dpb .panel-pill-label { font-size: 11px; }
-  .dpb .panel-pill-icon { font-size: 9px; padding: 1px 3px; }
-  .dpb .panel-add-btn { padding: 5px 8px; font-size: 10.5px; }
 
-  /* Edit panel padding */
   .dpb .edit-panel { padding: 10px; gap: 10px; }
   .dpb .panel-section { padding: 12px; }
-
-  /* Preview panel */
-  .dpb .preview-wrap { padding: 8px; }
-  .dpb .preview-toolbar { gap: 5px; }
-  .dpb .preview-toolbar .btn { padding: 6px 10px; font-size: 11px; }
 }
 
-/* ---------- Small Mobile (max-width: 480px) ---------- */
-@media (max-width: 480px) {
-  .dpb .topbar { padding: 6px 8px; gap: 4px; }
-  .dpb .topbar-title { font-size: 11px; gap: 3px; }
-  .dpb .topbar-title svg { width: 13px; height: 13px; }
-
-  .dpb .tabs { padding: 1px; gap: 1px; }
-  .dpb .tab { padding: 4px 7px; font-size: 10px; }
-  .dpb .tab.booking-tab { padding: 4px 7px; gap: 2px; }
-  .dpb .tab.booking-tab svg { width: 11px; height: 11px; }
-
-  .dpb .logout-btn { padding: 4px 6px; font-size: 10px; }
-  .dpb .logout-btn svg { width: 11px; height: 11px; }
-
-  .dpb .panel-switcher { padding: 5px 8px; top: 38px; }
-  .dpb .panel-pill { font-size: 10px; padding: 2px 6px; }
-  .dpb .panel-pill-label { font-size: 10px; }
-
-  .dpb .edit-panel { padding: 8px; gap: 8px; }
-  .dpb .panel-section { padding: 10px; }
-}
-
+/* ==================================================
+   PRINT
+   ================================================== */
 @media print{ .no-print{display:none !important;} .dpb{background:#fff;} .dpb .preview-wrap{max-width:100%;padding:0;margin:0;} .dpb .poster-page{box-shadow:none;border:none;border-radius:0;} .dpb .poster-body{display:grid !important; grid-template-columns: repeat(3, 1fr) !important;} .dpb *{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;} }
 @page{margin:10mm;}
 `;
@@ -499,7 +778,7 @@ function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
                   <td style={{ padding: '10px', fontWeight: '600' }}>{u.name}</td>
                   <td style={{ padding: '10px' }}>{u.designation}</td>
                   <td style={{ padding: '10px' }}>
-                    <select value={u.role} onChange={(e) => onSetRole(u.id, e.target.value)} style={{ padding: '6px', borderRadius: '6px', border: '1px solid #e2e6ee' }}>
+                    <select value={u.role} onChange={(e) => onSetRole(u.id, e.target.value)} style={{ padding: '6px', borderRadius: '8px', border: '1px solid #e2e6ee' }}>
                       <option value="pending">পেন্ডিং</option>
                       <option value="admin">অ্যাডমিন</option>
                       <option value="sub-admin">সাব-অ্যাডমিন</option>
@@ -534,9 +813,7 @@ function DoctorRow({ doc, index, total, checked, onToggleChecked, onEdit, onDele
         {doc.timeSlots && doc.timeSlots.length > 0 && (
           <div className="doctor-row-time-slots">
             {doc.timeSlots.map((slot, idx) => (
-              <span key={idx} className="doctor-row-time-slot-item">
-                ⏱ {slot.start} - {slot.end}
-              </span>
+              <span key={idx} className="doctor-row-time-slot-item">⏱ {slot.start} - {slot.end}</span>
             ))}
           </div>
         )}
@@ -601,18 +878,13 @@ function DepartmentModal({ initial, onSave, onClose }) {
   );
 }
 
-// ==================================================
-// ✅ DoctorModal — Manual Time Input with Validation
-// ==================================================
 function DoctorModal({ initial, onSave, onClose }) {
   const [name, setName] = useState(initial ? initial.name : '');
   const [quals, setQuals] = useState(initial ? initial.quals : '');
   const [specialty, setSpecialty] = useState(initial ? initial.specialty : '');
   const [workplace, setWorkplace] = useState(initial ? initial.workplace : '');
   const [timeSlots, setTimeSlots] = useState(
-    initial?.timeSlots && initial.timeSlots.length > 0
-      ? initial.timeSlots
-      : [{ start: '09:00 AM', end: '11:00 AM' }]
+    initial?.timeSlots && initial.timeSlots.length > 0 ? initial.timeSlots : [{ start: '09:00 AM', end: '11:00 AM' }]
   );
   const [slotErrors, setSlotErrors] = useState({});
 
@@ -622,15 +894,10 @@ function DoctorModal({ initial, onSave, onClose }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const handleAddSlot = () => {
-    setTimeSlots([...timeSlots, { start: '09:00 AM', end: '11:00 AM' }]);
-  };
+  const handleAddSlot = () => setTimeSlots([...timeSlots, { start: '09:00 AM', end: '11:00 AM' }]);
 
   const handleRemoveSlot = (index) => {
-    if (timeSlots.length <= 1) {
-      alert('কমপক্ষে একটি সময় স্লট থাকতে হবে!');
-      return;
-    }
+    if (timeSlots.length <= 1) { alert('কমপক্ষে একটি সময় স্লট থাকতে হবে!'); return; }
     const newSlots = timeSlots.filter((_, i) => i !== index);
     setTimeSlots(newSlots);
     const newErrors = { ...slotErrors };
@@ -640,18 +907,12 @@ function DoctorModal({ initial, onSave, onClose }) {
   };
 
   const handleSlotChange = (index, field, value) => {
-    const updated = timeSlots.map((slot, i) =>
-      i === index ? { ...slot, [field]: value } : slot
-    );
+    const updated = timeSlots.map((slot, i) => i === index ? { ...slot, [field]: value } : slot);
     setTimeSlots(updated);
-
     const errorKey = `${index}-${field}`;
     const newErrors = { ...slotErrors };
-    if (value.trim() && !validateTimeFormat(value)) {
-      newErrors[errorKey] = 'ফরম্যাট: 09:00 AM বা 11:30 PM';
-    } else {
-      delete newErrors[errorKey];
-    }
+    if (value.trim() && !validateTimeFormat(value)) newErrors[errorKey] = 'ফরম্যাট: 09:00 AM বা 11:30 PM';
+    else delete newErrors[errorKey];
     setSlotErrors(newErrors);
   };
 
@@ -659,44 +920,21 @@ function DoctorModal({ initial, onSave, onClose }) {
     const value = timeSlots[index][field];
     if (value.trim() && validateTimeFormat(value)) {
       const standardized = standardizeTime(value);
-      const updated = timeSlots.map((slot, i) =>
-        i === index ? { ...slot, [field]: standardized } : slot
-      );
+      const updated = timeSlots.map((slot, i) => i === index ? { ...slot, [field]: standardized } : slot);
       setTimeSlots(updated);
     }
   };
 
   const handleSave = () => {
-    if (!name.trim()) {
-      alert('ডাক্তারের নাম লিখুন!');
-      return;
-    }
-
+    if (!name.trim()) { alert('ডাক্তারের নাম লিখুন!'); return; }
     const errors = {};
     let hasError = false;
-
     timeSlots.forEach((slot, i) => {
-      if (!slot.start || !slot.start.trim()) {
-        errors[`${i}-start`] = 'শুরুর সময় লিখুন';
-        hasError = true;
-      } else if (!validateTimeFormat(slot.start)) {
-        errors[`${i}-start`] = 'ফরম্যাট: 09:00 AM বা 11:30 PM';
-        hasError = true;
-      }
-
-      if (!slot.end || !slot.end.trim()) {
-        errors[`${i}-end`] = 'শেষ সময় লিখুন';
-        hasError = true;
-      } else if (!validateTimeFormat(slot.end)) {
-        errors[`${i}-end`] = 'ফরম্যাট: 09:00 AM বা 11:30 PM';
-        hasError = true;
-      }
-
-      if (
-        slot.start && slot.end &&
-        validateTimeFormat(slot.start) &&
-        validateTimeFormat(slot.end)
-      ) {
+      if (!slot.start || !slot.start.trim()) { errors[`${i}-start`] = 'শুরুর সময় লিখুন'; hasError = true; }
+      else if (!validateTimeFormat(slot.start)) { errors[`${i}-start`] = 'ফরম্যাট: 09:00 AM বা 11:30 PM'; hasError = true; }
+      if (!slot.end || !slot.end.trim()) { errors[`${i}-end`] = 'শেষ সময় লিখুন'; hasError = true; }
+      else if (!validateTimeFormat(slot.end)) { errors[`${i}-end`] = 'ফরম্যাট: 09:00 AM বা 11:30 PM'; hasError = true; }
+      if (slot.start && slot.end && validateTimeFormat(slot.start) && validateTimeFormat(slot.end)) {
         const startMin = timeToMinutes(slot.start);
         const endMin = timeToMinutes(slot.end);
         if (startMin !== null && endMin !== null && startMin >= endMin) {
@@ -705,39 +943,14 @@ function DoctorModal({ initial, onSave, onClose }) {
         }
       }
     });
-
-    if (hasError) {
-      setSlotErrors(errors);
-      alert('সময় স্লটে ত্রুটি আছে। অনুগ্রহ করে ঠিক করুন।');
-      return;
-    }
-
-    const cleanedSlots = timeSlots.map((slot) => ({
-      start: standardizeTime(slot.start),
-      end: standardizeTime(slot.end),
-    }));
-
-    onSave({
-      name: name.trim(),
-      quals,
-      specialty,
-      workplace,
-      timeSlots: cleanedSlots,
-    });
+    if (hasError) { setSlotErrors(errors); alert('সময় স্লটে ত্রুটি আছে। অনুগ্রহ করে ঠিক করুন।'); return; }
+    const cleanedSlots = timeSlots.map((slot) => ({ start: standardizeTime(slot.start), end: standardizeTime(slot.end) }));
+    onSave({ name: name.trim(), quals, specialty, workplace, timeSlots: cleanedSlots });
   };
 
   const inputBaseStyle = {
-    padding: '9px 12px',
-    border: '1px solid #cbd5e1',
-    borderRadius: '6px',
-    fontSize: '14px',
-    fontFamily: 'inherit',
-    outline: 'none',
-    width: '100%',
-    textAlign: 'center',
-    fontWeight: '600',
-    letterSpacing: '0.5px',
-    background: '#fff',
+    padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit',
+    outline: 'none', width: '100%', textAlign: 'center', fontWeight: '600', letterSpacing: '0.5px', background: '#fff',
   };
 
   return (
@@ -758,9 +971,7 @@ function DoctorModal({ initial, onSave, onClose }) {
           <textarea className="textarea" rows={2} value={workplace} onChange={(e) => setWorkplace(e.target.value)} placeholder="যেমনঃ চট্টগ্রাম মেডিকেল কলেজ হাসপাতাল" />
 
           <div style={{ marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
-            <label style={{ fontWeight: '700', display: 'block', marginBottom: '4px' }}>
-              ⏰ সাক্ষাতের সময় (একাধিক স্লট যোগ করুন)
-            </label>
+            <label style={{ fontWeight: '700', display: 'block', marginBottom: '4px' }}>⏰ সাক্ষাতের সময় (একাধিক স্লট যোগ করুন)</label>
             <p style={{ fontSize: '12px', color: '#64748b', margin: '4px 0 12px 0', lineHeight: '1.5' }}>
               ফরম্যাট: <code style={{ background: '#f1f5f9', padding: '1px 6px', borderRadius: '4px', fontSize: '11.5px' }}>HH:MM AM</code> অথবা <code style={{ background: '#f1f5f9', padding: '1px 6px', borderRadius: '4px', fontSize: '11.5px' }}>HH:MM PM</code>
               <br />
@@ -770,74 +981,21 @@ function DoctorModal({ initial, onSave, onClose }) {
             {timeSlots.map((slot, index) => {
               const startError = slotErrors[`${index}-start`];
               const endError = slotErrors[`${index}-end`];
-
               return (
-                <div
-                  key={index}
-                  style={{
-                    marginBottom: '12px',
-                    background: '#f8fafc',
-                    padding: '12px',
-                    borderRadius: '10px',
-                    border: startError || endError ? '1.5px solid #dc2626' : '1px solid #e2e8f0',
-                  }}
-                >
+                <div key={index} style={{ marginBottom: '12px', background: '#f8fafc', padding: '12px', borderRadius: '10px', border: startError || endError ? '1.5px solid #dc2626' : '1px solid #e2e8f0' }}>
                   <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
                     <div style={{ flex: '1 1 140px' }}>
                       <label style={{ fontSize: '11.5px', fontWeight: '600', color: '#475569', display: 'block', marginBottom: '4px' }}>শুরু</label>
-                      <input
-                        type="text"
-                        value={slot.start}
-                        onChange={(e) => handleSlotChange(index, 'start', e.target.value)}
-                        onBlur={() => handleSlotBlur(index, 'start')}
-                        placeholder="09:00 AM"
-                        maxLength={8}
-                        autoComplete="off"
-                        style={{ ...inputBaseStyle, borderColor: startError ? '#dc2626' : '#cbd5e1' }}
-                      />
-                      {startError && (
-                        <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '4px', fontWeight: '500' }}>
-                          ⚠️ {startError}
-                        </div>
-                      )}
+                      <input type="text" value={slot.start} onChange={(e) => handleSlotChange(index, 'start', e.target.value)} onBlur={() => handleSlotBlur(index, 'start')} placeholder="09:00 AM" maxLength={8} autoComplete="off" style={{ ...inputBaseStyle, borderColor: startError ? '#dc2626' : '#cbd5e1' }} />
+                      {startError && (<div style={{ fontSize: '11px', color: '#dc2626', marginTop: '4px', fontWeight: '500' }}>⚠️ {startError}</div>)}
                     </div>
-
                     <div style={{ flex: '1 1 140px' }}>
                       <label style={{ fontSize: '11.5px', fontWeight: '600', color: '#475569', display: 'block', marginBottom: '4px' }}>শেষ</label>
-                      <input
-                        type="text"
-                        value={slot.end}
-                        onChange={(e) => handleSlotChange(index, 'end', e.target.value)}
-                        onBlur={() => handleSlotBlur(index, 'end')}
-                        placeholder="11:00 AM"
-                        maxLength={8}
-                        autoComplete="off"
-                        style={{ ...inputBaseStyle, borderColor: endError ? '#dc2626' : '#cbd5e1' }}
-                      />
-                      {endError && (
-                        <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '4px', fontWeight: '500' }}>
-                          ⚠️ {endError}
-                        </div>
-                      )}
+                      <input type="text" value={slot.end} onChange={(e) => handleSlotChange(index, 'end', e.target.value)} onBlur={() => handleSlotBlur(index, 'end')} placeholder="11:00 AM" maxLength={8} autoComplete="off" style={{ ...inputBaseStyle, borderColor: endError ? '#dc2626' : '#cbd5e1' }} />
+                      {endError && (<div style={{ fontSize: '11px', color: '#dc2626', marginTop: '4px', fontWeight: '500' }}>⚠️ {endError}</div>)}
                     </div>
-
                     <div style={{ paddingTop: '22px' }}>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveSlot(index)}
-                        title="স্লট মুছুন"
-                        style={{
-                          background: '#fee2e2',
-                          color: '#dc2626',
-                          border: 'none',
-                          borderRadius: '6px',
-                          padding: '9px 10px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
+                      <button type="button" onClick={() => handleRemoveSlot(index)} title="স্লট মুছুন" style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '10px', padding: '9px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(220,38,38,0.20)', transition: 'all 0.2s' }}>
                         <Trash2 size={16} />
                       </button>
                     </div>
@@ -846,9 +1004,7 @@ function DoctorModal({ initial, onSave, onClose }) {
               );
             })}
 
-            <button className="btn btn-secondary" onClick={handleAddSlot} style={{ marginTop: '6px' }}>
-              <Plus size={14} /> আরও সময় যোগ করুন
-            </button>
+            <button className="btn btn-secondary" onClick={handleAddSlot} style={{ marginTop: '6px' }}><Plus size={14} /> আরও সময় যোগ করুন</button>
           </div>
         </div>
         <div className="modal-footer">
@@ -871,7 +1027,27 @@ function PanelModal({ mode, initial, activeDeptCount, departments, onSave, onClo
   return (
     <div className="modal-overlay" onClick={onClose}><div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
       <div className="modal-header"><h3>{mode === 'add' ? 'নতুন দিন/প্যানেল যোগ করুন' : 'প্যানেল সম্পাদনা করুন'}</h3><button className="icon-btn" onClick={onClose}><X size={18} /></button></div>
-      <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}><label>দিন বা প্যানেলের নাম</label>{mode === 'add' ? (<div className="day-buttons">{DAY_NAMES.map((d) => (<button key={d} className="day-btn" onClick={() => setName(d)}>{d}</button>))}</div>) : null}<input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="যেমনঃ শনিবার, অথবা নিজের মতো নাম" />{mode === 'add' && (<><label style={{ marginTop: '14px', display: 'block' }}>ডাক্তার বেছে নিন (টিক দিন)</label><button className="btn btn-secondary" onClick={toggleAll} style={{ marginBottom: '10px' }}>{selectedIds.size === departments.flatMap(d => d.doctors || []).length ? 'সব বাদ দিন' : 'সব বাছুন'}</button>{departments.map(dept => (<div key={dept.id} style={{ marginBottom: '10px' }}><strong style={{ color: dept.color }}>{dept.name}</strong>{dept.doctors?.map(doc => (<div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: '4px 0' }}><input type="checkbox" checked={selectedIds.has(doc.id)} onChange={() => toggleDoctor(doc.id)} /><label>{doc.name}</label></div>))}</div>))}<label className="checkbox-row" style={{ marginTop: '14px' }}><input type="checkbox" checked={duplicate} onChange={(e) => setDuplicate(e.target.checked)} /><span>বর্তমান দিনের ডাক্তার সিলেকশন কপি করুন</span></label></>)}</div>
+      <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+        <label>দিন বা প্যানেলের নাম</label>
+        {mode === 'add' ? (<div className="day-buttons">{DAY_NAMES.map((d) => (<button key={d} className="day-btn" onClick={() => setName(d)}>{d}</button>))}</div>) : null}
+        <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="যেমনঃ শনিবার, অথবা নিজের মতো নাম" />
+        {mode === 'add' && (<>
+          <label style={{ marginTop: '14px', display: 'block' }}>ডাক্তার বেছে নিন (টিক দিন)</label>
+          <button className="btn btn-secondary" onClick={toggleAll} style={{ marginBottom: '10px' }}>{selectedIds.size === departments.flatMap(d => d.doctors || []).length ? 'সব বাদ দিন' : 'সব বাছুন'}</button>
+          {departments.map(dept => (
+            <div key={dept.id} style={{ marginBottom: '10px' }}>
+              <strong style={{ color: dept.color }}>{dept.name}</strong>
+              {dept.doctors?.map(doc => (
+                <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: '4px 0' }}>
+                  <input type="checkbox" checked={selectedIds.has(doc.id)} onChange={() => toggleDoctor(doc.id)} />
+                  <label>{doc.name}</label>
+                </div>
+              ))}
+            </div>
+          ))}
+          <label className="checkbox-row" style={{ marginTop: '14px' }}><input type="checkbox" checked={duplicate} onChange={(e) => setDuplicate(e.target.checked)} /><span>বর্তমান দিনের ডাক্তার সিলেকশন কপি করুন</span></label>
+        </>)}
+      </div>
       <div className="modal-footer"><button className="btn btn-secondary" onClick={onClose}>বাতিল</button><button className="btn btn-primary" onClick={handleSave} disabled={!name.trim()}>সংরক্ষণ করুন</button></div>
     </div></div>
   );
@@ -934,7 +1110,7 @@ function EditPanel({ panel, departments, footer, checkedIds, allChecked, onUpdat
           </div>
         </div>
       </section>
-      <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: '30px' }}><button className="btn btn-primary" onClick={onGoPreview} style={{ padding: '11px 26px', fontSize: '14px' }}>প্রিভিউ দেখুন →</button></div>
+      <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: '30px' }}><button className="btn btn-primary" onClick={onGoPreview} style={{ padding: '12px 28px', fontSize: '14px' }}>প্রিভিউ দেখুন →</button></div>
     </div>
   );
 }
@@ -953,7 +1129,7 @@ function DoctorEntry({ doc, accentColor }) {
           {doc.timeSlots.map((slot, idx) => (
             <span key={idx} className="doctor-time-slot-item">
               <span className="doctor-time-label">⏱ সাক্ষাতের সময়ঃ</span>
-               {slot.start} - {slot.end}
+              {' '}{slot.start} - {slot.end}
             </span>
           ))}
         </div>
@@ -964,56 +1140,32 @@ function DoctorEntry({ doc, accentColor }) {
 
 function PreviewPanel({ panel, departments, checkedIds, footer, onBack, user }) {
   const printRef = useRef(null);
-
-  // ✅ Admin check
   const isAdmin = user?.role === 'admin';
 
   const handlePrint = () => {
-    if (!isAdmin) {
-      alert('❌ শুধুমাত্র অ্যাডমিন প্রিন্ট করতে পারবেন।');
-      return;
-    }
+    if (!isAdmin) { alert('❌ শুধুমাত্র অ্যাডমিন প্রিন্ট করতে পারবেন।'); return; }
     window.print();
   };
 
   const downloadPNG = async () => {
-    if (!isAdmin) {
-      alert('❌ শুধুমাত্র অ্যাডমিন PNG ডাউনলোড করতে পারবেন।');
-      return;
-    }
+    if (!isAdmin) { alert('❌ শুধুমাত্র অ্যাডমিন PNG ডাউনলোড করতে পারবেন।'); return; }
     const element = printRef.current;
     if (!element) return;
     try {
-      const canvas = await html2canvas(element, {
-        scale: 3,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-      });
+      const canvas = await html2canvas(element, { scale: 3, useCORS: true, logging: false, backgroundColor: '#ffffff' });
       const link = document.createElement('a');
       link.download = `${panel?.title || 'poster'}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
-    } catch (error) {
-      console.error('PNG download error:', error);
-      alert('PNG ডাউনলোড করতে সমস্যা হয়েছে।');
-    }
+    } catch (error) { console.error('PNG download error:', error); alert('PNG ডাউনলোড করতে সমস্যা হয়েছে।'); }
   };
 
   const downloadPDF = async () => {
-    if (!isAdmin) {
-      alert('❌ শুধুমাত্র অ্যাডমিন PDF ডাউনলোড করতে পারবেন।');
-      return;
-    }
+    if (!isAdmin) { alert('❌ শুধুমাত্র অ্যাডমিন PDF ডাউনলোড করতে পারবেন।'); return; }
     const element = printRef.current;
     if (!element) return;
     try {
-      const canvas = await html2canvas(element, {
-        scale: 3,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-      });
+      const canvas = await html2canvas(element, { scale: 3, useCORS: true, logging: false, backgroundColor: '#ffffff' });
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -1030,90 +1182,30 @@ function PreviewPanel({ panel, departments, checkedIds, footer, onBack, user }) 
         heightLeft -= pdfPageHeight;
       }
       pdf.save(`${panel?.title || 'poster'}.pdf`);
-    } catch (error) {
-      console.error('PDF download error:', error);
-      alert('PDF ডাউনলোড করতে সমস্যা হয়েছে।');
-    }
+    } catch (error) { console.error('PDF download error:', error); alert('PDF ডাউনলোড করতে সমস্যা হয়েছে।'); }
   };
 
   const hasChecked = checkedIds && checkedIds.size > 0;
-  const visibleDepartments = departments
-    .map((dept) => ({
-      ...dept,
-      doctors:
-        dept.doctors?.filter((doc) => (hasChecked ? checkedIds.has(doc.id) : true)) || [],
-    }))
-    .filter((dept) => dept.doctors.length > 0);
+  const visibleDepartments = departments.map((dept) => ({
+    ...dept,
+    doctors: dept.doctors?.filter((doc) => hasChecked ? checkedIds.has(doc.id) : true) || []
+  })).filter((dept) => dept.doctors.length > 0);
 
   return (
     <div className="preview-wrap">
-      {/* ✅ শুধু Admin হলে toolbar render হবে — Non-admin এ সম্পূর্ণ hidden */}
       {isAdmin && (
         <div className="preview-toolbar no-print">
-          {onBack && (
-            <button
-              className="btn btn-outline"
-              onClick={onBack}
-              style={{ marginRight: 'auto' }}
-            >
-              <ChevronLeft size={16} /> ব্যাক টু এডিট
-            </button>
-          )}
-
-          <button className="btn btn-primary" onClick={handlePrint}>
-            <Printer size={16} /> প্রিন্ট
-          </button>
-
-          <button className="btn btn-secondary" onClick={downloadPNG}>
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <polyline points="21 15 16 10 5 21" />
-            </svg>{' '}
-            PNG
-          </button>
-
-          <button className="btn btn-secondary" onClick={downloadPDF}>
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-              <polyline points="14 2 14 8 20 8" />
-              <line x1="16" y1="13" x2="8" y2="13" />
-              <line x1="16" y1="17" x2="8" y2="17" />
-            </svg>{' '}
-            PDF
-          </button>
+          {onBack && (<button className="btn btn-outline" onClick={onBack} style={{ marginRight: 'auto' }}><ChevronLeft size={16} /> ব্যাক টু এডিট</button>)}
+          <button className="btn btn-primary" onClick={handlePrint}><Printer size={16} /> প্রিন্ট</button>
+          <button className="btn btn-secondary" onClick={downloadPNG}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> PNG</button>
+          <button className="btn btn-secondary" onClick={downloadPDF}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> PDF</button>
         </div>
       )}
 
-      {/* Poster Content — সবার জন্য visible */}
       <div id="dpb-print-area" className="poster-page" ref={printRef}>
-        <div className="poster-header">
-          <h1>{panel?.title || panel?.name || 'ডক্টরস প্যানেল'}</h1>
-        </div>
-
+        <div className="poster-header"><h1>{panel?.title || panel?.name || 'ডক্টরস প্যানেল'}</h1></div>
         {visibleDepartments.length === 0 ? (
-          <div
-            className="poster-empty-note"
-            style={{ padding: '30px', textAlign: 'center', color: '#6b7280' }}
-          >
+          <div className="poster-empty-note" style={{ padding: '30px', textAlign: 'center', color: '#6b7280' }}>
             {panel?.name || 'এই প্যানেলে'} এর জন্য কোনো ডাক্তার নির্বাচন করা হয়নি।
           </div>
         ) : (
@@ -1121,40 +1213,23 @@ function PreviewPanel({ panel, departments, checkedIds, footer, onBack, user }) 
             {visibleDepartments.map((dept) => (
               <div className="dept-block" key={dept.id}>
                 <DeptHeader dept={dept} />
-                {dept.doctors.map((doc) => (
-                  <DoctorEntry key={doc.id} doc={doc} accentColor={dept.color} />
-                ))}
+                {dept.doctors.map((doc) => <DoctorEntry key={doc.id} doc={doc} accentColor={dept.color} />)}
               </div>
             ))}
           </div>
         )}
-
         <div className="poster-footer">
           <div className="footer-col footer-left">
-            <div className="footer-line">
-              <MapPin size={20} /> <span>{footer.address}</span>
-            </div>
-            <div className="footer-line">
-              <Globe size={20} /> <span>{footer.website}</span>
-            </div>
+            <div className="footer-line"><MapPin size={20} /> <span>{footer.address}</span></div>
+            <div className="footer-line"><Globe size={20} /> <span>{footer.website}</span></div>
           </div>
-
           <div className="footer-col footer-center">
-            <img
-              src={footer.logo}
-              alt="Logo"
-              style={{ height: '170px', width: 'auto', objectFit: 'contain' }}
-            />
+            <img src={footer.logo} alt="Logo" style={{ height: '170px', width: 'auto', objectFit: 'contain' }} />
             <div className="hospital-subtitle">{footer.hospitalSubtitle}</div>
           </div>
-
           <div className="footer-col footer-right">
             <div className="footer-contact-label">{footer.contactLabel}</div>
-            {footer.phones.map((p, i) => (
-              <div className="footer-phone" key={i}>
-                <Phone size={22} /> {p}
-              </div>
-            ))}
+            {footer.phones.map((p, i) => <div className="footer-phone" key={i}><Phone size={22} /> {p}</div>)}
           </div>
         </div>
       </div>
@@ -1227,63 +1302,40 @@ export default function DoctorPanelBuilder() {
   const debounceRef = useRef(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  const handleLogout = () => {
-    logout();
-    setTimeout(() => window.location.reload(), 100);
-  };
+  const handleLogout = () => { logout(); setTimeout(() => window.location.reload(), 100); };
 
-  // ডেটা লোড (লগইন ছাড়াই)
   useEffect(() => {
     const loadData = async () => {
       const hid = hospitalId || 'alafiyah_main';
       console.log('🏥 হাসপাতাল আইডি:', hid);
-
       setLoading(true);
       try {
-        // ডিপার্টমেন্ট লোড (sorted by order)
         const deptSnapshot = await getDocs(collection(db, 'hospitals', hid, 'departments'));
-        const depts = deptSnapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() }))
-          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        const depts = deptSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         console.log('📂 ডিপার্টমেন্ট পাওয়া গেছে:', depts.length);
         setDepartments(depts);
 
-        // ==================================================
-        // ✅ প্যানেল লোড — শনিবার → শুক্রবার ক্রমানুসারে Sort
-        // ==================================================
         const panelSnapshot = await getDocs(collection(db, 'hospitals', hid, 'panels'));
         let panelList = panelSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-        // ✅ Sort by Day order (শনিবার → শুক্রবার)
         panelList.sort((a, b) => {
           const ai = DAY_NAMES.indexOf(a.name);
           const bi = DAY_NAMES.indexOf(b.name);
           return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
         });
-
         console.log('📅 Sorted Panels:', panelList.map(p => p.name));
 
-        // ✅ যদি কোনো panel না থাকে — default "শনিবার" তৈরি করি
         if (panelList.length === 0) {
-          const defaultPanel = {
-            id: 'শনিবার',
-            name: 'শনিবার',
-            title: 'শনিবারের ডক্টরস প্যানেল',
-            activeDoctorIds: []
-          };
+          const defaultPanel = { id: 'শনিবার', name: 'শনিবার', title: 'শনিবারের ডক্টরস প্যানেল', activeDoctorIds: [] };
           await setDoc(doc(db, 'hospitals', hid, 'panels', 'শনিবার'), defaultPanel);
           panelList = [defaultPanel];
         }
-
         console.log(`✅ panels state এ setting: ${panelList.length} টি panel`);
         setPanels(panelList);
 
-        // ফুটার লোড
         const footerRef = doc(db, 'hospitals', hid, 'footer', 'data');
         const footerSnap = await getDoc(footerRef);
         if (footerSnap.exists()) setFooter(footerSnap.data());
 
-        // অ্যাক্টিভ প্যানেল সেট (আজকের দিন)
         const params = new URLSearchParams(window.location.search);
         let targetDay = params.get('day');
         if (!targetDay) {
@@ -1295,7 +1347,6 @@ export default function DoctorPanelBuilder() {
           setActivePanelId(activePanel.id);
           setCheckedIds(new Set(activePanel.activeDoctorIds || []));
         }
-
       } catch (error) {
         console.error('❌ ডেটা লোড ত্রুটি:', error);
       } finally {
@@ -1305,13 +1356,8 @@ export default function DoctorPanelBuilder() {
     loadData();
   }, [hospitalId, reloadKey]);
 
-  // ইউজার লোড
   useEffect(() => {
-    if (!isAdmin || !hospitalId) {
-      setAllUsers([]);
-      return;
-    }
-
+    if (!isAdmin || !hospitalId) { setAllUsers([]); return; }
     const loadUsers = async () => {
       try {
         console.log("🔄 অ্যাডমিন ইউজার লোড হচ্ছে, hospitalId:", hospitalId);
@@ -1319,12 +1365,7 @@ export default function DoctorPanelBuilder() {
         const usersSnapshot = await getDocs(usersRef);
         const usersList = usersSnapshot.docs.map(doc => {
           const data = doc.data();
-          return {
-            id: doc.id,
-            ...data,
-            name: data.name || data.displayName || 'নাম নেই',
-            designation: data.designation || data.role || '',
-          };
+          return { id: doc.id, ...data, name: data.name || data.displayName || 'নাম নেই', designation: data.designation || data.role || '' };
         });
         console.log("✅ ইউজার পাওয়া গেছে:", usersList.length);
         setAllUsers(usersList);
@@ -1333,7 +1374,6 @@ export default function DoctorPanelBuilder() {
         setAllUsers([]);
       }
     };
-
     loadUsers();
   }, [isAdmin, hospitalId]);
 
@@ -1429,10 +1469,7 @@ export default function DoctorPanelBuilder() {
   const handleDeleteDept = (deptId) => {
     const removedIds = departments.find(d => d.id === deptId)?.doctors?.map(doc => doc.id) || [];
     updateDepartments(d => d.filter(dept => dept.id !== deptId), true);
-    const newPanels = panels.map(p => ({
-      ...p,
-      activeDoctorIds: (p.activeDoctorIds || []).filter(id => !removedIds.includes(id)),
-    }));
+    const newPanels = panels.map(p => ({ ...p, activeDoctorIds: (p.activeDoctorIds || []).filter(id => !removedIds.includes(id)) }));
     setPanels(newPanels);
     newPanels.forEach(p => savePanelToFirebase(p));
   };
@@ -1471,10 +1508,7 @@ export default function DoctorPanelBuilder() {
     const updatedDepts = departments.map(dept => dept.id === deptId ? { ...dept, doctors: dept.doctors.filter(doc => doc.id !== doctorId) } : dept);
     setDepartments(updatedDepts);
     saveDepartments(updatedDepts);
-    const newPanels = panels.map(p => ({
-      ...p,
-      activeDoctorIds: (p.activeDoctorIds || []).filter(id => id !== doctorId),
-    }));
+    const newPanels = panels.map(p => ({ ...p, activeDoctorIds: (p.activeDoctorIds || []).filter(id => id !== doctorId) }));
     setPanels(newPanels);
     newPanels.forEach(p => savePanelToFirebase(p));
     setCheckedIds(prev => { const newSet = new Set(prev); newSet.delete(doctorId); return newSet; });
@@ -1567,7 +1601,6 @@ export default function DoctorPanelBuilder() {
     );
   }
 
-  // ✅ /login route — শুধুমাত্র direct URL access এর জন্য
   if (path === '/login') {
     return (
       <div className="dpb">
@@ -1599,7 +1632,7 @@ export default function DoctorPanelBuilder() {
             </button>
 
             <button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>
-               আজকের ডাক্তার সময়সূচি
+              আজকের ডাক্তার সময়সূচি
             </button>
 
             {!isGuest && (isEditor || isSubAdmin || isAdmin) && (
@@ -1626,7 +1659,6 @@ export default function DoctorPanelBuilder() {
 
           <NotificationBell user={user} />
 
-          {/* ✅ Login button সরানো হয়েছে — শুধু /login URL থেকে access */}
           {!isGuest && (
             <button className="logout-btn" onClick={handleLogout}>
               <LogOut size={14} /> লগআউট
