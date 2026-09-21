@@ -806,15 +806,58 @@ function DoctorEntry({ doc, accentColor }) {
   );
 }
 
-function PreviewPanel({ panel, departments, checkedIds, footer, onBack }) {
+function PreviewPanel({ panel, departments, checkedIds, footer, onBack, user }) {
   const printRef = useRef(null);
-  const handlePrint = () => window.print();
-  const downloadPNG = async () => { const element = printRef.current; if (!element) return; try { const canvas = await html2canvas(element, { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' }); const link = document.createElement('a'); link.download = `${panel?.title || 'poster'}.png`; link.href = canvas.toDataURL('image/png'); link.click(); } catch (error) { alert('PNG ডাউনলোড করতে সমস্যা হয়েছে।'); } };
-  const downloadPDF = async () => {
+
+  // ✅ Admin check
+  const isAdmin = user?.role === 'admin';
+
+  const handlePrint = () => {
+    if (!isAdmin) {
+      alert('❌ শুধুমাত্র অ্যাডমিন প্রিন্ট করতে পারবেন।');
+      return;
+    }
+    window.print();
+  };
+
+  const downloadPNG = async () => {
+    if (!isAdmin) {
+      alert('❌ শুধুমাত্র অ্যাডমিন PNG ডাউনলোড করতে পারবেন।');
+      return;
+    }
     const element = printRef.current;
     if (!element) return;
     try {
-      const canvas = await html2canvas(element, { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' });
+      const canvas = await html2canvas(element, {
+        scale: 3,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+      });
+      const link = document.createElement('a');
+      link.download = `${panel?.title || 'poster'}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch (error) {
+      console.error('PNG download error:', error);
+      alert('PNG ডাউনলোড করতে সমস্যা হয়েছে।');
+    }
+  };
+
+  const downloadPDF = async () => {
+    if (!isAdmin) {
+      alert('❌ শুধুমাত্র অ্যাডমিন PDF ডাউনলোড করতে পারবেন।');
+      return;
+    }
+    const element = printRef.current;
+    if (!element) return;
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 3,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+      });
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -831,27 +874,90 @@ function PreviewPanel({ panel, departments, checkedIds, footer, onBack }) {
         heightLeft -= pdfPageHeight;
       }
       pdf.save(`${panel?.title || 'poster'}.pdf`);
-    } catch (error) { alert('PDF ডাউনলোড করতে সমস্যা হয়েছে।'); }
+    } catch (error) {
+      console.error('PDF download error:', error);
+      alert('PDF ডাউনলোড করতে সমস্যা হয়েছে।');
+    }
   };
 
   const hasChecked = checkedIds && checkedIds.size > 0;
-  const visibleDepartments = departments.map((dept) => ({
-    ...dept,
-    doctors: dept.doctors?.filter((doc) => hasChecked ? checkedIds.has(doc.id) : true) || []
-  })).filter((dept) => dept.doctors.length > 0);
+  const visibleDepartments = departments
+    .map((dept) => ({
+      ...dept,
+      doctors:
+        dept.doctors?.filter((doc) => (hasChecked ? checkedIds.has(doc.id) : true)) || [],
+    }))
+    .filter((dept) => dept.doctors.length > 0);
 
   return (
     <div className="preview-wrap">
-      <div className="preview-toolbar no-print">
-        {onBack && <button className="btn btn-outline" onClick={onBack} style={{ marginRight: 'auto' }}><ChevronLeft size={16} /> ব্যাক টু এডিট</button>}
-        <button className="btn btn-primary" onClick={handlePrint}><Printer size={16} /> প্রিন্ট</button>
-        <button className="btn btn-secondary" onClick={downloadPNG}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> PNG</button>
-        <button className="btn btn-secondary" onClick={downloadPDF}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> PDF</button>
-      </div>
+      {/* ✅ শুধু Admin হলে toolbar render হবে — Non-admin এ সম্পূর্ণ hidden */}
+      {isAdmin && (
+        <div className="preview-toolbar no-print">
+          {onBack && (
+            <button
+              className="btn btn-outline"
+              onClick={onBack}
+              style={{ marginRight: 'auto' }}
+            >
+              <ChevronLeft size={16} /> ব্যাক টু এডিট
+            </button>
+          )}
+
+          <button className="btn btn-primary" onClick={handlePrint}>
+            <Printer size={16} /> প্রিন্ট
+          </button>
+
+          <button className="btn btn-secondary" onClick={downloadPNG}>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
+            </svg>{' '}
+            PNG
+          </button>
+
+          <button className="btn btn-secondary" onClick={downloadPDF}>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+            </svg>{' '}
+            PDF
+          </button>
+        </div>
+      )}
+
+      {/* Poster Content — সবার জন্য visible */}
       <div id="dpb-print-area" className="poster-page" ref={printRef}>
-        <div className="poster-header"><h1>{panel?.title || panel?.name || 'ডক্টরস প্যানেল'}</h1></div>
+        <div className="poster-header">
+          <h1>{panel?.title || panel?.name || 'ডক্টরস প্যানেল'}</h1>
+        </div>
+
         {visibleDepartments.length === 0 ? (
-          <div className="poster-empty-note" style={{ padding: '30px', textAlign: 'center', color: '#6b7280' }}>
+          <div
+            className="poster-empty-note"
+            style={{ padding: '30px', textAlign: 'center', color: '#6b7280' }}
+          >
             {panel?.name || 'এই প্যানেলে'} এর জন্য কোনো ডাক্তার নির্বাচন করা হয়নি।
           </div>
         ) : (
@@ -859,23 +965,40 @@ function PreviewPanel({ panel, departments, checkedIds, footer, onBack }) {
             {visibleDepartments.map((dept) => (
               <div className="dept-block" key={dept.id}>
                 <DeptHeader dept={dept} />
-                {dept.doctors.map((doc) => <DoctorEntry key={doc.id} doc={doc} accentColor={dept.color} />)}
+                {dept.doctors.map((doc) => (
+                  <DoctorEntry key={doc.id} doc={doc} accentColor={dept.color} />
+                ))}
               </div>
             ))}
           </div>
         )}
+
         <div className="poster-footer">
           <div className="footer-col footer-left">
-            <div className="footer-line"><MapPin size={13} /> <span>{footer.address}</span></div>
-            <div className="footer-line"><Globe size={13} /> <span>{footer.website}</span></div>
+            <div className="footer-line">
+              <MapPin size={20} /> <span>{footer.address}</span>
+            </div>
+            <div className="footer-line">
+              <Globe size={20} /> <span>{footer.website}</span>
+            </div>
           </div>
+
           <div className="footer-col footer-center">
-            <img src={footer.logo} alt="Logo" style={{ height: '160px', width: 'auto', objectFit: 'contain' }} />
+            <img
+              src={footer.logo}
+              alt="Logo"
+              style={{ height: '170px', width: 'auto', objectFit: 'contain' }}
+            />
             <div className="hospital-subtitle">{footer.hospitalSubtitle}</div>
           </div>
+
           <div className="footer-col footer-right">
             <div className="footer-contact-label">{footer.contactLabel}</div>
-            {footer.phones.map((p, i) => <div className="footer-phone" key={i}><Phone size={13} /> {p}</div>)}
+            {footer.phones.map((p, i) => (
+              <div className="footer-phone" key={i}>
+                <Phone size={22} /> {p}
+              </div>
+            ))}
           </div>
         </div>
       </div>
