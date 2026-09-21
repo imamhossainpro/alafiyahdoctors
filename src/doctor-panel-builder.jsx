@@ -598,9 +598,6 @@ function DoctorModal({ initial, onSave, onClose }) {
           <label>কর্মস্থল / পদবী</label>
           <textarea className="textarea" rows={2} value={workplace} onChange={(e) => setWorkplace(e.target.value)} placeholder="যেমনঃ চট্টগ্রাম মেডিকেল কলেজ হাসপাতাল" />
 
-          {/* ================================================
-              ⏰ Time Slots Section — Manual Input
-              ================================================ */}
           <div style={{ marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
             <label style={{ fontWeight: '700', display: 'block', marginBottom: '4px' }}>
               ⏰ সাক্ষাতের সময় (একাধিক স্লট যোগ করুন)
@@ -1091,41 +1088,37 @@ export default function DoctorPanelBuilder() {
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         console.log('📂 ডিপার্টমেন্ট পাওয়া গেছে:', depts.length);
         setDepartments(depts);
-      // ==================================================
-      // ✅ প্যানেল লোড — শনিবার → শুক্রবার ক্রমানুসারে Sort
-      // ==================================================
-      const panelSnapshot = await getDocs(collection(db, 'hospitals', hid, 'panels'));
-      let panelList = panelSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-      // ✅ Sort by Day order (শনিবার → শুক্রবার)
-      panelList.sort((a, b) => {
-        const ai = DAY_NAMES.indexOf(a.name);
-        const bi = DAY_NAMES.indexOf(b.name);
-        // যেগুলো DAY_NAMES এ নেই, সেগুলো শেষে যাবে
-        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
-      });
+        // ==================================================
+        // ✅ প্যানেল লোড — শনিবার → শুক্রবার ক্রমানুসারে Sort
+        // ==================================================
+        const panelSnapshot = await getDocs(collection(db, 'hospitals', hid, 'panels'));
+        let panelList = panelSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-      console.log('📅 Sorted Panels:', panelList.map(p => p.name));
+        // ✅ Sort by Day order (শনিবার → শুক্রবার)
+        panelList.sort((a, b) => {
+          const ai = DAY_NAMES.indexOf(a.name);
+          const bi = DAY_NAMES.indexOf(b.name);
+          return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+        });
 
-      // ✅ যদি কোনো panel না থাকে — default "শনিবার" তৈরি করি
-      if (panelList.length === 0) {
-        const defaultPanel = {
-          id: 'শনিবার',
-          name: 'শনিবার',
-          title: 'শনিবারের ডক্টরস প্যানেল',
-          activeDoctorIds: []
-        };
-        await setDoc(doc(db, 'hospitals', hid, 'panels', 'শনিবার'), defaultPanel);
-        panelList = [defaultPanel];
-      }
+        console.log('📅 Sorted Panels:', panelList.map(p => p.name));
 
-      setPanels(panelList);
+        // ✅ যদি কোনো panel না থাকে — default "শনিবার" তৈরি করি
+        if (panelList.length === 0) {
+          const defaultPanel = {
+            id: 'শনিবার',
+            name: 'শনিবার',
+            title: 'শনিবারের ডক্টরস প্যানেল',
+            activeDoctorIds: []
+          };
+          await setDoc(doc(db, 'hospitals', hid, 'panels', 'শনিবার'), defaultPanel);
+          panelList = [defaultPanel];
+        }
 
-      // ✅ Sort by order (নতুন field)
-      panelList.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        console.log(`✅ panels state এ setting: ${panelList.length} টি panel`);
+        setPanels(panelList);
 
-      console.log(`✅ panels state এ setting: ${panelList.length} টি panel`);
-      setPanels(panelList);
         // ফুটার লোড
         const footerRef = doc(db, 'hospitals', hid, 'footer', 'data');
         const footerSnap = await getDoc(footerRef);
@@ -1191,7 +1184,6 @@ export default function DoctorPanelBuilder() {
       const oldSnapshot = await getDocs(collection(db, 'hospitals', hospitalId, 'departments'));
       const batch = writeBatch(db);
       oldSnapshot.forEach(doc => batch.delete(doc.ref));
-      // ✅ Save order field so sequence persists after reload
       newDepts.forEach((dept, index) => {
         const { id, ...deptData } = dept;
         const ref = doc(db, 'hospitals', hospitalId, 'departments', id || uid());
@@ -1200,26 +1192,12 @@ export default function DoctorPanelBuilder() {
       await batch.commit();
       console.log('✅ Departments saved with order:', newDepts.length);
     } catch (error) { console.error('saveDepartments error:', error); }
-};
+  };
 
-    const savePanelToFirebase = async (panel) => {
-        if (!hospitalId) return;
-        try { await setDoc(doc(db, 'hospitals', hospitalId, 'panels', panel.id), panel); } catch (error) { console.error('savePanel error:', error); }
-    };
-
-    // ✅ Save all panels with order fields
-    const saveAllPanels = async (panelList) => {
-        if (!hospitalId) return;
-        try {
-          const batch = writeBatch(db);
-          panelList.forEach((panel, index) => {
-            const { id, ...panelData } = panel;
-            const ref = doc(db, 'hospitals', hospitalId, 'panels', id);
-            batch.set(ref, { ...panelData, order: index }, { merge: true });
-          });
-          await batch.commit();
-        } catch (error) { console.error('saveAllPanels error:', error); }
-    };
+  const savePanelToFirebase = async (panel) => {
+    if (!hospitalId) return;
+    try { await setDoc(doc(db, 'hospitals', hospitalId, 'panels', panel.id), panel); } catch (error) { console.error('savePanel error:', error); }
+  };
 
   const deletePanelFromFirebase = async (panelId) => {
     if (!hospitalId) return;
@@ -1289,7 +1267,6 @@ export default function DoctorPanelBuilder() {
     setDeptModal(null);
   };
 
-  // ✅ FIX: Null-safe activeDoctorIds in handleDeleteDept
   const handleDeleteDept = (deptId) => {
     const removedIds = departments.find(d => d.id === deptId)?.doctors?.map(doc => doc.id) || [];
     updateDepartments(d => d.filter(dept => dept.id !== deptId), true);
@@ -1331,7 +1308,6 @@ export default function DoctorPanelBuilder() {
     setDoctorModal(null);
   };
 
-  // ✅ FIX: Null-safe activeDoctorIds in handleDeleteDoctor
   const handleDeleteDoctor = (deptId, doctorId) => {
     const updatedDepts = departments.map(dept => dept.id === deptId ? { ...dept, doctors: dept.doctors.filter(doc => doc.id !== doctorId) } : dept);
     setDepartments(updatedDepts);
@@ -1415,7 +1391,7 @@ export default function DoctorPanelBuilder() {
   const handleRefreshData = () => setReloadKey(prev => prev + 1);
 
   const getIsAuthorized = () => {
-    if (path === '/' || path === '/booking' || path === '/display' || path === '/preview') return true;
+    if (path === '/' || path === '/booking' || path === '/display' || path === '/preview' || path === '/login') return true;
     if (path === '/edit' && (isEditor || isSubAdmin || isAdmin)) return true;
     if (path === '/doctors' && (isSubAdmin || isAdmin)) return true;
     if (path === '/dashboard' && (isSubAdmin || isAdmin)) return true;
@@ -1424,13 +1400,23 @@ export default function DoctorPanelBuilder() {
   };
 
   if (loading) {
-  return (
-    <>
-      <style>{CSS}</style>
-      <AppShellSkeleton />
-    </>
-  );
-}
+    return (
+      <>
+        <style>{CSS}</style>
+        <AppShellSkeleton />
+      </>
+    );
+  }
+
+  // ✅ /login route — শুধুমাত্র direct URL access এর জন্য
+  if (path === '/login') {
+    return (
+      <div className="dpb">
+        <style>{CSS}</style>
+        <AuthPage onClose={() => navigate('/')} />
+      </div>
+    );
+  }
 
   if (!getIsAuthorized()) return <NotFoundPage />;
 
@@ -1454,7 +1440,7 @@ export default function DoctorPanelBuilder() {
             </button>
 
             <button className={activeView === 'preview' ? 'tab active' : 'tab'} onClick={() => setActiveView('preview')}>
-              প্রিভিউ
+               আজকের ডাক্তার সময়সূচি
             </button>
 
             {!isGuest && (isEditor || isSubAdmin || isAdmin) && (
@@ -1481,10 +1467,11 @@ export default function DoctorPanelBuilder() {
 
           <NotificationBell user={user} />
 
-          {isGuest ? (
-            <button className="login-btn" onClick={() => setShowAuth(true)}>লগইন / রেজিস্ট্রেশন</button>
-          ) : (
-            <button className="logout-btn" onClick={handleLogout}><LogOut size={14} /> লগআউট</button>
+          {/* ✅ Login button সরানো হয়েছে — শুধু /login URL থেকে access */}
+          {!isGuest && (
+            <button className="logout-btn" onClick={handleLogout}>
+              <LogOut size={14} /> লগআউট
+            </button>
           )}
         </div>
       </div>
@@ -1502,7 +1489,7 @@ export default function DoctorPanelBuilder() {
       )}
 
       {activeView === 'booking' && <BookingSystem departments={departments} panels={panels} onBack={() => setActiveView('preview')} />}
-      {activeView === 'preview' && <PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} />}
+      {activeView === 'preview' && <PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} user={user} />}
       {activeView === 'edit' && !isGuest && (isEditor || isSubAdmin || isAdmin) && (
         <EditPanel panel={activePanel} departments={departments} footer={footer} checkedIds={checkedIds} allChecked={allChecked} onUpdateTitle={handleUpdateTitle} onUpdateFooter={handleUpdateFooter} onUpdatePhone={handleUpdatePhone} onAddPhone={handleAddPhone} onRemovePhone={handleRemovePhone} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={isAdmin ? handleDeleteDept : () => {}} onMoveDept={handleMoveDept} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={() => {}} onMoveDoctor={handleMoveDoctor} onToggleDoctorChecked={handleToggleDoctorChecked} onToggleDeptAllChecked={handleToggleDeptAllChecked} onToggleAll={handleToggleAll} clearConfirm={clearConfirm} onClearAll={() => {}} onGoPreview={() => setActiveView('preview')} />
       )}
