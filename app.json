@@ -1,24 +1,36 @@
 {
   "expo": {
-    "name": "AlafiyahMobileApp",
-    "slug": "AlafiyahMobileApp",
+    "name": "আল-আফিয়া হাসপাতাল",
+    "slug": "alafiyah-hospital",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "ios": {
-      "supportsTablet": true
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1c5fa8"
     },
     "android": {
+      "package": "com.alafiyah.hospital",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1c5fa8"
+      },
+      "permissions": []
+    },
+    "ios": {
+      "bundleIdentifier": "com.alafiyah.hospital",
+      "supportsTablet": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "68d7a24c-dbb9-4a69-ac63-97114cfa43a5"
       }
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    }
+    "plugins": [
+      "expo-font"
+    ]
   }
 }
