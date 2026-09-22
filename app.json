@@ -18,6 +18,7 @@
     "android": {
       "package": "com.alafiyah.hospital",
       "versionCode": 1,
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",

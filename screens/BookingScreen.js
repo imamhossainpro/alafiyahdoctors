@@ -1,6 +1,6 @@
 // screens/BookingScreen.js
 // ==================================================
-// 📅 রোগীর ডাক্তার বুকিং ফর্ম (Firebase Save সহ)
+// 📅 রোগীর ডাক্তার বুকিং ফর্ম
 // ==================================================
 import React, { useState, useEffect, useMemo } from 'react';
 import {
@@ -35,6 +35,7 @@ import {
   Timestamp,
 } from '../firebase';
 import { useHospital } from '../context/HospitalContext';
+import HeaderMenu from '../components/HeaderMenu';
 
 // ==================================================
 // ✅ Constants
@@ -93,7 +94,7 @@ const getBanglaDayName = (dateStr) => {
 // ==================================================
 // ✅ Main Component
 // ==================================================
-export default function BookingScreen() {
+export default function BookingScreen({ navigation }) {
   const { hospitalId } = useHospital();
 
   const [formData, setFormData] = useState({
@@ -111,7 +112,7 @@ export default function BookingScreen() {
     return new Date(today.getFullYear(), today.getMonth(), 1);
   });
 
-  // ✅ Doctor Data
+  // Doctor Data State
   const [departments, setDepartments] = useState([]);
   const [panels, setPanels] = useState([]);
   const [availableDoctors, setAvailableDoctors] = useState([]);
@@ -119,17 +120,29 @@ export default function BookingScreen() {
   const [selectedDoctor, setSelectedDoctor] = useState(null);
   const [loadingDoctors, setLoadingDoctors] = useState(false);
 
-  // ✅ Submit State
+  // Submit State
   const [submitting, setSubmitting] = useState(false);
-  const [bookingResult, setBookingResult] = useState(null); // Success হলে এখানে ডেটা
+  const [bookingResult, setBookingResult] = useState(null);
 
-  // ✅ Selected Date-এর বাংলা দিন
+  // ✅ Header Menu Button
+  useEffect(() => {
+    if (navigation) {
+      navigation.setOptions({
+        headerRight: () => <HeaderMenu />,
+        headerRightContainerStyle: {
+          paddingRight: 12,
+        },
+      });
+    }
+  }, [navigation]);
+
+  // Selected Date-এর বাংলা দিন
   const selectedDayName = useMemo(
     () => getBanglaDayName(selectedDate),
     [selectedDate]
   );
 
-  // ✅ এ মাসের কত দিন
+  // এ মাসের কত দিন
   const monthDays = useMemo(() => {
     const year = viewDate.getFullYear();
     const month = viewDate.getMonth();
@@ -151,7 +164,7 @@ export default function BookingScreen() {
   }, []);
 
   // ==================================================
-  // ✅ Load Departments & Panels
+  // Load Departments & Panels
   // ==================================================
   useEffect(() => {
     const loadData = async () => {
@@ -170,7 +183,7 @@ export default function BookingScreen() {
   }, [hospitalId]);
 
   // ==================================================
-  // ✅ Date Change → Update Doctors
+  // Date Change → Update Doctors
   // ==================================================
   useEffect(() => {
     if (panels.length === 0 || departments.length === 0) return;
@@ -207,7 +220,7 @@ export default function BookingScreen() {
     setLoadingDoctors(false);
   }, [selectedDate, panels, departments]);
 
-  // ✅ Filtered Doctors
+  // Filtered Doctors
   const filteredDoctors = useMemo(() => {
     if (selectedDepartment === 'all') return availableDoctors;
     return availableDoctors.filter((d) => d.deptId === selectedDepartment);
@@ -228,7 +241,7 @@ export default function BookingScreen() {
   }, [availableDoctors]);
 
   // ==================================================
-  // ✅ Handlers
+  // Handlers
   // ==================================================
   const handleChange = (key, value) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
@@ -262,9 +275,6 @@ export default function BookingScreen() {
     setSelectedDoctor(null);
   };
 
-  // ==================================================
-  // ✅ New Booking (Success screen থেকে ফেরা)
-  // ==================================================
   const handleNewBooking = () => {
     setFormData({
       name: '',
@@ -280,10 +290,9 @@ export default function BookingScreen() {
   };
 
   // ==================================================
-  // ✅ SUBMIT → Firebase Save
+  // SUBMIT → Firebase Save
   // ==================================================
   const handleSubmit = async () => {
-    // 1. Validation
     if (!formData.name.trim()) {
       Alert.alert('⚠️', 'রোগীর নাম লিখুন');
       return;
@@ -307,9 +316,7 @@ export default function BookingScreen() {
       const mobile = toEnglishDigits(formData.mobile.trim());
       const age = toEnglishDigits(formData.age.trim());
 
-      // ==================================================
-      // 1️⃣ Patient তৈরি / খুঁজে বের করা
-      // ==================================================
+      // 1. Patient তৈরি / খুঁজে বের করা
       let patient = await findPatientByMobile(hospitalId, mobile);
       let patientId;
       let isNewPatient = true;
@@ -317,7 +324,6 @@ export default function BookingScreen() {
       if (patient) {
         patientId = patient.id;
         isNewPatient = false;
-        console.log('✅ পুরনো রোগী:', patientId);
       } else {
         const newPatient = await createPatient(hospitalId, {
           name: formData.name.trim(),
@@ -328,7 +334,6 @@ export default function BookingScreen() {
         });
         patientId = newPatient.id;
         isNewPatient = true;
-        console.log('✅ নতুন রোগী:', patientId);
       }
 
       // Visit track
@@ -338,9 +343,7 @@ export default function BookingScreen() {
         visitDate: selectedDate,
       });
 
-      // ==================================================
-      // 2️⃣ Serial Number (প্রতি ডাক্তার + প্রতি তারিখ আলাদা)
-      // ==================================================
+      // 2. Serial Number
       const counterKey = `${selectedDoctor.id}_${selectedDate}`;
       const counterRef = doc(
         db,
@@ -376,41 +379,28 @@ export default function BookingScreen() {
         });
       }
 
-      console.log('✅ Serial No:', serialNo);
-
-      // ==================================================
-      // 3️⃣ Appointment তৈরি
-      // ==================================================
+      // 3. Appointment তৈরি
       const doctorTime =
         selectedDoctor.timeSlots && selectedDoctor.timeSlots.length > 0
           ? `${selectedDoctor.timeSlots[0].start} - ${selectedDoctor.timeSlots[0].end}`
           : '';
 
       const appointmentData = {
-        // Patient info
         name: formData.name.trim(),
         age,
         mobile,
         gender: formData.gender,
         address: formData.address.trim(),
         patientId,
-
-        // Doctor info
         doctorId: selectedDoctor.id,
         doctorName: selectedDoctor.name,
         doctorDept: selectedDoctor.deptName,
         doctorQuals: selectedDoctor.quals || '',
         doctorTime,
-
-        // Booking info
         bookingDate: selectedDate,
         bookingDay: selectedDayName,
         serialNo,
-
-        // Referral info
         referralSource: formData.referralSource,
-
-        // Meta
         status: 'pending',
         isArchived: false,
         isNew: isNewPatient,
@@ -425,11 +415,6 @@ export default function BookingScreen() {
         appointmentData
       );
 
-      console.log('✅ Appointment created:', docRef.id);
-
-      // ==================================================
-      // 4️⃣ Success Result
-      // ==================================================
       setBookingResult({
         appointmentId: docRef.id,
         serialNo,
@@ -450,7 +435,7 @@ export default function BookingScreen() {
   };
 
   // ==================================================
-  // ✅ Render Doctor Card
+  // Render Doctor Card
   // ==================================================
   const renderDoctorCard = (doc, isSelected) => (
     <TouchableOpacity
@@ -484,9 +469,7 @@ export default function BookingScreen() {
         <Text style={styles.doctorSpecialty}>{doc.specialty}</Text>
       ) : null}
 
-      {doc.quals ? (
-        <Text style={styles.doctorQuals}>{doc.quals}</Text>
-      ) : null}
+      {doc.quals ? <Text style={styles.doctorQuals}>{doc.quals}</Text> : null}
 
       {doc.workplace ? (
         <Text style={styles.doctorWorkplace}>{doc.workplace}</Text>
@@ -508,7 +491,7 @@ export default function BookingScreen() {
   );
 
   // ==================================================
-  // ✅ SUCCESS SCREEN
+  // SUCCESS SCREEN
   // ==================================================
   if (bookingResult) {
     const checkinUrl = `${WEB_APP_URL}/checkin/${bookingResult.appointmentId}`;
@@ -519,7 +502,6 @@ export default function BookingScreen() {
           contentContainerStyle={styles.successContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Success Icon */}
           <View style={styles.successIconBox}>
             <Ionicons name="checkmark-circle" size={80} color="#16a34a" />
           </View>
@@ -533,13 +515,11 @@ export default function BookingScreen() {
             </View>
           )}
 
-          {/* Serial Number — Big */}
           <View style={styles.serialBox}>
             <Text style={styles.serialLabel}>আপনার সিরিয়াল নম্বর</Text>
             <Text style={styles.serialNumber}>{bookingResult.serialNo}</Text>
           </View>
 
-          {/* Details */}
           <View style={styles.detailsBox}>
             <View style={styles.detailRow}>
               <Ionicons name="person-outline" size={18} color="#64748b" />
@@ -570,7 +550,6 @@ export default function BookingScreen() {
             ) : null}
           </View>
 
-          {/* QR Code */}
           <View style={styles.qrBox}>
             <Text style={styles.qrTitle}>চেক-ইন QR কোড</Text>
             <View style={styles.qrWrapper}>
@@ -586,7 +565,6 @@ export default function BookingScreen() {
             </Text>
           </View>
 
-          {/* New Booking Button */}
           <TouchableOpacity
             style={styles.newBookingButton}
             onPress={handleNewBooking}
@@ -603,7 +581,7 @@ export default function BookingScreen() {
   }
 
   // ==================================================
-  // ✅ MAIN FORM
+  // MAIN FORM
   // ==================================================
   return (
     <KeyboardAvoidingView
@@ -1057,11 +1035,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 55,
   },
-  picker: {
-    height: 55,
-    width: '100%',
-    color: '#1e293b',
-  },
+  picker: { height: 55, width: '100%', color: '#1e293b' },
 
   loadingBox: { padding: 30, alignItems: 'center', gap: 12 },
   loadingText: { fontSize: 14, color: '#64748b' },
@@ -1173,7 +1147,6 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
 
-  // Deselect
   deselectButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1216,22 +1189,15 @@ const styles = StyleSheet.create({
   },
   submitButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 
-  // ==================================================
-  // ✅ SUCCESS SCREEN STYLES
-  // ==================================================
-  successContainer: {
-    flex: 1,
-    backgroundColor: '#f4f7f6',
-  },
+  // Success Screen
+  successContainer: { flex: 1, backgroundColor: '#f4f7f6' },
   successContent: {
     padding: 20,
     alignItems: 'center',
     paddingTop: 30,
     paddingBottom: 40,
   },
-  successIconBox: {
-    marginBottom: 16,
-  },
+  successIconBox: { marginBottom: 16 },
   successTitle: {
     fontSize: 26,
     fontWeight: '800',
@@ -1249,11 +1215,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginBottom: 20,
   },
-  newPatientText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#7c3aed',
-  },
+  newPatientText: { fontSize: 12.5, fontWeight: '700', color: '#7c3aed' },
   serialBox: {
     backgroundColor: '#0d9488',
     paddingVertical: 20,
@@ -1361,9 +1323,5 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  newBookingText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  newBookingText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });
