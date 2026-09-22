@@ -22,7 +22,10 @@
     },
     "ios": {
       "bundleIdentifier": "com.alafiyah.hospital",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "extra": {
       "eas": {
