@@ -4,7 +4,7 @@
     "slug": "alafiyah-hospital",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon-2.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "updates": {
       "url": "https://u.expo.dev/68d7a24c-dbb9-4a69-ac63-97114cfa43a5",
@@ -20,6 +20,8 @@
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png",
         "backgroundColor": "#1c5fa8"
       }
     },
