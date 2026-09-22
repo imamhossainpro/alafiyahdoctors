@@ -6,34 +6,18 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#1c5fa8"
-    },
     "android": {
       "package": "com.alafiyah.hospital",
       "versionCode": 1,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundColor": "#1c5fa8"
-      },
-      "permissions": []
-    },
-    "ios": {
-      "bundleIdentifier": "com.alafiyah.hospital",
-      "supportsTablet": true,
-      "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "extra": {
       "eas": {
         "projectId": "68d7a24c-dbb9-4a69-ac63-97114cfa43a5"
       }
-    },
-    "plugins": [
-      "expo-font"
-    ]
+    }
   }
 }

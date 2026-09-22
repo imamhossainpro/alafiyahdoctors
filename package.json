@@ -17,6 +17,7 @@
     "expo-device": "~57.0.2",
     "expo-font": "~57.0.4",
     "expo-notifications": "~57.0.20",
+    "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
     "firebase": "^12.19.0",
     "lucide-react-native": "^1.47.0",
@@ -26,7 +27,6 @@
     "react-native-qrcode-svg": "^6.3.25",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
-    "react-native-skeleton-placeholder": "^5.2.4",
     "react-native-svg": "15.15.4"
   },
   "scripts": {
