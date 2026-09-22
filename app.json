@@ -1,11 +1,20 @@
 {
   "expo": {
-    "name": "আল-আফিয়া হাসপাতাল",
+    "name": "Al Afiyah Hospital",
     "slug": "alafiyah-hospital",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/icon-2.png",
     "userInterfaceStyle": "light",
+    "updates": {
+      "url": "https://u.expo.dev/68d7a24c-dbb9-4a69-ac63-97114cfa43a5",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "android": {
       "package": "com.alafiyah.hospital",
       "versionCode": 1,
