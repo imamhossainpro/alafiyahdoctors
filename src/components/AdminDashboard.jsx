@@ -30,6 +30,8 @@ const MarketingReport = lazy(() => import('./admin/MarketingReport'));
 const DisplaySettings = lazy(() => import('./admin/DisplaySettings'));
 const LocationManager = lazy(() => import('./admin/LocationManager'));
 const UserAccessManager = lazy(() => import('./admin/UserAccessManager'));
+const QueueControlPanel = lazy(() => import('./admin/QueueControlPanel'));
+const ReportVaultManager = lazy(() => import('./admin/ReportVaultManager'));
 
 // ==================================================
 // ✅ Tab Loader
@@ -516,6 +518,48 @@ export default function AdminDashboard({ user: propUser }) {
             </button>
           )}
 
+          {/* ✅ Queue Control — Phase 5 */}
+          {can('booking.view') && (
+            <button
+              onClick={() => {
+                setShowArchived(false);
+                setTab('queue');
+              }}
+              style={{
+                padding: '8px 16px',
+                background: tab === 'queue' ? '#1c5fa8' : '#ffffff',
+                color: tab === 'queue' ? '#ffffff' : '#333333',
+                border: '1px solid #e2e8f0',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                fontWeight: '600',
+              }}
+            >
+              🎛️ Queue Control
+            </button>
+          )}
+
+          {/* ✅ Report Vault — Phase 6 (NEW) */}
+          {can('booking.view') && (
+            <button
+              onClick={() => {
+                setShowArchived(false);
+                setTab('reports');
+              }}
+              style={{
+                padding: '8px 16px',
+                background: tab === 'reports' ? '#1c5fa8' : '#ffffff',
+                color: tab === 'reports' ? '#ffffff' : '#333333',
+                border: '1px solid #e2e8f0',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                fontWeight: '600',
+              }}
+            >
+              📄 Report Vault
+            </button>
+          )}
+
           {/* Booking List */}
           {can('booking.view') && (
             <button
@@ -793,6 +837,24 @@ export default function AdminDashboard({ user: propUser }) {
         <SafeArea>
           <Suspense fallback={<TabLoader />}>
             <Overview appointments={activeAppointments} />
+          </Suspense>
+        </SafeArea>
+      )}
+
+      {/* ✅ Queue Control — Phase 5 */}
+      {tab === 'queue' && can('booking.view') && (
+        <SafeArea>
+          <Suspense fallback={<TabLoader />}>
+            <QueueControlPanel user={user} />
+          </Suspense>
+        </SafeArea>
+      )}
+
+      {/* ✅ Report Vault — Phase 6 (NEW) */}
+      {tab === 'reports' && can('booking.view') && (
+        <SafeArea>
+          <Suspense fallback={<TabLoader />}>
+            <ReportVaultManager user={user} />
           </Suspense>
         </SafeArea>
       )}
