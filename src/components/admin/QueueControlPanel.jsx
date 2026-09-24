@@ -92,39 +92,36 @@ export default function QueueControlPanel({ user }) {
     return () => unsub();
   }, [hospitalId, selectedDoctor, selectedDate]);
 
-  const handleCallNext = async () => {
-    if (!selectedDoctor || !selectedDate) return;
-    setActionLoading(true);
-    setError('');
-    try {
-      const result = await callNextPatient(
-        hospitalId,
-        selectedDoctor,
-        selectedDate,
-        authUser || user
-      );
+ const handleCallNext = async () => {
+  if (!selectedDoctor || !selectedDate) return;
+  setActionLoading(true);
+  
+  try {
+    const result = await callNextPatient(hospitalId, selectedDoctor, selectedDate, authUser || user);
 
-      // Log activity
-      try {
-        await logActivity({
+    // ✅ FCM Notification পাঠান
+    if (result.success && result.currentSerial) {
+      const response = await fetch('https://your-app.railway.app/api/queue/next', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           hospitalId,
-          module: LOG_MODULES.BOOKING,
-          action: LOG_ACTIONS.STATUS_CHANGE,
-          recordId: `${selectedDoctor}_${selectedDate}`,
-          description: `Queue: Called serial #${result.currentSerial}`,
-          oldValue: { currentSerial: result.currentSerial - 1 },
-          newValue: { currentSerial: result.currentSerial },
-          user: authUser || user,
-        });
-      } catch (logErr) {
-        console.warn('Activity log error:', logErr);
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setActionLoading(false);
+          doctorId: selectedDoctor,
+          date: selectedDate,
+          nextSerial: result.currentSerial,
+        }),
+      });
+
+      const data = await response.json();
+      console.log('FCM response:', data);
     }
-  };
+
+  } catch (err) {
+    setError(err.message);
+  } finally {
+    setActionLoading(false);
+  }
+};
 
   const handleReset = async () => {
     if (!window.confirm('Queue reset করতে চান? Current serial 0 হবে।')) return;

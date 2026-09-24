@@ -15,7 +15,89 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { createRequire } from 'module';
 import fs from 'fs'; // ✅ নতুন যোগ করা হয়েছে (সেশন ফোল্ডার মুছতে)
 
+const fcmService = require('./services/fcmService');
+
 const require = createRequire(import.meta.url);
+
+
+
+
+
+// ==================================================
+// ✅ FCM Queue Notification API
+// ==================================================
+app.post('/api/queue/next', async (req, res) => {
+  try {
+    const { hospitalId, doctorId, date, nextSerial } = req.body;
+
+    if (!hospitalId || !doctorId || !date) {
+      return res.status(400).json({ success: false, error: 'Missing fields' });
+    }
+
+    console.log(`📢 Queue Next API: Serial #${nextSerial} for doctor ${doctorId}`);
+
+    // 1. Firestore থেকে রোগীর appointment খুঁজুন
+    const appointmentsRef = db.collection('hospitals').doc(hospitalId).collection('appointments');
+    const snapshot = await appointmentsRef
+      .where('doctorId', '==', doctorId)
+      .where('bookingDate', '==', date)
+      .where('serialNo', '==', nextSerial)
+      .limit(1)
+      .get();
+
+    if (snapshot.empty) {
+      return res.json({ success: false, error: 'No appointment found' });
+    }
+
+    const appointment = snapshot.docs[0].data();
+    const userId = appointment.userId;
+
+    if (!userId) {
+      return res.json({ success: false, error: 'Patient has no user account' });
+    }
+
+    // 2. User doc থেকে FCM token নিন
+    const userDoc = await db.collection('hospitals').doc(hospitalId).collection('users').doc(userId).get();
+    
+    if (!userDoc.exists) {
+      return res.json({ success: false, error: 'User not found' });
+    }
+
+    const userData = userDoc.data();
+    let fcmTokens = [];
+    
+    if (Array.isArray(userData.fcmTokens)) {
+      fcmTokens = userData.fcmTokens.map(t => typeof t === 'string' ? t : t.token);
+    } else if (userData.fcmToken) {
+      fcmTokens = [userData.fcmToken];
+    }
+
+    if (fcmTokens.length === 0) {
+      return res.json({ success: false, error: 'No FCM token for patient' });
+    }
+
+    // 3. Nofitication পাঠান
+    const result = await fcmService.sendToDevice(
+      fcmTokens[0], // প্রথম token নিন
+      {
+        title: '🔔 আপনার সিরিয়াল আসছে!',
+        body: `${appointment.doctorName} এর চেম্বারে প্রস্তুত হোন। সিরিয়াল #${nextSerial}`
+      },
+      {
+        type: 'QUEUE_UPDATE',
+        appointmentId: snapshot.docs[0].id,
+        mySerial: String(nextSerial)
+      }
+    );
+
+    console.log(`✅ Notification sent: ${result.success}`);
+    res.json({ success: true, result });
+
+  } catch (error) {
+    console.error('❌ Queue API error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // ==================================================
 // ✅ Firebase Credentials Loader
@@ -609,4 +691,8 @@ process.on('SIGINT', () => {
 
 process.on('unhandledRejection', (reason) => {
   console.error('⚠️ Unhandled Rejection:', reason);
+});
+
+app.listen(PORT, () => {
+  console.log(`🚀 Backend Server চলছে: ${PORT}`);
 });
