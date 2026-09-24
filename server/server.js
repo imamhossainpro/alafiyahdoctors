@@ -4,6 +4,7 @@
 // ==================================================
 // ✅ ESM (import) — Baileys 7.x এর জন্য
 // ✅ CORS enabled — Web App থেকে API কল করার জন্য
+// ✅ In-App Notification save to Firestore
 // ==================================================
 
 import 'dotenv/config';
@@ -67,27 +68,23 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // ==================================================
-// ✅ CORS Middleware — Web App থেকে API কল করার অনুমতি
-// ⚠️ এটি express.json() এবং route handlers এর আগে থাকতে হবে
+// ✅ CORS Middleware
 // ==================================================
 const ALLOWED_ORIGINS = [
   'https://doctors.alafiyahhospital.com',
   'https://alafiyahhospital.com',
   'https://www.alafiyahhospital.com',
-  'http://localhost:5173',   // Vite dev server
-  'http://localhost:3000',   // Alternate dev
+  'http://localhost:5173',
+  'http://localhost:3000',
 ];
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-
-  // ✅ Allow list-এ থাকলে সেই origin, নাহলে '*' (development-এ সুবিধাজনক)
   if (origin && ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   } else {
     res.setHeader('Access-Control-Allow-Origin', '*');
   }
-
   res.setHeader(
     'Access-Control-Allow-Methods',
     'GET, POST, PUT, DELETE, OPTIONS'
@@ -97,13 +94,11 @@ app.use((req, res, next) => {
     'Content-Type, Authorization, X-Requested-With'
   );
   res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Max-Age', '86400'); // 24 ঘন্টা preflight cache
+  res.setHeader('Access-Control-Max-Age', '86400');
 
-  // ✅ Preflight request (OPTIONS) handling
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
   }
-
   next();
 });
 
@@ -129,6 +124,44 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASS,
   },
 });
+
+// ==================================================
+// ✅ In-App Notification Save to Firestore
+// ==================================================
+async function saveInAppNotification(userId, notification, data = {}) {
+  if (!userId) {
+    console.warn('⚠️ saveInAppNotification: No userId');
+    return null;
+  }
+
+  try {
+    const notificationsRef = db
+      .collection('hospitals')
+      .doc(HOSPITAL_ID)
+      .collection('users')
+      .doc(userId)
+      .collection('notifications');
+
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    const docRef = await notificationsRef.add({
+      title: notification.title || 'নোটিফিকেশন',
+      body: notification.body || '',
+      type: notification.type || 'general',
+      data: data || {},
+      isRead: false,
+      createdAt: now.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+    });
+
+    console.log(`✅ In-app notification saved: ${docRef.id}`);
+    return docRef.id;
+  } catch (error) {
+    console.error('❌ saveInAppNotification error:', error.message);
+    return null;
+  }
+}
 
 // ==================================================
 // 📱 SMS পাঠানোর ফাংশন (sms.net.bd)
@@ -314,7 +347,7 @@ async function sendHospitalNotification(data, appointmentId) {
 }
 
 // ==================================================
-// 🆕 TRIGGER 2: Admin Confirm করলে রোগীকে SMS + Email
+// 🆕 TRIGGER 2: Admin Confirm করলে রোগীকে SMS + Email + In-App
 // ==================================================
 async function sendPatientConfirmation(data, appointmentId) {
   const baseUrl = process.env.BASE_URL || 'https://doctors.alafiyahhospital.com';
@@ -397,6 +430,24 @@ ${serviceMessage}
       console.error('❌ ইমেইল পাঠাতে ব্যর্থ:', err.message);
     }
   }
+
+  // ---------- ৩. In-App Notification (Bell icon-এর জন্য) ----------
+  if (data.userId) {
+    await saveInAppNotification(
+      data.userId,
+      {
+        title: '✅ আপনার সিরিয়াল নিশ্চিত হয়েছে',
+        body: `${data.doctorName} এর সিরিয়াল #${data.serialNo}, ${data.bookingDate}`,
+        type: 'booking_confirmed',
+      },
+      {
+        appointmentId: appointmentId,
+        doctorName: data.doctorName || '',
+        serialNo: String(data.serialNo || ''),
+        bookingDate: data.bookingDate || '',
+      }
+    );
+  }
 }
 
 // ==================================================
@@ -412,7 +463,6 @@ app.post('/api/queue/next', async (req, res) => {
 
     console.log(`📢 Queue Next API: Serial #${nextSerial} for doctor ${doctorId}`);
 
-    // 1. Firestore থেকে রোগীর appointment খুঁজুন
     const appointmentsRef = db
       .collection('hospitals')
       .doc(hospitalId)
@@ -436,7 +486,6 @@ app.post('/api/queue/next', async (req, res) => {
       return res.json({ success: false, error: 'Patient has no user account' });
     }
 
-    // 2. User doc থেকে FCM token নিন
     const userDoc = await db
       .collection('hospitals')
       .doc(hospitalId)
@@ -459,28 +508,120 @@ app.post('/api/queue/next', async (req, res) => {
       fcmTokens = [userData.fcmToken];
     }
 
-    if (fcmTokens.length === 0) {
-      return res.json({ success: false, error: 'No FCM token for patient' });
+    // ✅ 3. FCM Push (যদি token থাকে)
+    let fcmResult = { success: false, error: 'No FCM token' };
+    if (fcmTokens.length > 0) {
+      fcmResult = await sendToDevice(
+        fcmTokens[0],
+        {
+          title: '🔔 আপনার সিরিয়াল আসছে!',
+          body: `${appointment.doctorName} এর চেম্বারে প্রস্তুত হোন। সিরিয়াল #${nextSerial}`,
+        },
+        {
+          type: 'QUEUE_UPDATE',
+          appointmentId: snapshot.docs[0].id,
+          mySerial: String(nextSerial),
+        }
+      );
     }
 
-    // 3. Notification পাঠান
-    const result = await sendToDevice(
-      fcmTokens[0],
+    // ✅ 4. In-App Notification save (Bell icon-এর জন্য)
+    await saveInAppNotification(
+      userId,
       {
         title: '🔔 আপনার সিরিয়াল আসছে!',
         body: `${appointment.doctorName} এর চেম্বারে প্রস্তুত হোন। সিরিয়াল #${nextSerial}`,
+        type: 'queue_update',
       },
       {
-        type: 'QUEUE_UPDATE',
         appointmentId: snapshot.docs[0].id,
-        mySerial: String(nextSerial),
+        doctorName: appointment.doctorName || '',
+        serialNo: String(nextSerial),
       }
     );
 
-    console.log(`✅ Notification sent: ${result.success}`);
-    res.json({ success: true, result });
+    console.log(`✅ FCM: ${fcmResult.success} | In-App: saved`);
+    res.json({ success: true, result: fcmResult });
   } catch (error) {
     console.error('❌ Queue API error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================================================
+// 📢 Promotional Notification API
+// ==================================================
+app.post('/api/notification/send-promo', async (req, res) => {
+  try {
+    const { title, body, targetUserIds } = req.body;
+
+    if (!title || !body) {
+      return res.status(400).json({ success: false, error: 'Missing title or body' });
+    }
+
+    let userIds = targetUserIds;
+
+    if (!userIds || userIds.length === 0) {
+      const usersSnap = await db
+        .collection('hospitals')
+        .doc(HOSPITAL_ID)
+        .collection('users')
+        .where('approved', '==', true)
+        .get();
+
+      userIds = usersSnap.docs.map((d) => d.id);
+    }
+
+    console.log(`📢 Sending promo to ${userIds.length} users`);
+
+    const results = [];
+
+    for (const userId of userIds) {
+      const notifId = await saveInAppNotification(
+        userId,
+        { title, body, type: 'promo' },
+        { isPromo: true }
+      );
+
+      try {
+        const userDoc = await db
+          .collection('hospitals')
+          .doc(HOSPITAL_ID)
+          .collection('users')
+          .doc(userId)
+          .get();
+
+        if (userDoc.exists) {
+          const userData = userDoc.data();
+          let fcmTokens = [];
+          if (Array.isArray(userData.fcmTokens)) {
+            fcmTokens = userData.fcmTokens.map((t) => (typeof t === 'string' ? t : t.token));
+          } else if (userData.fcmToken) {
+            fcmTokens = [userData.fcmToken];
+          }
+
+          if (fcmTokens.length > 0) {
+            await sendToDevice(
+              fcmTokens[0],
+              { title, body },
+              { type: 'PROMO', clickAction: 'OPEN_APP' }
+            );
+          }
+        }
+      } catch (err) {
+        console.warn(`⚠️ FCM failed for user ${userId}:`, err.message);
+      }
+
+      results.push({ userId, notifId });
+    }
+
+    res.json({
+      success: true,
+      sent: results.length,
+      results,
+    });
+  } catch (error) {
+    console.error('❌ Promo API error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -639,7 +780,7 @@ const appointmentsPath = `hospitals/${HOSPITAL_ID}/appointments`;
 
 console.log(`\n🔍 Firestore listener চালু হচ্ছে: ${appointmentsPath}`);
 console.log(`📢 Trigger 1: নতুন বুকিং → হাসপাতালের WhatsApp`);
-console.log(`📢 Trigger 2: Admin Confirm → রোগীকে SMS + Email\n`);
+console.log(`📢 Trigger 2: Admin Confirm → রোগীকে SMS + Email + In-App\n`);
 
 db.collection(appointmentsPath).onSnapshot(
   (snapshot) => {
@@ -671,7 +812,7 @@ db.collection(appointmentsPath).onSnapshot(
           ? (now.getTime() - createdAt.getTime()) / 1000
           : 999;
 
-        const isFreshBooking = secondsSinceCreation < 300; // 5 মিনিট
+        const isFreshBooking = secondsSinceCreation < 300;
 
         console.log(
           `➕ নতুন appointment: ${docId} | status: ${currentStatus} | age: ${Math.round(secondsSinceCreation)}s | fresh: ${isFreshBooking}`
@@ -690,7 +831,7 @@ db.collection(appointmentsPath).onSnapshot(
       }
 
       // ==================================================
-      // ✅ TRIGGER 2: PENDING → CONFIRMED → রোগীকে SMS + Email
+      // ✅ TRIGGER 2: PENDING → CONFIRMED → রোগীকে SMS + Email + In-App
       // ==================================================
       if (change.type === 'modified') {
         const previousStatus = previousStatuses.get(docId);
@@ -700,7 +841,7 @@ db.collection(appointmentsPath).onSnapshot(
 
         if (previousStatus === 'pending' && currentStatus === 'confirmed') {
           console.log(
-            `\n✅ Admin booking confirm করেছে! রোগীকে SMS + Email পাঠাচ্ছি...`
+            `\n✅ Admin booking confirm করেছে! রোগীকে SMS + Email + In-App পাঠাচ্ছি...`
           );
 
           try {
