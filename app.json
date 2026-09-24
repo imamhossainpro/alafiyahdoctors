@@ -18,6 +18,15 @@
     },
     "plugins": [
       [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#ffffff",
+          "image": "./assets/icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain"
+        }
+      ],
+      [
         "expo-notifications",
         {
           "color": "#1c5fa8"

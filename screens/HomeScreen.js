@@ -2,6 +2,8 @@
 // ==================================================
 // 🏠 HomeScreen — Patient Home Dashboard
 // ==================================================
+// ✅ Bell icon notification badge (real-time unread count)
+// ==================================================
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -21,6 +23,7 @@ import {
   findUserAppointments,
 } from '../services/userAppointmentsService';
 import { loadDepartments, loadPanels } from '../services/dataService';
+import { subscribeToUnreadCount } from '../services/inAppNotificationService';
 
 import GreetingHeader from '../components/home/GreetingHeader';
 import HomeCarousel from '../components/home/HomeCarousel';
@@ -62,6 +65,9 @@ export default function HomeScreen({ navigation }) {
   const [upcomingAppointments, setUpcomingAppointments] = useState([]);
   const [todayDoctors, setTodayDoctors] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // ✅ Real-time unread notification count
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // ==================================================
   // ✅ Load Home data
@@ -122,6 +128,22 @@ export default function HomeScreen({ navigation }) {
     }, [loadHomeData])
   );
 
+  // ==================================================
+  // ✅ Real-time unread notification count (Bell badge)
+  // ==================================================
+  useEffect(() => {
+    if (!hospitalId || !user?.uid) return;
+
+    const unsub = subscribeToUnreadCount(
+      hospitalId,
+      user.uid,
+      (count) => setUnreadCount(count),
+      (err) => console.warn('Unread count error:', err)
+    );
+
+    return () => unsub();
+  }, [hospitalId, user?.uid]);
+
   const handleRefresh = () => {
     setRefreshing(true);
     loadHomeData();
@@ -177,11 +199,11 @@ export default function HomeScreen({ navigation }) {
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
       >
-        {/* Greeting */}
+        {/* Greeting + Bell with badge */}
         <GreetingHeader
           userName={user?.name}
-          onNotificationPress={() => {}}
-          notificationCount={0}
+          onNotificationPress={() => navigation.navigate('Notifications')}
+          notificationCount={unreadCount}
         />
 
         {/* Search */}
@@ -193,7 +215,7 @@ export default function HomeScreen({ navigation }) {
           />
         </View>
 
-        {/* ✅ Carousel — between Search and Quick Actions */}
+        {/* Carousel */}
         <HomeCarousel navigation={navigation} />
 
         {/* Quick Actions */}

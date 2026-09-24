@@ -2,8 +2,12 @@
 // ==================================================
 // 🏥 আল-আফিয়া হাসপাতাল — Mobile App
 // ==================================================
-import React, { useEffect } from 'react';
+// ✅ Animated Splash Screen integrated
+// ✅ In-App Notifications route added
+// ==================================================
+import React, { useEffect, useState } from 'react';
 import * as Notifications from 'expo-notifications';
+import * as SplashScreenLib from 'expo-splash-screen';
 import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -22,6 +26,9 @@ import {
   saveFcmToken,
 } from './services/notificationService';
 
+// ✅ Custom Animated Splash
+import SplashScreen from './components/SplashScreen';
+
 // ✅ Main Screens (5 tabs)
 import HomeScreen from './screens/HomeScreen';
 import DoctorsScreen from './screens/DoctorsScreen';
@@ -35,6 +42,7 @@ import EditProfileScreen from './screens/EditProfileScreen';
 import OnlineReportScreen from './screens/OnlineReportScreen';
 import DoctorDetailsScreen from './screens/DoctorDetailsScreen';
 import AppointmentDetailScreen from './screens/AppointmentDetailScreen';
+import NotificationsScreen from './screens/NotificationsScreen';
 
 // ✅ Auth Screens
 import LoginScreen from './screens/auth/LoginScreen';
@@ -49,6 +57,9 @@ import DesignSystemShowcase from './screens/DesignSystemShowcase';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
+
+// ✅ Native splash auto-hide বন্ধ (আমরা manual control করব)
+SplashScreenLib.preventAutoHideAsync().catch(() => {});
 
 // ==================================================
 // ✅ Bottom padding helper
@@ -227,6 +238,11 @@ function MainAppStack() {
         options={{ title: 'অনলাইন রিপোর্ট' }}
       />
       <Stack.Screen
+        name="Notifications"
+        component={NotificationsScreen}
+        options={{ title: 'নোটিফিকেশন' }}
+      />
+      <Stack.Screen
         name="About"
         component={AboutScreen}
         options={{ title: 'আমাদের সম্পর্কে' }}
@@ -291,7 +307,7 @@ function AppNavigator() {
 }
 
 // ==================================================
-// ✅ App Root — শুধু Providers wrap করে
+// ✅ App Root — Custom Splash + Providers
 // ==================================================
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -302,14 +318,50 @@ export default function App() {
     'HindSiliguri-Bold': require('./assets/fonts/HindSiliguri-Bold.ttf'),
   });
 
-  if (!fontsLoaded) {
+  const [showSplash, setShowSplash] = useState(true);
+  const [splashStartTime] = useState(Date.now());
+
+  const isAppReady = fontsLoaded;
+
+  // ==================================================
+  // ✅ Minimum Splash Duration + Exit Animation
+  // ==================================================
+  useEffect(() => {
+    if (!isAppReady) return;
+
+    const MIN_SPLASH_DURATION = 1400;
+    const elapsed = Date.now() - splashStartTime;
+    const remaining = Math.max(0, MIN_SPLASH_DURATION - elapsed);
+
+    const timer = setTimeout(() => {
+      SplashScreenLib.hideAsync().catch(() => {});
+
+      if (SplashScreen.exit) {
+        SplashScreen.exit(() => {
+          setShowSplash(false);
+        });
+      } else {
+        setShowSplash(false);
+      }
+    }, remaining);
+
+    return () => clearTimeout(timer);
+  }, [isAppReady, splashStartTime]);
+
+  // ==================================================
+  // ✅ Render: Custom Splash OR Main App
+  // ==================================================
+  if (showSplash) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1c5fa8" />
+      <View style={styles.rootContainer}>
+        <SplashScreen />
       </View>
     );
   }
 
+  // ==================================================
+  // ✅ Main App
+  // ==================================================
   return (
     <SafeAreaProvider>
       <AuthProvider>
@@ -324,6 +376,10 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  rootContainer: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
   loadingContainer: {
     flex: 1,
     backgroundColor: '#f4f7f6',
