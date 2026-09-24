@@ -1,13 +1,13 @@
 // server/services/fcmService.js
 // ==================================================
-// 📨 FCM Service — Firebase Cloud Messaging (HTTP v1)
+// 📨 FCM Service — Firebase Cloud Messaging (ESM)
 // ==================================================
-const admin = require('firebase-admin');
+import { getMessaging } from 'firebase-admin/messaging';
 
 // ==================================================
 // ✅ Send notification to single device
 // ==================================================
-async function sendToDevice(fcmToken, notification, data = {}) {
+export async function sendToDevice(fcmToken, notification, data = {}) {
   if (!fcmToken) {
     console.warn('⚠️ No FCM token provided');
     return { success: false, error: 'No token' };
@@ -45,13 +45,12 @@ async function sendToDevice(fcmToken, notification, data = {}) {
       },
     };
 
-    const response = await admin.messaging().send(message);
+    const response = await getMessaging().send(message);
     console.log(`✅ FCM sent: ${response}`);
     return { success: true, messageId: response };
   } catch (error) {
     console.error('❌ FCM send error:', error.message);
 
-    // Handle invalid tokens
     if (
       error.code === 'messaging/invalid-registration-token' ||
       error.code === 'messaging/registration-token-not-registered'
@@ -66,7 +65,7 @@ async function sendToDevice(fcmToken, notification, data = {}) {
 // ==================================================
 // ✅ Send to multiple devices
 // ==================================================
-async function sendToDevices(fcmTokens, notification, data = {}) {
+export async function sendToDevices(fcmTokens, notification, data = {}) {
   if (!fcmTokens || fcmTokens.length === 0) {
     return { success: false, sent: 0, failed: 0 };
   }
@@ -83,7 +82,4 @@ async function sendToDevices(fcmTokens, notification, data = {}) {
   return { success: sent > 0, sent, failed, results };
 }
 
-module.exports = {
-  sendToDevice,
-  sendToDevices,
-};
+export default { sendToDevice, sendToDevices };
