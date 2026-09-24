@@ -31,6 +31,7 @@ const DisplaySettings = lazy(() => import('./admin/DisplaySettings'));
 const LocationManager = lazy(() => import('./admin/LocationManager'));
 const UserAccessManager = lazy(() => import('./admin/UserAccessManager'));
 const QueueControlPanel = lazy(() => import('./admin/QueueControlPanel'));
+const PromoManager = lazy(() => import('./admin/PromoManager'));  // ✅ নতুন
 // ❌ ReportVaultManager — removed (Phase 6 simplified)
 
 // ==================================================
@@ -515,7 +516,7 @@ export default function AdminDashboard({ user: propUser }) {
             </button>
           )}
 
-          {/* ✅ Queue Control — Phase 5 */}
+          {/* ✅ Queue Control */}
           {can('booking.view') && (
             <button
               onClick={() => {
@@ -536,7 +537,26 @@ export default function AdminDashboard({ user: propUser }) {
             </button>
           )}
 
-          {/* ❌ Report Vault — Removed */}
+          {/* ✅ Promo Manager — নতুন */}
+          {can('dashboard.view') && (
+            <button
+              onClick={() => {
+                setShowArchived(false);
+                setTab('promo');
+              }}
+              style={{
+                padding: '8px 16px',
+                background: tab === 'promo' ? '#1c5fa8' : '#ffffff',
+                color: tab === 'promo' ? '#ffffff' : '#333333',
+                border: '1px solid #e2e8f0',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                fontWeight: '600',
+              }}
+            >
+              📢 Promo
+            </button>
+          )}
 
           {/* Booking List */}
           {can('booking.view') && (
@@ -692,8 +712,6 @@ export default function AdminDashboard({ user: propUser }) {
         </div>
       </div>
 
-      {/* Date Filter Bar — same as before */}
-
       {/* ============ Tab Content ============ */}
 
       {tab === 'overview' && !showArchived && can('dashboard.view') && (
@@ -712,7 +730,14 @@ export default function AdminDashboard({ user: propUser }) {
         </SafeArea>
       )}
 
-      {/* ❌ Report Vault render — Removed */}
+      {/* ✅ Promo Manager — নতুন */}
+      {tab === 'promo' && can('dashboard.view') && (
+        <SafeArea>
+          <Suspense fallback={<TabLoader />}>
+            <PromoManager />
+          </Suspense>
+        </SafeArea>
+      )}
 
       {tab === 'appointments' && can('booking.view') && (
         <SafeArea>
@@ -778,7 +803,6 @@ export default function AdminDashboard({ user: propUser }) {
 
       {tab === 'logs' && can('activity_log.view') && (
         <SafeArea>
-          {/* Activity Log — same as before (unchanged) */}
           <div
             style={{
               background: '#fff',
