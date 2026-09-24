@@ -2,30 +2,34 @@
 // ==================================================
 // 🏥 আল-আফিয়া হাসপাতাল — WhatsApp + SMS + Email Server
 // ==================================================
-// ✅ CommonJS (require) — ESM (import) নয়
+// ✅ ESM (import) — Baileys 7.x এর জন্য
 // ==================================================
 
-require('dotenv').config();
-
-const express = require('express');
-const makeWASocket = require('@whiskeysockets/baileys').default;
-const {
+import 'dotenv/config';
+import express from 'express';
+import makeWASocket, {
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
-} = require('@whiskeysockets/baileys');
-const pino = require('pino');
-const qrcode = require('qrcode-terminal');
-const nodemailer = require('nodemailer');
-const axios = require('axios');
-const fs = require('fs');
+} from '@whiskeysockets/baileys';
+import pino from 'pino';
+import QRCode from 'qrcode';
+import nodemailer from 'nodemailer';
+import axios from 'axios';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
 // ---------- Firebase Admin ----------
-const { initializeApp, cert } = require('firebase-admin/app');
-const { getFirestore } = require('firebase-admin/firestore');
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 
 // ---------- FCM Service ----------
-const fcmService = require('./services/fcmService');
+import { sendToDevice } from './services/fcmService.js';
+
+// ✅ __dirname তৈরি (ESM-এ built-in নেই)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // ==================================================
 // ✅ Firebase Credentials Loader
@@ -42,7 +46,8 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT) {
   }
 } else {
   try {
-    serviceAccount = require('./serviceAccountKey.json');
+    const filePath = join(__dirname, 'serviceAccountKey.json');
+    serviceAccount = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     console.log('✅ Firebase service account loaded from FILE');
   } catch (err) {
     console.error('❌ No Firebase credentials found!');
@@ -163,7 +168,6 @@ async function connectToWhatsApp() {
 
       if (qr) {
         try {
-          const QRCode = require('qrcode');
           currentQRDataUrl = await QRCode.toDataURL(qr, {
             width: 400,
             margin: 2,
@@ -194,7 +198,6 @@ async function connectToWhatsApp() {
 
         console.log(`\n🔌 সংযোগ বন্ধ | statusCode: ${statusCode}`);
 
-        // 401 (Logged Out) হলে সেশন ফোল্ডার মুছে ফ্রেশ স্টার্ট
         if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
           console.log('❌ WhatsApp থেকে লগআউট! auth_info_baileys ফোল্ডার মুছে ফেলা হচ্ছে...');
           try {
@@ -367,7 +370,6 @@ app.post('/api/queue/next', async (req, res) => {
 
     console.log(`📢 Queue Next API: Serial #${nextSerial} for doctor ${doctorId}`);
 
-    // 1. Firestore থেকে রোগীর appointment খুঁজুন
     const appointmentsRef = db
       .collection('hospitals')
       .doc(hospitalId)
@@ -391,7 +393,6 @@ app.post('/api/queue/next', async (req, res) => {
       return res.json({ success: false, error: 'Patient has no user account' });
     }
 
-    // 2. User doc থেকে FCM token নিন
     const userDoc = await db
       .collection('hospitals')
       .doc(hospitalId)
@@ -418,8 +419,7 @@ app.post('/api/queue/next', async (req, res) => {
       return res.json({ success: false, error: 'No FCM token for patient' });
     }
 
-    // 3. Notification পাঠান
-    const result = await fcmService.sendToDevice(
+    const result = await sendToDevice(
       fcmTokens[0],
       {
         title: '🔔 আপনার সিরিয়াল আসছে!',
@@ -626,7 +626,7 @@ db.collection(appointmentsPath).onSnapshot(
           ? (now.getTime() - createdAt.getTime()) / 1000
           : 999;
 
-        const isFreshBooking = secondsSinceCreation < 300; // 5 মিনিট
+        const isFreshBooking = secondsSinceCreation < 300;
 
         console.log(
           `➕ নতুন appointment: ${docId} | status: ${currentStatus} | age: ${Math.round(secondsSinceCreation)}s | fresh: ${isFreshBooking}`
