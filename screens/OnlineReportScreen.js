@@ -150,7 +150,7 @@ export default function OnlineReportScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* WebView */}
+      {/* ✅ WebView with ALL permissions for HTTP */}
       <WebView
         ref={webViewRef}
         source={{ uri: ONLINE_REPORT_URL }}
@@ -163,12 +163,25 @@ export default function OnlineReportScreen({ navigation }) {
         startInLoadingState
         javaScriptEnabled
         domStorageEnabled
-        // ✅ Android-এ HTTP URL support
+        // ✅ HTTP URL support
         mixedContentMode="always"
         allowsInlineMediaPlayback
-        // ✅ Android-এ http URL-এর জন্য
+        // ✅ সব URL allow
         originWhitelist={['*']}
-        // ✅ User Agent
+        // ✅ Back/forward gesture
+        allowsBackForwardNavigationGestures
+        // ✅ Cookies enabled (login/session এর জন্য)
+        sharedCookiesEnabled
+        thirdPartyCookiesEnabled
+        // ✅ Cache enabled (দ্রুত লোড)
+        cacheEnabled
+        // ✅ File access
+        allowFileAccess
+        allowFileAccessFromFileURLs
+        allowUniversalAccessFromFileURLs
+        // ✅ Media playback
+        mediaPlaybackRequiresUserAction={false}
+        // ✅ User Agent (mobile-friendly view)
         userAgent={
           Platform.OS === 'android'
             ? 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'
