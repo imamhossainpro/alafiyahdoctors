@@ -1,108 +1,37 @@
-// server/server.js
-import 'dotenv/config';
-import express from 'express';
-import makeWASocket, {
+// server.js
+// ==================================================
+// 🏥 আল-আফিয়া হাসপাতাল — WhatsApp + SMS + Email Server
+// ==================================================
+// ✅ CommonJS (require) — ESM (import) নয়
+// ==================================================
+
+require('dotenv').config();
+
+const express = require('express');
+const makeWASocket = require('@whiskeysockets/baileys').default;
+const {
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
-} from '@whiskeysockets/baileys';
-import pino from 'pino';
-import QRCode from 'qrcode';
-import nodemailer from 'nodemailer';
-import axios from 'axios';
-import { initializeApp, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { createRequire } from 'module';
-import fs from 'fs'; // ✅ নতুন যোগ করা হয়েছে (সেশন ফোল্ডার মুছতে)
+} = require('@whiskeysockets/baileys');
+const pino = require('pino');
+const qrcode = require('qrcode-terminal');
+const nodemailer = require('nodemailer');
+const axios = require('axios');
+const fs = require('fs');
 
+// ---------- Firebase Admin ----------
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getFirestore } = require('firebase-admin/firestore');
+
+// ---------- FCM Service ----------
 const fcmService = require('./services/fcmService');
-
-const require = createRequire(import.meta.url);
-
-
-
-
-
-// ==================================================
-// ✅ FCM Queue Notification API
-// ==================================================
-app.post('/api/queue/next', async (req, res) => {
-  try {
-    const { hospitalId, doctorId, date, nextSerial } = req.body;
-
-    if (!hospitalId || !doctorId || !date) {
-      return res.status(400).json({ success: false, error: 'Missing fields' });
-    }
-
-    console.log(`📢 Queue Next API: Serial #${nextSerial} for doctor ${doctorId}`);
-
-    // 1. Firestore থেকে রোগীর appointment খুঁজুন
-    const appointmentsRef = db.collection('hospitals').doc(hospitalId).collection('appointments');
-    const snapshot = await appointmentsRef
-      .where('doctorId', '==', doctorId)
-      .where('bookingDate', '==', date)
-      .where('serialNo', '==', nextSerial)
-      .limit(1)
-      .get();
-
-    if (snapshot.empty) {
-      return res.json({ success: false, error: 'No appointment found' });
-    }
-
-    const appointment = snapshot.docs[0].data();
-    const userId = appointment.userId;
-
-    if (!userId) {
-      return res.json({ success: false, error: 'Patient has no user account' });
-    }
-
-    // 2. User doc থেকে FCM token নিন
-    const userDoc = await db.collection('hospitals').doc(hospitalId).collection('users').doc(userId).get();
-    
-    if (!userDoc.exists) {
-      return res.json({ success: false, error: 'User not found' });
-    }
-
-    const userData = userDoc.data();
-    let fcmTokens = [];
-    
-    if (Array.isArray(userData.fcmTokens)) {
-      fcmTokens = userData.fcmTokens.map(t => typeof t === 'string' ? t : t.token);
-    } else if (userData.fcmToken) {
-      fcmTokens = [userData.fcmToken];
-    }
-
-    if (fcmTokens.length === 0) {
-      return res.json({ success: false, error: 'No FCM token for patient' });
-    }
-
-    // 3. Nofitication পাঠান
-    const result = await fcmService.sendToDevice(
-      fcmTokens[0], // প্রথম token নিন
-      {
-        title: '🔔 আপনার সিরিয়াল আসছে!',
-        body: `${appointment.doctorName} এর চেম্বারে প্রস্তুত হোন। সিরিয়াল #${nextSerial}`
-      },
-      {
-        type: 'QUEUE_UPDATE',
-        appointmentId: snapshot.docs[0].id,
-        mySerial: String(nextSerial)
-      }
-    );
-
-    console.log(`✅ Notification sent: ${result.success}`);
-    res.json({ success: true, result });
-
-  } catch (error) {
-    console.error('❌ Queue API error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
 
 // ==================================================
 // ✅ Firebase Credentials Loader
 // ==================================================
 let serviceAccount;
+
 if (process.env.FIREBASE_SERVICE_ACCOUNT) {
   try {
     serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
@@ -130,11 +59,13 @@ const db = getFirestore();
 // ==================================================
 const app = express();
 const PORT = process.env.PORT || 3001;
+
 app.use(express.json());
 
 // ---------- কনস্ট্যান্ট ----------
 const HOSPITAL_ID = 'alafiyah_main';
 const HOSPITAL_WHATSAPP = '8801889885094';
+
 let sock = null;
 let isConnected = false;
 let reconnectAttempts = 0;
@@ -219,8 +150,8 @@ async function connectToWhatsApp() {
     sock = makeWASocket({
       version,
       auth: state,
-      logger: pino({ level: 'debug' }), // ✅ silent থেকে debug করা হয়েছে
-      browser: ["Ubuntu", "Chrome", "20.0.04"], // ✅ নতুন যোগ করা হয়েছে
+      logger: pino({ level: 'silent' }),
+      browser: ['Ubuntu', 'Chrome', '20.0.04'],
       connectTimeoutMs: 60000,
       keepAliveIntervalMs: 10000,
     });
@@ -232,6 +163,7 @@ async function connectToWhatsApp() {
 
       if (qr) {
         try {
+          const QRCode = require('qrcode');
           currentQRDataUrl = await QRCode.toDataURL(qr, {
             width: 400,
             margin: 2,
@@ -241,7 +173,7 @@ async function connectToWhatsApp() {
 
           const domain = process.env.RAILWAY_PUBLIC_DOMAIN
             ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
-            : 'https://<your-service>.up.railway.app';
+            : `http://localhost:${PORT}`;
 
           console.log('\n====================');
           console.log('📱 WhatsApp QR Code প্রস্তুত!');
@@ -256,12 +188,13 @@ async function connectToWhatsApp() {
         isConnected = false;
         currentQRDataUrl = null;
 
-        const statusCode = lastDisconnect?.error?.output?.statusCode || 
-                           lastDisconnect?.error?.statusCode;
+        const statusCode =
+          lastDisconnect?.error?.output?.statusCode ||
+          lastDisconnect?.error?.statusCode;
 
         console.log(`\n🔌 সংযোগ বন্ধ | statusCode: ${statusCode}`);
 
-        // ✅ 401 (Logged Out) হলে সেশন ফোল্ডার মুছে ফ্রেশ স্টার্ট নিতে হবে
+        // 401 (Logged Out) হলে সেশন ফোল্ডার মুছে ফ্রেশ স্টার্ট
         if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
           console.log('❌ WhatsApp থেকে লগআউট! auth_info_baileys ফোল্ডার মুছে ফেলা হচ্ছে...');
           try {
@@ -270,9 +203,8 @@ async function connectToWhatsApp() {
           } catch (err) {
             console.error('❌ ফোল্ডার মোছার সময় সমস্যা:', err.message);
           }
-          setTimeout(() => connectToWhatsApp(), 3000); // ফ্রেশ স্টার্ট
+          setTimeout(() => connectToWhatsApp(), 3000);
         } else {
-          // সাধারণ রিকানেক্ট লজিক
           reconnectAttempts++;
           if (reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
             const delay = Math.min(3000 * reconnectAttempts, 15000);
@@ -299,9 +231,7 @@ async function connectToWhatsApp() {
 // ==================================================
 async function sendHospitalNotification(data, appointmentId) {
   if (!isConnected || !sock) {
-    console.log(
-      `⚠️ WhatsApp কানেক্টেড নেই! isConnected=${isConnected}, sock=${!!sock}`
-    );
+    console.log(`⚠️ WhatsApp কানেক্টেড নেই! isConnected=${isConnected}, sock=${!!sock}`);
     return;
   }
 
@@ -342,7 +272,7 @@ async function sendHospitalNotification(data, appointmentId) {
 // 🆕 TRIGGER 2: Admin Confirm করলে রোগীকে SMS + Email
 // ==================================================
 async function sendPatientConfirmation(data, appointmentId) {
-  const baseUrl = process.env.BASE_URL || 'https://your-hospital.com';
+  const baseUrl = process.env.BASE_URL || 'https://doctors.alafiyahhospital.com';
   const checkinLink = `${baseUrl}/checkin/${appointmentId}`;
 
   const serviceMessage =
@@ -423,6 +353,92 @@ ${serviceMessage}
     }
   }
 }
+
+// ==================================================
+// 📢 FCM Queue Notification API
+// ==================================================
+app.post('/api/queue/next', async (req, res) => {
+  try {
+    const { hospitalId, doctorId, date, nextSerial } = req.body;
+
+    if (!hospitalId || !doctorId || !date) {
+      return res.status(400).json({ success: false, error: 'Missing fields' });
+    }
+
+    console.log(`📢 Queue Next API: Serial #${nextSerial} for doctor ${doctorId}`);
+
+    // 1. Firestore থেকে রোগীর appointment খুঁজুন
+    const appointmentsRef = db
+      .collection('hospitals')
+      .doc(hospitalId)
+      .collection('appointments');
+
+    const snapshot = await appointmentsRef
+      .where('doctorId', '==', doctorId)
+      .where('bookingDate', '==', date)
+      .where('serialNo', '==', nextSerial)
+      .limit(1)
+      .get();
+
+    if (snapshot.empty) {
+      return res.json({ success: false, error: 'No appointment found' });
+    }
+
+    const appointment = snapshot.docs[0].data();
+    const userId = appointment.userId;
+
+    if (!userId) {
+      return res.json({ success: false, error: 'Patient has no user account' });
+    }
+
+    // 2. User doc থেকে FCM token নিন
+    const userDoc = await db
+      .collection('hospitals')
+      .doc(hospitalId)
+      .collection('users')
+      .doc(userId)
+      .get();
+
+    if (!userDoc.exists) {
+      return res.json({ success: false, error: 'User not found' });
+    }
+
+    const userData = userDoc.data();
+    let fcmTokens = [];
+
+    if (Array.isArray(userData.fcmTokens)) {
+      fcmTokens = userData.fcmTokens.map((t) =>
+        typeof t === 'string' ? t : t.token
+      );
+    } else if (userData.fcmToken) {
+      fcmTokens = [userData.fcmToken];
+    }
+
+    if (fcmTokens.length === 0) {
+      return res.json({ success: false, error: 'No FCM token for patient' });
+    }
+
+    // 3. Notification পাঠান
+    const result = await fcmService.sendToDevice(
+      fcmTokens[0],
+      {
+        title: '🔔 আপনার সিরিয়াল আসছে!',
+        body: `${appointment.doctorName} এর চেম্বারে প্রস্তুত হোন। সিরিয়াল #${nextSerial}`,
+      },
+      {
+        type: 'QUEUE_UPDATE',
+        appointmentId: snapshot.docs[0].id,
+        mySerial: String(nextSerial),
+      }
+    );
+
+    console.log(`✅ Notification sent: ${result.success}`);
+    res.json({ success: true, result });
+  } catch (error) {
+    console.error('❌ Queue API error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // ==================================================
 // 🖼️ QR Code HTML Page
@@ -676,6 +692,7 @@ app.listen(PORT, () => {
   console.log(`🔗 QR page: http://localhost:${PORT}/qr\n`);
 });
 
+// ---------- WhatsApp কানেকশন শুরু ----------
 connectToWhatsApp();
 
 // ---------- Graceful Shutdown ----------
@@ -684,15 +701,13 @@ process.on('SIGINT', () => {
   if (sock) {
     try {
       sock.end(undefined);
-    } catch (e) {}
+    } catch (e) {
+      // ignore
+    }
   }
   process.exit(0);
 });
 
 process.on('unhandledRejection', (reason) => {
   console.error('⚠️ Unhandled Rejection:', reason);
-});
-
-app.listen(PORT, () => {
-  console.log(`🚀 Backend Server চলছে: ${PORT}`);
 });
