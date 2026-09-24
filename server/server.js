@@ -3,6 +3,7 @@
 // 🏥 আল-আফিয়া হাসপাতাল — WhatsApp + SMS + Email Server
 // ==================================================
 // ✅ ESM (import) — Baileys 7.x এর জন্য
+// ✅ CORS enabled — Web App থেকে API কল করার জন্য
 // ==================================================
 
 import 'dotenv/config';
@@ -64,6 +65,47 @@ const db = getFirestore();
 // ==================================================
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// ==================================================
+// ✅ CORS Middleware — Web App থেকে API কল করার অনুমতি
+// ⚠️ এটি express.json() এবং route handlers এর আগে থাকতে হবে
+// ==================================================
+const ALLOWED_ORIGINS = [
+  'https://doctors.alafiyahhospital.com',
+  'https://alafiyahhospital.com',
+  'https://www.alafiyahhospital.com',
+  'http://localhost:5173',   // Vite dev server
+  'http://localhost:3000',   // Alternate dev
+];
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  // ✅ Allow list-এ থাকলে সেই origin, নাহলে '*' (development-এ সুবিধাজনক)
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+
+  res.setHeader(
+    'Access-Control-Allow-Methods',
+    'GET, POST, PUT, DELETE, OPTIONS'
+  );
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, X-Requested-With'
+  );
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Max-Age', '86400'); // 24 ঘন্টা preflight cache
+
+  // ✅ Preflight request (OPTIONS) handling
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+
+  next();
+});
 
 app.use(express.json());
 
@@ -370,6 +412,7 @@ app.post('/api/queue/next', async (req, res) => {
 
     console.log(`📢 Queue Next API: Serial #${nextSerial} for doctor ${doctorId}`);
 
+    // 1. Firestore থেকে রোগীর appointment খুঁজুন
     const appointmentsRef = db
       .collection('hospitals')
       .doc(hospitalId)
@@ -393,6 +436,7 @@ app.post('/api/queue/next', async (req, res) => {
       return res.json({ success: false, error: 'Patient has no user account' });
     }
 
+    // 2. User doc থেকে FCM token নিন
     const userDoc = await db
       .collection('hospitals')
       .doc(hospitalId)
@@ -419,6 +463,7 @@ app.post('/api/queue/next', async (req, res) => {
       return res.json({ success: false, error: 'No FCM token for patient' });
     }
 
+    // 3. Notification পাঠান
     const result = await sendToDevice(
       fcmTokens[0],
       {
@@ -626,7 +671,7 @@ db.collection(appointmentsPath).onSnapshot(
           ? (now.getTime() - createdAt.getTime()) / 1000
           : 999;
 
-        const isFreshBooking = secondsSinceCreation < 300;
+        const isFreshBooking = secondsSinceCreation < 300; // 5 মিনিট
 
         console.log(
           `➕ নতুন appointment: ${docId} | status: ${currentStatus} | age: ${Math.round(secondsSinceCreation)}s | fresh: ${isFreshBooking}`
@@ -689,7 +734,8 @@ app.listen(PORT, () => {
   console.log(`📁 হসপিটাল আইডি: ${HOSPITAL_ID}`);
   console.log(`📁 অ্যাপয়েন্টমেন্ট পাথ: ${appointmentsPath}`);
   console.log(`📞 হাসপাতাল WhatsApp: ${HOSPITAL_WHATSAPP}`);
-  console.log(`🔗 QR page: http://localhost:${PORT}/qr\n`);
+  console.log(`🔗 QR page: http://localhost:${PORT}/qr`);
+  console.log(`🌐 CORS allowed origins: ${ALLOWED_ORIGINS.join(', ')}\n`);
 });
 
 // ---------- WhatsApp কানেকশন শুরু ----------

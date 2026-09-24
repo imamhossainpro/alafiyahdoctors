@@ -16,6 +16,11 @@ import {
 import { logActivity, LOG_MODULES, LOG_ACTIONS } from '../../services/activityLogService';
 import { Bell, RefreshCw, Pause, Play, Users, Clock } from 'lucide-react';
 
+// ==================================================
+// ✅ Railway Backend URL — FCM Notification API
+// ==================================================
+const RAILWAY_API_URL = 'https://soothing-healing-production-8e36.up.railway.app';
+
 const getTodayString = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
@@ -92,36 +97,53 @@ export default function QueueControlPanel({ user }) {
     return () => unsub();
   }, [hospitalId, selectedDoctor, selectedDate]);
 
- const handleCallNext = async () => {
-  if (!selectedDoctor || !selectedDate) return;
-  setActionLoading(true);
-  
-  try {
-    const result = await callNextPatient(hospitalId, selectedDoctor, selectedDate, authUser || user);
+  // ==================================================
+  // ✅ Handle Call Next — with FCM Notification
+  // ==================================================
+  const handleCallNext = async () => {
+    if (!selectedDoctor || !selectedDate) return;
+    setActionLoading(true);
+    setError('');
 
-    // ✅ FCM Notification পাঠান
-    if (result.success && result.currentSerial) {
-      const response = await fetch('https://your-app.railway.app/api/queue/next', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          hospitalId,
-          doctorId: selectedDoctor,
-          date: selectedDate,
-          nextSerial: result.currentSerial,
-        }),
-      });
+    try {
+      const result = await callNextPatient(
+        hospitalId,
+        selectedDoctor,
+        selectedDate,
+        authUser || user
+      );
 
-      const data = await response.json();
-      console.log('FCM response:', data);
+      // ✅ FCM Notification পাঠান
+      if (result.success && result.currentSerial) {
+        try {
+          const response = await fetch(`${RAILWAY_API_URL}/api/queue/next`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              hospitalId,
+              doctorId: selectedDoctor,
+              date: selectedDate,
+              nextSerial: result.currentSerial,
+            }),
+          });
+
+          const data = await response.json();
+          console.log('✅ FCM response:', data);
+
+          if (!data.success) {
+            console.warn('⚠️ FCM notification failed:', data.error);
+          }
+        } catch (fcmErr) {
+          // FCM fail হলেও app crash হবে না
+          console.error('❌ FCM API call failed:', fcmErr.message);
+        }
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setActionLoading(false);
     }
-
-  } catch (err) {
-    setError(err.message);
-  } finally {
-    setActionLoading(false);
-  }
-};
+  };
 
   const handleReset = async () => {
     if (!window.confirm('Queue reset করতে চান? Current serial 0 হবে।')) return;
