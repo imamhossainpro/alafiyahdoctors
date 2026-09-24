@@ -107,6 +107,9 @@ export default function ProfileScreen() {
     ]);
   };
 
+  // ✅ Check if phone is missing
+  const hasPhone = user?.phone || user?.phoneNormalized;
+
   return (
     <ScrollView
       style={styles.container}
@@ -129,6 +132,26 @@ export default function ProfileScreen() {
         </View>
       </View>
 
+      {/* ✅ Phone Required Alert (if missing) */}
+      {!hasPhone && (
+        <TouchableOpacity
+          style={styles.phoneAlert}
+          onPress={() => navigation.navigate('EditProfile')}
+          activeOpacity={0.8}
+        >
+          <View style={styles.phoneAlertIcon}>
+            <Ionicons name="call-outline" size={22} color="#d97706" />
+          </View>
+          <View style={styles.phoneAlertText}>
+            <Text style={styles.phoneAlertTitle}>ফোন নাম্বার যোগ করুন</Text>
+            <Text style={styles.phoneAlertSub}>
+              সিরিয়াল দেখতে ফোন নাম্বার প্রয়োজন
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#d97706" />
+        </TouchableOpacity>
+      )}
+
       {/* Info Card */}
       <View style={styles.card}>
         <View style={styles.cardHeader}>
@@ -146,7 +169,7 @@ export default function ProfileScreen() {
         <InfoRow
           icon="call-outline"
           label="ফোন"
-          value={user.phone || '—'}
+          value={user.phone || '— যোগ করা হয়নি'}
         />
         <InfoRow
           icon="shield-outline"
@@ -166,6 +189,17 @@ export default function ProfileScreen() {
           <Ionicons name="settings-outline" size={22} color="#1c5fa8" />
           <Text style={styles.cardTitle}>সেটিংস</Text>
         </View>
+
+        {/* ✅ Edit Profile — NEW */}
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={() => navigation.navigate('EditProfile')}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="create-outline" size={20} color="#334155" />
+          <Text style={styles.actionText}>প্রোফাইল সম্পাদনা</Text>
+          <Ionicons name="chevron-forward" size={18} color="#94a3b8" />
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.actionBtn}
@@ -360,6 +394,38 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   roleText: { color: '#fff', fontSize: 12.5, fontWeight: '700' },
+
+  // ✅ Phone Alert
+  phoneAlert: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#fef3c7',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: '#fde68a',
+  },
+  phoneAlertIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#fef9c3',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  phoneAlertText: { flex: 1 },
+  phoneAlertTitle: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: '#92400e',
+    marginBottom: 2,
+  },
+  phoneAlertSub: {
+    fontSize: 12,
+    color: '#b45309',
+  },
 
   // Card
   card: {

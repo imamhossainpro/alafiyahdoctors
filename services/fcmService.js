@@ -1,0 +1,136 @@
+// services/fcmService.js
+// ==================================================
+// 📨 FCM Service — Firebase Cloud Messaging (HTTP v1)
+// ==================================================
+const admin = require('firebase-admin');
+
+// ==================================================
+// ✅ Send notification to single device
+// ==================================================
+async function sendToDevice(fcmToken, notification, data = {}) {
+  if (!fcmToken) {
+    console.warn('⚠️ No FCM token provided');
+    return { success: false, error: 'No token' };
+  }
+
+  try {
+    const message = {
+      token: fcmToken,
+      notification: {
+        title: notification.title || 'আল-আফিয়া হাসপাতাল',
+        body: notification.body || '',
+      },
+      data: {
+        ...Object.fromEntries(
+          Object.entries(data).map(([k, v]) => [k, String(v)])
+        ),
+        clickAction: data.clickAction || 'OPEN_APP',
+      },
+      android: {
+        priority: 'high',
+        notification: {
+          channelId: 'alafiyah_default',
+          sound: 'default',
+          priority: 'high',
+          color: '#1c5fa8',
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1,
+          },
+        },
+      },
+    };
+
+    const response = await admin.messaging().send(message);
+    console.log(`✅ FCM sent: ${response}`);
+    return { success: true, messageId: response };
+  } catch (error) {
+    console.error('❌ FCM send error:', error.message);
+
+    // ✅ Handle invalid tokens
+    if (
+      error.code === 'messaging/invalid-registration-token' ||
+      error.code === 'messaging/registration-token-not-registered'
+    ) {
+      return { success: false, error: 'INVALID_TOKEN', code: error.code };
+    }
+
+    return { success: false, error: error.message };
+  }
+}
+
+// ==================================================
+// ✅ Send to multiple devices
+// ==================================================
+async function sendToDevices(fcmTokens, notification, data = {}) {
+  if (!fcmTokens || fcmTokens.length === 0) {
+    return { success: false, sent: 0, failed: 0 };
+  }
+
+  const results = await Promise.allSettled(
+    fcmTokens.map((token) =>
+      sendToDevice(token, notification, data)
+    )
+  );
+
+  const sent = results.filter(
+    (r) => r.status === 'fulfilled' && r.value.success
+  ).length;
+  const failed = results.length - sent;
+
+  return { success: sent > 0, sent, failed, results };
+}
+
+// ==================================================
+// ✅ Send queue notification (specialized)
+// ==================================================
+async function sendQueueNotification(fcmToken, payload) {
+  const {
+    patientName,
+    doctorName,
+    mySerial,
+    currentSerial,
+    waitingAhead,
+    appointmentId,
+  } = payload;
+
+  let title = '🔔 সিরিয়াল আপডেট';
+  let body = '';
+
+  if (waitingAhead === 0) {
+    title = '🔔 আপনার সিরিয়াল এখন!';
+    body = `${doctorName} এর চেম্বারে এখনই আসুন। আপনার সিরিয়াল #${mySerial}`;
+  } else if (waitingAhead <= 2) {
+    title = '⏰ প্রস্তুত হোন';
+    body = `আপনার আগে মাত্র ${waitingAhead} জন। সিরিয়াল #${mySerial}`;
+  } else if (waitingAhead <= 5) {
+    title = '📢 সিরিয়াল আপডেট';
+    body = `আপনার আগে ${waitingAhead} জন। সিরিয়াল #${mySerial}`;
+  } else {
+    // Don't spam for >5
+    return { success: true, skipped: true };
+  }
+
+  return sendToDevice(
+    fcmToken,
+    { title, body },
+    {
+      type: 'QUEUE_UPDATE',
+      appointmentId: appointmentId || '',
+      mySerial: String(mySerial || ''),
+      currentSerial: String(currentSerial || ''),
+      waitingAhead: String(waitingAhead || ''),
+      clickAction: 'OPEN_APPOINTMENT',
+    }
+  );
+}
+
+module.exports = {
+  sendToDevice,
+  sendToDevices,
+  sendQueueNotification,
+};

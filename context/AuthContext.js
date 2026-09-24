@@ -18,11 +18,25 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { auth, db } from '../firebase';
+import { normalizePhone } from '../utils/bengaliDigits';
 
 const AuthContext = createContext();
 
 // ✅ হাসপাতাল ID (web app-এর সাথে মিল)
 const DEFAULT_HOSPITAL_ID = 'alafiyah_main';
+
+// ==================================================
+// ✅ Helper — enrich user with normalized fields
+// ==================================================
+const enrichUser = (firebaseUser, userData) => {
+  return {
+    uid: firebaseUser.uid,
+    email: firebaseUser.email,
+    ...userData,
+    // ✅ Normalized phone (English digits) for Firebase queries
+    phoneNormalized: normalizePhone(userData?.phone),
+  };
+};
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -47,15 +61,15 @@ export function AuthProvider({ children }) {
 
           if (userSnap.exists()) {
             const data = userSnap.data();
-            setUser({
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              ...data,
-            });
-            console.log('✅ Auth state: user loaded', data.name || firebaseUser.email);
+            setUser(enrichUser(firebaseUser, data));
+            console.log(
+              '✅ Auth state: user loaded',
+              data.name || firebaseUser.email
+            );
           } else {
-            // Firestore-এ user নেই → sign out করে দাও
-            console.log('⚠️ Auth state: Firestore-এ user নেই, sign out করছি');
+            console.log(
+              '⚠️ Auth state: Firestore-এ user নেই, sign out করছি'
+            );
             await signOut(auth);
             setUser(null);
           }
@@ -121,12 +135,8 @@ export function AuthProvider({ children }) {
         throw new Error('❌ আপনার অ্যাকাউন্ট নিষ্ক্রিয় করা হয়েছে।');
       }
 
-      // ✅ user state set — AppNavigator auto switch করবে
-      setUser({
-        uid: result.user.uid,
-        email: result.user.email,
-        ...userData,
-      });
+      // ✅ user state set
+      setUser(enrichUser(result.user, userData));
 
       console.log('✅ Login সম্পূর্ণ');
       return { success: true, user: userData };
@@ -152,7 +162,7 @@ export function AuthProvider({ children }) {
   };
 
   // ==================================================
-  // ✅ Register
+  // ✅ Register — WITH DEBUG LOGS
   // ==================================================
   const register = async ({
     name,
@@ -162,6 +172,17 @@ export function AuthProvider({ children }) {
     phone = '',
   }) => {
     setError(null);
+
+    // ✅ DEBUG LOG — register-এ data আসছে কিনা
+    console.log('🔍 [AuthContext.register] RECEIVED:', {
+      name,
+      email,
+      designation,
+      phone,
+      phoneType: typeof phone,
+      phoneLength: phone?.length,
+    });
+
     try {
       const result = await createUserWithEmailAndPassword(
         auth,
@@ -179,18 +200,35 @@ export function AuthProvider({ children }) {
         result.user.uid
       );
 
-      await setDoc(userRef, {
+      // ✅ Normalize phone
+      const normalizedPhone = normalizePhone(phone);
+
+      // ✅ DEBUG LOG — normalized value
+      console.log('🔍 [AuthContext.register] NORMALIZED PHONE:', {
+        raw: phone,
+        normalized: normalizedPhone,
+      });
+
+      const userData = {
         name: name.trim(),
         email: email.trim(),
         designation: designation.trim(),
         phone: phone.trim(),
+        phoneNormalized: normalizedPhone,
         role: 'pending',
         approved: false,
         isActive: true,
         hospitalId: DEFAULT_HOSPITAL_ID,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      };
+
+      // ✅ DEBUG LOG — what we're about to save
+      console.log('🔍 [AuthContext.register] SAVING TO FIRESTORE:', userData);
+
+      await setDoc(userRef, userData);
+
+      console.log('✅ [AuthContext.register] Firestore save SUCCESS');
 
       // Sign out (user-কে login screen-এ ফিরিয়ে নিয়ে যাবে)
       await signOut(auth);

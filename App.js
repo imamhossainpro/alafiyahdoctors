@@ -3,21 +3,32 @@
 // 🏥 আল-আফিয়া হাসপাতাল — Mobile App
 // ==================================================
 import React from 'react';
+import * as Notifications from 'expo-notifications';
 import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFonts } from 'expo-font';
 
 // ✅ Context Providers
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { HospitalProvider } from './context/HospitalContext';
 
-// ✅ Main Screens
-import PreviewScreen from './screens/PreviewScreen';
-import BookingScreen from './screens/BookingScreen';
+// ✅ Main Screens (5 tabs)
+import HomeScreen from './screens/HomeScreen';
+import DoctorsScreen from './screens/DoctorsScreen';
+import MyAppointmentsScreen from './screens/MyAppointmentsScreen';   // ✅ Phase 4
+import ReportsScreen from './screens/ReportsScreen';
 import ProfileScreen from './screens/ProfileScreen';
+
+// ✅ Stack Screens
+import BookingScreen from './screens/BookingScreen';
+import EditProfileScreen from './screens/EditProfileScreen';
+import OnlineReportScreen from './screens/OnlineReportScreen';
+import DoctorDetailsScreen from './screens/DoctorDetailsScreen';
+import AppointmentDetailScreen from './screens/AppointmentDetailScreen';  // ✅ Phase 4
 
 // ✅ Auth Screens
 import LoginScreen from './screens/auth/LoginScreen';
@@ -28,25 +39,35 @@ import PendingScreen from './screens/auth/PendingScreen';
 // ✅ Extra Screens
 import AboutScreen from './screens/AboutScreen';
 import ContactScreen from './screens/ContactScreen';
-import OnlineReportScreen from './screens/OnlineReportScreen';
+
+// ✅ Design System Showcase (temporary — remove later)
+import DesignSystemShowcase from './screens/DesignSystemShowcase';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
 // ==================================================
-// ✅ Bottom padding calculation (fallback সহ)
+// ✅ Bottom padding helper
 // ==================================================
 const getBottomPadding = (insetsBottom) => {
   if (insetsBottom > 0) return insetsBottom;
-
-  if (Platform.OS === 'android') {
-    return 16;
-  }
+  if (Platform.OS === 'android') return 16;
   return 0;
 };
 
+// ✅ Notification Handler — App খোলা থাকলে কী হবে
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
+
+
 // ==================================================
-// ✅ Main Tabs — SafeArea-aware bottom tab
+// ✅ Main Tabs (5 tabs)
 // ==================================================
 function MainTabs() {
   const insets = useSafeAreaInsets();
@@ -55,47 +76,62 @@ function MainTabs() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        headerStyle: { backgroundColor: '#1c5fa8' },
-        headerTintColor: '#fff',
-        headerTitleStyle: { fontWeight: 'bold' },
+        headerShown: false,
         tabBarActiveTintColor: '#1c5fa8',
-        tabBarInactiveTintColor: '#888',
+        tabBarInactiveTintColor: '#94a3b8',
         tabBarStyle: {
           height: 60 + bottomPadding,
           paddingBottom: bottomPadding + 6,
           paddingTop: 6,
+          backgroundColor: '#ffffff',
+          borderTopColor: '#f1f5f9',
+          borderTopWidth: 1,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: '600',
+          marginTop: 2,
         },
         tabBarIcon: ({ color, size, focused }) => {
           let iconName;
-          if (route.name === 'Preview') {
-            iconName = focused ? 'list' : 'list-outline';
-          } else if (route.name === 'Booking') {
+          if (route.name === 'Home')
+            iconName = focused ? 'home' : 'home-outline';
+          else if (route.name === 'Doctors')
+            iconName = focused ? 'medkit' : 'medkit-outline';
+          else if (route.name === 'Bookings')
             iconName = focused ? 'calendar' : 'calendar-outline';
-          } else if (route.name === 'Profile') {
+          else if (route.name === 'Reports')
+            iconName = focused ? 'document-text' : 'document-text-outline';
+          else if (route.name === 'Profile')
             iconName = focused ? 'person' : 'person-outline';
-          }
           return <Ionicons name={iconName} size={size} color={color} />;
         },
       })}
     >
       <Tab.Screen
-        name="Preview"
-        component={PreviewScreen}
-        options={{ title: 'ডাক্তার প্যানেল', tabBarLabel: 'প্যানেল' }}
+        name="Home"
+        component={HomeScreen}
+        options={{ tabBarLabel: 'হোম' }}
       />
       <Tab.Screen
-        name="Booking"
-        component={BookingScreen}
-        options={{ title: 'সিরিয়াল বুকিং', tabBarLabel: 'বুকিং' }}
+        name="Doctors"
+        component={DoctorsScreen}
+        options={{ tabBarLabel: 'ডাক্তার' }}
+      />
+      <Tab.Screen
+        name="Bookings"
+        component={MyAppointmentsScreen}   // ✅ Phase 4 — replaces old
+        options={{ tabBarLabel: 'সিরিয়াল' }}
+      />
+      <Tab.Screen
+        name="Reports"
+        component={ReportsScreen}
+        options={{ tabBarLabel: 'রিপোর্ট' }}
       />
       <Tab.Screen
         name="Profile"
         component={ProfileScreen}
-        options={{ title: 'প্রোফাইল', tabBarLabel: 'প্রোফাইল' }}
+        options={{ tabBarLabel: 'প্রোফাইল' }}
       />
     </Tab.Navigator>
   );
@@ -157,11 +193,49 @@ function MainAppStack() {
         headerTitleAlign: 'center',
       }}
     >
+      {/* Main Tabs */}
       <Stack.Screen
         name="Main"
         component={MainTabs}
         options={{ headerShown: false }}
       />
+
+      {/* Booking */}
+      <Stack.Screen
+        name="Booking"
+        component={BookingScreen}
+        options={{ title: 'সিরিয়াল বুকিং' }}
+      />
+
+      {/* Doctor Details */}
+      <Stack.Screen
+        name="DoctorDetails"
+        component={DoctorDetailsScreen}
+        options={{ title: 'ডাক্তারের বিস্তারিত' }}
+      />
+
+      {/* ✅ Phase 4 — Appointment Details */}
+      <Stack.Screen
+        name="AppointmentDetail"
+        component={AppointmentDetailScreen}
+        options={{ title: 'সিরিয়াল বিস্তারিত' }}
+      />
+
+      {/* Profile Edit */}
+      <Stack.Screen
+        name="EditProfile"
+        component={EditProfileScreen}
+        options={{ title: 'প্রোফাইল সম্পাদনা' }}
+      />
+
+      {/* Reports WebView */}
+      <Stack.Screen
+        name="OnlineReport"
+        component={OnlineReportScreen}
+        options={{ title: 'অনলাইন রিপোর্ট' }}
+      />
+
+      {/* Extra */}
       <Stack.Screen
         name="About"
         component={AboutScreen}
@@ -172,10 +246,12 @@ function MainAppStack() {
         component={ContactScreen}
         options={{ title: 'যোগাযোগ' }}
       />
+
+      {/* Design System (Dev only) */}
       <Stack.Screen
-        name="OnlineReport"
-        component={OnlineReportScreen}
-        options={{ title: 'অনলাইন রিপোর্ট' }}
+        name="DesignSystem"
+        component={DesignSystemShowcase}
+        options={{ title: 'Design System (Dev)' }}
       />
     </Stack.Navigator>
   );
@@ -198,18 +274,11 @@ function LoadingScreen() {
 function AppNavigator() {
   const { user, loading } = useAuth();
 
-  if (loading) {
-    return <LoadingScreen />;
-  }
-
-  if (!user) {
-    return <AuthStack key="auth" />;
-  }
+  if (loading) return <LoadingScreen />;
+  if (!user) return <AuthStack key="auth" />;
 
   const isPending = user.role === 'pending' || user.approved === false;
-  if (isPending) {
-    return <PendingStack key="pending" />;
-  }
+  if (isPending) return <PendingStack key="pending" />;
 
   return <MainAppStack key="main" />;
 }
@@ -218,6 +287,40 @@ function AppNavigator() {
 // ✅ App Root
 // ==================================================
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    'HindSiliguri-Light': require('./assets/fonts/HindSiliguri-Light.ttf'),
+    'HindSiliguri-Regular': require('./assets/fonts/HindSiliguri-Regular.ttf'),
+    'HindSiliguri-Medium': require('./assets/fonts/HindSiliguri-Medium.ttf'),
+    'HindSiliguri-SemiBold': require('./assets/fonts/HindSiliguri-SemiBold.ttf'),
+    'HindSiliguri-Bold': require('./assets/fonts/HindSiliguri-Bold.ttf'),
+  });
+
+ const { user } = useAuth();
+  const { hospitalId } = useHospital();
+
+  // ✅ Login হলে FCM token register করুন
+  useEffect(() => {
+    if (!user) return;
+
+    const setupNotifications = async () => {
+      const token = await registerForPushNotificationsAsync(user, hospitalId);
+      if (token) {
+        await saveFcmToken(user, hospitalId, token);
+      }
+    };
+
+    setupNotifications();
+  }, [user, hospitalId]);
+
+
+  if (!fontsLoaded) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#1c5fa8" />
+      </View>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       <AuthProvider>

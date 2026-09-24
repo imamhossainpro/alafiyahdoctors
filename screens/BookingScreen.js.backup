@@ -35,7 +35,6 @@ import {
   Timestamp,
 } from '../firebase';
 import { useHospital } from '../context/HospitalContext';
-import { useAuth } from '../context/AuthContext';
 import HeaderMenu from '../components/HeaderMenu';
 
 // ==================================================
@@ -95,13 +94,8 @@ const getBanglaDayName = (dateStr) => {
 // ==================================================
 // ✅ Main Component
 // ==================================================
-export default function BookingScreen({ navigation, route }) {
+export default function BookingScreen({ navigation }) {
   const { hospitalId } = useHospital();
-  const { user } = useAuth();
-
-  // ✅ Phase 3 — Preselected doctor/date
-  const preselectedDoctor = route?.params?.preselectedDoctor || null;
-  const preselectedDate = route?.params?.preselectedDate || null;
 
   const [formData, setFormData] = useState({
     name: '',
@@ -112,9 +106,7 @@ export default function BookingScreen({ navigation, route }) {
     referralSource: 'Walk-in / নিজে এসেছেন',
   });
 
-  const [selectedDate, setSelectedDate] = useState(
-    preselectedDate || getTodayString()
-  );
+  const [selectedDate, setSelectedDate] = useState(getTodayString());
   const [viewDate, setViewDate] = useState(() => {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), 1);
@@ -125,29 +117,24 @@ export default function BookingScreen({ navigation, route }) {
   const [panels, setPanels] = useState([]);
   const [availableDoctors, setAvailableDoctors] = useState([]);
   const [selectedDepartment, setSelectedDepartment] = useState('all');
-  const [selectedDoctor, setSelectedDoctor] = useState(preselectedDoctor);
+  const [selectedDoctor, setSelectedDoctor] = useState(null);
   const [loadingDoctors, setLoadingDoctors] = useState(false);
 
   // Submit State
   const [submitting, setSubmitting] = useState(false);
   const [bookingResult, setBookingResult] = useState(null);
 
-  // ==================================================
-  // ✅ Header Menu Button — with dynamic title
-  // ==================================================
+  // ✅ Header Menu Button
   useEffect(() => {
     if (navigation) {
       navigation.setOptions({
-        title: preselectedDoctor
-          ? `${preselectedDoctor.name}`
-          : 'সিরিয়াল বুকিং',
         headerRight: () => <HeaderMenu />,
         headerRightContainerStyle: {
           paddingRight: 12,
         },
       });
     }
-  }, [navigation, preselectedDoctor]);
+  }, [navigation]);
 
   // Selected Date-এর বাংলা দিন
   const selectedDayName = useMemo(
@@ -175,31 +162,6 @@ export default function BookingScreen({ navigation, route }) {
     max.setDate(max.getDate() + MAX_DAYS_AHEAD);
     return `${max.getFullYear()}-${String(max.getMonth() + 1).padStart(2, '0')}-${String(max.getDate()).padStart(2, '0')}`;
   }, []);
-
-  // ==================================================
-  // ✅ Get ALL days where selected doctor is available
-  // ==================================================
-  const doctorAvailableDays = useMemo(() => {
-    if (!selectedDoctor || panels.length === 0) return [];
-
-    const days = [];
-    BANGLA_DAYS_FULL.forEach((dayName) => {
-      const panel = panels.find((p) => p.name === dayName || p.id === dayName);
-      if (panel?.activeDoctorIds?.includes(selectedDoctor.id)) {
-        days.push(dayName);
-      }
-    });
-    return days;
-  }, [selectedDoctor, panels]);
-
-  // ==================================================
-  // ✅ Check if selected doctor is available on a specific date
-  // ==================================================
-  const isDoctorAvailableOnDate = (dateStr) => {
-    if (!selectedDoctor) return true; // no doctor selected — all dates allowed
-    const dayName = getBanglaDayName(dateStr);
-    return doctorAvailableDays.includes(dayName);
-  };
 
   // ==================================================
   // Load Departments & Panels
@@ -232,6 +194,7 @@ export default function BookingScreen({ navigation, route }) {
 
     if (!dayPanel) {
       setAvailableDoctors([]);
+      setSelectedDoctor(null);
       setLoadingDoctors(false);
       return;
     }
@@ -252,47 +215,10 @@ export default function BookingScreen({ navigation, route }) {
     });
 
     setAvailableDoctors(docs);
+    setSelectedDoctor(null);
+    setSelectedDepartment('all');
     setLoadingDoctors(false);
-
-    // ✅ Preserve selected doctor across date changes
-    const doctorToPreserve = preselectedDoctor || selectedDoctor;
-
-    if (doctorToPreserve) {
-      const match = docs.find((d) => d.id === doctorToPreserve.id);
-
-      if (match) {
-        setSelectedDoctor(match);
-      } else if (preselectedDoctor) {
-        setSelectedDoctor(preselectedDoctor);
-      } else if (!preselectedDoctor && !match) {
-        setSelectedDoctor(null);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate, panels, departments, preselectedDoctor]);
-
-  // ==================================================
-  // Auto-select preselected doctor
-  // ==================================================
-  useEffect(() => {
-    if (!preselectedDoctor) return;
-    if (selectedDoctor?.id === preselectedDoctor.id) return;
-
-    const match = availableDoctors.find((d) => d.id === preselectedDoctor.id);
-    if (match) {
-      setSelectedDoctor(match);
-      return;
-    }
-
-    setSelectedDoctor(preselectedDoctor);
-  }, [preselectedDoctor, availableDoctors, selectedDoctor]);
-
-  // Sync preselectedDate
-  useEffect(() => {
-    if (preselectedDate && typeof preselectedDate === 'string') {
-      setSelectedDate(preselectedDate);
-    }
-  }, [preselectedDate]);
+  }, [selectedDate, panels, departments]);
 
   // Filtered Doctors
   const filteredDoctors = useMemo(() => {
@@ -342,17 +268,6 @@ export default function BookingScreen({ navigation, route }) {
     const dateStr = `${year}-${month}-${dayStr}`;
 
     if (dateStr < todayStr || dateStr > maxDateStr) return;
-
-    // ✅ Guard: doctor selected হলে unavailable দিনে select করা যাবে না
-    if (selectedDoctor && !isDoctorAvailableOnDate(dateStr)) {
-      Alert.alert(
-        'ডাক্তার এই দিনে নেই',
-        `${selectedDoctor.name} ${getBanglaDayName(dateStr)}-এ চেম্বারে থাকেন না।\n\nউপলব্ধ দিন: ${doctorAvailableDays.join(', ')}`,
-        [{ text: 'ঠিক আছে' }]
-      );
-      return;
-    }
-
     setSelectedDate(dateStr);
   };
 
@@ -395,15 +310,6 @@ export default function BookingScreen({ navigation, route }) {
       return;
     }
 
-    // ✅ Final guard: doctor selected date-এ available কিনা
-    if (!isDoctorAvailableOnDate(selectedDate)) {
-      Alert.alert(
-        'ভুল দিন',
-        `${selectedDoctor.name} ${selectedDayName}-এ চেম্বারে থাকেন না। অন্য দিন নির্বাচন করুন।`
-      );
-      return;
-    }
-
     setSubmitting(true);
 
     try {
@@ -425,7 +331,6 @@ export default function BookingScreen({ navigation, route }) {
           age,
           gender: formData.gender,
           address: formData.address.trim(),
-          userId: user?.uid || null,
         });
         patientId = newPatient.id;
         isNewPatient = true;
@@ -440,7 +345,13 @@ export default function BookingScreen({ navigation, route }) {
 
       // 2. Serial Number
       const counterKey = `${selectedDoctor.id}_${selectedDate}`;
-      const counterRef = doc(db, 'hospitals', hospitalId, 'counters', counterKey);
+      const counterRef = doc(
+        db,
+        'hospitals',
+        hospitalId,
+        'counters',
+        counterKey
+      );
 
       let serialNo = 1;
       const counterDoc = await getDoc(counterRef);
@@ -481,10 +392,9 @@ export default function BookingScreen({ navigation, route }) {
         gender: formData.gender,
         address: formData.address.trim(),
         patientId,
-        userId: user?.uid || null,
         doctorId: selectedDoctor.id,
         doctorName: selectedDoctor.name,
-        doctorDept: selectedDoctor.deptName || '',
+        doctorDept: selectedDoctor.deptName,
         doctorQuals: selectedDoctor.quals || '',
         doctorTime,
         bookingDate: selectedDate,
@@ -542,11 +452,7 @@ export default function BookingScreen({ navigation, route }) {
       <View style={styles.doctorHeader}>
         <View style={styles.doctorHeaderText}>
           <Text style={styles.doctorName}>{doc.name}</Text>
-          {(doc.deptName || doc.specialty) && (
-            <Text style={styles.doctorDept}>
-              {doc.deptName || doc.specialty}
-            </Text>
-          )}
+          <Text style={styles.doctorDept}>{doc.deptName}</Text>
         </View>
 
         <View
@@ -693,22 +599,6 @@ export default function BookingScreen({ navigation, route }) {
           <Text style={styles.headerTitle}>রোগীর ডাক্তার বুকিং ফর্ম</Text>
         </View>
 
-        {/* ✅ Availability notice when doctor selected */}
-        {selectedDoctor && (
-          <View style={styles.availabilityNotice}>
-            <Ionicons
-              name="information-circle"
-              size={18}
-              color="#0d9488"
-            />
-            <Text style={styles.availabilityNoticeText}>
-              {selectedDoctor.name} শুধু {doctorAvailableDays.join(', ')}-এ চেম্বারে থাকেন।
-              {doctorAvailableDays.length === 0 &&
-                ' কিন্তু কোনো দিন পাওয়া যায়নি।'}
-            </Text>
-          </View>
-        )}
-
         {/* Calendar Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -751,14 +641,7 @@ export default function BookingScreen({ navigation, route }) {
 
               const isPast = dateStr < todayStr;
               const isBeyondMax = dateStr > maxDateStr;
-              const isDateDisabled = isPast || isBeyondMax;
-
-              // ✅ Doctor availability check for this specific date
-              const isDoctorUnavailable =
-                selectedDoctor && !isDoctorAvailableOnDate(dateStr);
-
-              const isFullyDisabled = isDateDisabled || isDoctorUnavailable;
-
+              const isDisabled = isPast || isBeyondMax;
               const isSelected = dateStr === selectedDate;
               const isToday = dateStr === todayStr;
 
@@ -767,24 +650,22 @@ export default function BookingScreen({ navigation, route }) {
                   key={day}
                   style={styles.calDayCell}
                   onPress={() => handleDateSelect(day)}
-                  disabled={isFullyDisabled}
+                  disabled={isDisabled}
                   activeOpacity={0.7}
                 >
                   <View
                     style={[
                       styles.calDayCircle,
                       isSelected && styles.calDaySelected,
-                      isToday && !isSelected && !isFullyDisabled && styles.calDayToday,
-                      isDateDisabled && styles.calDayDisabled,
-                      isDoctorUnavailable && !isDateDisabled && styles.calDayUnavailable,
+                      isToday && !isSelected && styles.calDayToday,
+                      isDisabled && styles.calDayDisabled,
                     ]}
                   >
                     <Text
                       style={[
                         styles.calDayText,
                         isSelected && styles.calDayTextSelected,
-                        isDateDisabled && styles.calDayTextDisabled,
-                        isDoctorUnavailable && !isDateDisabled && styles.calDayTextUnavailable,
+                        isDisabled && styles.calDayTextDisabled,
                       ]}
                     >
                       {day}
@@ -801,20 +682,6 @@ export default function BookingScreen({ navigation, route }) {
               নির্বাচিত: {formatDisplayDate(selectedDate)} ({selectedDayName})
             </Text>
           </View>
-
-          {/* ✅ Legend */}
-          {selectedDoctor && (
-            <View style={styles.calLegend}>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: '#0d9488' }]} />
-                <Text style={styles.legendText}>নির্বাচিত</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: '#e2e8f0' }]} />
-                <Text style={styles.legendText}>ডাক্তার নেই</Text>
-              </View>
-            </View>
-          )}
         </View>
 
         {/* Patient Info */}
@@ -940,6 +807,14 @@ export default function BookingScreen({ navigation, route }) {
               <ActivityIndicator size="large" color="#0d9488" />
               <Text style={styles.loadingText}>ডাক্তার লোড হচ্ছে...</Text>
             </View>
+          ) : availableDoctors.length === 0 ? (
+            <View style={styles.emptyBox}>
+              <Ionicons name="alert-circle-outline" size={40} color="#94a3b8" />
+              <Text style={styles.emptyTitle}>
+                {selectedDayName}-এ কোনো ডাক্তার নেই
+              </Text>
+              <Text style={styles.emptySubtext}>অন্য তারিখ নির্বাচন করুন</Text>
+            </View>
           ) : selectedDoctor ? (
             <>
               {renderDoctorCard(selectedDoctor, true)}
@@ -955,14 +830,6 @@ export default function BookingScreen({ navigation, route }) {
                 </Text>
               </TouchableOpacity>
             </>
-          ) : availableDoctors.length === 0 ? (
-            <View style={styles.emptyBox}>
-              <Ionicons name="alert-circle-outline" size={40} color="#94a3b8" />
-              <Text style={styles.emptyTitle}>
-                {selectedDayName}-এ কোনো ডাক্তার নেই
-              </Text>
-              <Text style={styles.emptySubtext}>অন্য তারিখ নির্বাচন করুন</Text>
-            </View>
           ) : (
             <>
               <View style={styles.formGroup}>
@@ -1043,26 +910,6 @@ const styles = StyleSheet.create({
   header: { alignItems: 'center', marginBottom: 20, marginTop: 4 },
   headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#0f766e' },
 
-  // ✅ Availability notice
-  availabilityNotice: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    backgroundColor: '#f0fdfa',
-    borderWidth: 1,
-    borderColor: '#99f6e4',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-  },
-  availabilityNoticeText: {
-    flex: 1,
-    fontSize: 12.5,
-    color: '#0f766e',
-    lineHeight: 18,
-    fontWeight: '500',
-  },
-
   section: {
     backgroundColor: '#ffffff',
     borderRadius: 14,
@@ -1137,16 +984,9 @@ const styles = StyleSheet.create({
   calDaySelected: { backgroundColor: '#0d9488' },
   calDayToday: { borderWidth: 2, borderColor: '#0d9488' },
   calDayDisabled: { opacity: 0.3 },
-  // ✅ Doctor unavailable day style
-  calDayUnavailable: {
-    backgroundColor: '#f1f5f9',
-    opacity: 0.45,
-  },
   calDayText: { fontSize: 15, fontWeight: '600', color: '#1e293b' },
   calDayTextSelected: { color: '#fff', fontWeight: 'bold' },
   calDayTextDisabled: { color: '#94a3b8' },
-  // ✅ Unavailable day text
-  calDayTextUnavailable: { color: '#cbd5e1' },
   selectedDateBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1163,29 +1003,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0d9488',
     flex: 1,
-  },
-  // ✅ Legend
-  calLegend: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    marginTop: 10,
-    paddingHorizontal: 4,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  legendDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  legendText: {
-    fontSize: 11.5,
-    color: '#64748b',
-    fontWeight: '500',
   },
 
   // Form

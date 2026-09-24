@@ -1,6 +1,6 @@
 // screens/auth/RegisterScreen.js
 // ==================================================
-// 📝 Register Screen
+// 📝 Register Screen — WITH DEBUG LOGS
 // ==================================================
 import React, { useState } from 'react';
 import {
@@ -30,6 +30,18 @@ export default function RegisterScreen({ navigation }) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // ==================================================
+  // ✅ Phone handler — Bengali digits allowed, cleaned
+  // ==================================================
+  const handlePhoneChange = (text) => {
+    // Allow only 0-9 and ০-৯
+    const cleaned = text.replace(/[^0-9০-৯]/g, '');
+    setPhone(cleaned);
+  };
+
+  // ==================================================
+  // ✅ Register
+  // ==================================================
   const handleRegister = async () => {
     // Validation
     if (!name.trim()) {
@@ -48,6 +60,16 @@ export default function RegisterScreen({ navigation }) {
       Alert.alert('⚠️', 'পাসওয়ার্ড দুটি মিলছে না');
       return;
     }
+
+    // ✅ DEBUG LOG — what we're sending
+    console.log('🔍 [RegisterScreen] SUBMITTING:', {
+      name,
+      email,
+      designation,
+      phone,
+      phoneType: typeof phone,
+      phoneLength: phone?.length,
+    });
 
     setLoading(true);
     const result = await register({
@@ -141,21 +163,26 @@ export default function RegisterScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Phone */}
+          {/* Phone — REQUIRED now */}
           <View style={styles.formGroup}>
-            <Text style={styles.label}>মোবাইল নম্বর</Text>
+            <Text style={styles.label}>
+              মোবাইল নম্বর <Text style={styles.required}>*</Text>
+            </Text>
             <View style={styles.inputContainer}>
               <Ionicons name="call-outline" size={18} color="#94a3b8" />
               <TextInput
                 style={styles.input}
                 value={phone}
-                onChangeText={setPhone}
+                onChangeText={handlePhoneChange}
                 placeholder="01712345678"
                 placeholderTextColor="#94a3b8"
                 keyboardType="phone-pad"
-                maxLength={11}
+                maxLength={14}
               />
             </View>
+            <Text style={styles.hint}>
+              ১১ digit (যেমন: 01712345678 বা ০১৭১২৩৪৫৬৭৮)
+            </Text>
           </View>
 
           {/* Password */}
@@ -291,6 +318,12 @@ const styles = StyleSheet.create({
     paddingLeft: 10,
   },
   eyeButton: { padding: 4 },
+  hint: {
+    fontSize: 11.5,
+    color: '#94a3b8',
+    marginTop: 4,
+    marginLeft: 4,
+  },
   infoBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
