@@ -2,7 +2,7 @@
 // ==================================================
 // 🏥 আল-আফিয়া হাসপাতাল — Mobile App
 // ==================================================
-import React from 'react';
+import React, { useEffect } from 'react';
 import * as Notifications from 'expo-notifications';
 import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
@@ -14,12 +14,18 @@ import { useFonts } from 'expo-font';
 
 // ✅ Context Providers
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { HospitalProvider } from './context/HospitalContext';
+import { HospitalProvider, useHospital } from './context/HospitalContext';
+
+// ✅ Notification Service
+import {
+  registerForPushNotificationsAsync,
+  saveFcmToken,
+} from './services/notificationService';
 
 // ✅ Main Screens (5 tabs)
 import HomeScreen from './screens/HomeScreen';
 import DoctorsScreen from './screens/DoctorsScreen';
-import MyAppointmentsScreen from './screens/MyAppointmentsScreen';   // ✅ Phase 4
+import MyAppointmentsScreen from './screens/MyAppointmentsScreen';
 import ReportsScreen from './screens/ReportsScreen';
 import ProfileScreen from './screens/ProfileScreen';
 
@@ -28,7 +34,7 @@ import BookingScreen from './screens/BookingScreen';
 import EditProfileScreen from './screens/EditProfileScreen';
 import OnlineReportScreen from './screens/OnlineReportScreen';
 import DoctorDetailsScreen from './screens/DoctorDetailsScreen';
-import AppointmentDetailScreen from './screens/AppointmentDetailScreen';  // ✅ Phase 4
+import AppointmentDetailScreen from './screens/AppointmentDetailScreen';
 
 // ✅ Auth Screens
 import LoginScreen from './screens/auth/LoginScreen';
@@ -39,8 +45,6 @@ import PendingScreen from './screens/auth/PendingScreen';
 // ✅ Extra Screens
 import AboutScreen from './screens/AboutScreen';
 import ContactScreen from './screens/ContactScreen';
-
-// ✅ Design System Showcase (temporary — remove later)
 import DesignSystemShowcase from './screens/DesignSystemShowcase';
 
 const Tab = createBottomTabNavigator();
@@ -55,7 +59,7 @@ const getBottomPadding = (insetsBottom) => {
   return 0;
 };
 
-// ✅ Notification Handler — App খোলা থাকলে কী হবে
+// ✅ Notification Handler
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldPlaySound: true,
@@ -64,7 +68,6 @@ Notifications.setNotificationHandler({
     shouldShowList: true,
   }),
 });
-
 
 // ==================================================
 // ✅ Main Tabs (5 tabs)
@@ -120,7 +123,7 @@ function MainTabs() {
       />
       <Tab.Screen
         name="Bookings"
-        component={MyAppointmentsScreen}   // ✅ Phase 4 — replaces old
+        component={MyAppointmentsScreen}
         options={{ tabBarLabel: 'সিরিয়াল' }}
       />
       <Tab.Screen
@@ -193,49 +196,36 @@ function MainAppStack() {
         headerTitleAlign: 'center',
       }}
     >
-      {/* Main Tabs */}
       <Stack.Screen
         name="Main"
         component={MainTabs}
         options={{ headerShown: false }}
       />
-
-      {/* Booking */}
       <Stack.Screen
         name="Booking"
         component={BookingScreen}
         options={{ title: 'সিরিয়াল বুকিং' }}
       />
-
-      {/* Doctor Details */}
       <Stack.Screen
         name="DoctorDetails"
         component={DoctorDetailsScreen}
         options={{ title: 'ডাক্তারের বিস্তারিত' }}
       />
-
-      {/* ✅ Phase 4 — Appointment Details */}
       <Stack.Screen
         name="AppointmentDetail"
         component={AppointmentDetailScreen}
         options={{ title: 'সিরিয়াল বিস্তারিত' }}
       />
-
-      {/* Profile Edit */}
       <Stack.Screen
         name="EditProfile"
         component={EditProfileScreen}
         options={{ title: 'প্রোফাইল সম্পাদনা' }}
       />
-
-      {/* Reports WebView */}
       <Stack.Screen
         name="OnlineReport"
         component={OnlineReportScreen}
         options={{ title: 'অনলাইন রিপোর্ট' }}
       />
-
-      {/* Extra */}
       <Stack.Screen
         name="About"
         component={AboutScreen}
@@ -246,8 +236,6 @@ function MainAppStack() {
         component={ContactScreen}
         options={{ title: 'যোগাযোগ' }}
       />
-
-      {/* Design System (Dev only) */}
       <Stack.Screen
         name="DesignSystem"
         component={DesignSystemShowcase}
@@ -269,10 +257,29 @@ function LoadingScreen() {
 }
 
 // ==================================================
-// ✅ App Navigator
+// ✅ App Navigator — FCM Setup এখানে (Provider-এর ভিতরে)
 // ==================================================
 function AppNavigator() {
   const { user, loading } = useAuth();
+  const { hospitalId } = useHospital();
+
+  // ✅ FCM Token Registration — শুধু লগইন করা ইউজারের জন্য
+  useEffect(() => {
+    if (!user || !hospitalId) return;
+
+    const setupNotifications = async () => {
+      try {
+        const token = await registerForPushNotificationsAsync(user, hospitalId);
+        if (token) {
+          await saveFcmToken(user, hospitalId, token);
+        }
+      } catch (error) {
+        console.warn('⚠️ Notification setup failed:', error.message);
+      }
+    };
+
+    setupNotifications();
+  }, [user, hospitalId]);
 
   if (loading) return <LoadingScreen />;
   if (!user) return <AuthStack key="auth" />;
@@ -284,7 +291,7 @@ function AppNavigator() {
 }
 
 // ==================================================
-// ✅ App Root
+// ✅ App Root — শুধু Providers wrap করে
 // ==================================================
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -294,24 +301,6 @@ export default function App() {
     'HindSiliguri-SemiBold': require('./assets/fonts/HindSiliguri-SemiBold.ttf'),
     'HindSiliguri-Bold': require('./assets/fonts/HindSiliguri-Bold.ttf'),
   });
-
- const { user } = useAuth();
-  const { hospitalId } = useHospital();
-
-  // ✅ Login হলে FCM token register করুন
-  useEffect(() => {
-    if (!user) return;
-
-    const setupNotifications = async () => {
-      const token = await registerForPushNotificationsAsync(user, hospitalId);
-      if (token) {
-        await saveFcmToken(user, hospitalId, token);
-      }
-    };
-
-    setupNotifications();
-  }, [user, hospitalId]);
-
 
   if (!fontsLoaded) {
     return (
