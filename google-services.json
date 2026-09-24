@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "524797545432",
+    "project_id": "alafiyahdoctors",
+    "storage_bucket": "alafiyahdoctors.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:524797545432:android:460ca9a4567156950380ad",
+        "android_client_info": {
+          "package_name": "com.alafiyah.hospital"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "524797545432-kshfpc8t138plq7dv3qb0tbe0707as5h.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAEOBOoHQeaBPQBrlbKtC9PABFg7nLJ2TM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "524797545432-kshfpc8t138plq7dv3qb0tbe0707as5h.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
