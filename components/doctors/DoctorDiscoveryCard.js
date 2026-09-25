@@ -1,15 +1,34 @@
 // components/doctors/DoctorDiscoveryCard.js
 // ==================================================
-// 👨‍⚕️ DoctorDiscoveryCard — Redesigned (Premium)
+// 👨‍⚕️ DoctorDiscoveryCard — Redesigned + Fixed
 // ==================================================
-// ✅ Fallback avatar (no imageUrl)
-// ✅ Verified badge (all doctors)
-// ✅ Availability status (green/gray)
-// ✅ Redesigned action buttons
+// ✅ Lucide icons for departments
+// ✅ No duplicate "বিভাগ" suffix
+// ✅ Gender-based avatar fallback (Female/Male)
+// ✅ Photo support (imageUrl)
 // ==================================================
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import {
+  Stethoscope,
+  Scissors,
+  Heart,
+  Baby,
+  Bone,
+  Syringe,
+  Pill,
+  Activity,
+  Brain,
+  Eye,
+  Utensils,
+  Smile,
+  Sparkles,
+  User,
+  Droplet,
+  Thermometer,
+  Ear,
+} from 'lucide-react-native';
 import Button from '../ui/Button';
 import FavoriteButton from './FavoriteButton';
 import {
@@ -23,11 +42,48 @@ import { fontFamily } from '../../theme/typography';
 import { radius } from '../../theme/radius';
 import { shadows } from '../../theme/shadows';
 
-// ✅ Bangla digit converter
-const toBangla = (num) => {
-  if (num === undefined || num === null) return '';
-  const bangla = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
-  return String(num).replace(/[0-9]/g, (d) => bangla[d]);
+// ==================================================
+// ✅ Department Icon Map (lucide-react-native)
+// ==================================================
+const DEPT_ICONS = {
+  Stethoscope,
+  Scissors,
+  Heart,
+  Baby,
+  Bone,
+  Syringe,
+  Pill,
+  Activity,
+  Brain,
+  Eye,
+  Utensils,
+  Smile,
+  Sparkles,
+  User,
+  Droplet,
+  Thermometer,
+  Ear,
+};
+
+// ==================================================
+// ✅ Dept name + "বিভাগ" (avoid duplicate)
+// ==================================================
+const formatDeptLabel = (deptName) => {
+  if (!deptName) return '';
+  const trimmed = deptName.trim();
+  if (trimmed.includes('বিভাগ') || trimmed.includes('department')) {
+    return trimmed;
+  }
+  return `${trimmed} বিভাগ`;
+};
+
+// ==================================================
+// ✅ Doctor initials for fallback avatar
+// ==================================================
+const getDoctorInitials = (name) => {
+  if (!name) return 'ডা';
+  const cleaned = name.replace(/^(ডাঃ|ডা\.|Dr\.?|Dr\s*)/i, '').trim();
+  return cleaned.charAt(0) || 'ডা';
 };
 
 export default function DoctorDiscoveryCard({
@@ -44,33 +100,61 @@ export default function DoctorDiscoveryCard({
   const todayTime = getTodayTimeDisplay(doctor);
   const canBookToday = availableToday;
 
-  // ✅ Initials for fallback avatar
-  const getInitials = () => {
-    const name = doctor.name || '';
-    // Bengali name থেকে প্রথম অক্ষর নিন
-    const cleaned = name.replace(/^(ডাঃ|ডা\.|Dr\.?)\s*/i, '').trim();
-    return cleaned.charAt(0) || 'ড';
-  };
+  // ✅ Department icon
+  const DeptIcon = DEPT_ICONS[doctor.deptIcon] || Stethoscope;
 
-  const handleBookPress = () => {
-    if (!canBookToday) return;
-    onBookPress?.();
-  };
+  // ✅ Gender detection
+  const isFemale =
+    doctor.gender === 'female' ||
+    doctor.gender === 'মহিলা' ||
+    doctor.gender === 'female_doctor';
+  const isMale =
+    doctor.gender === 'male' ||
+    doctor.gender === 'পুরুষ' ||
+    doctor.gender === 'male_doctor';
+
+  // ✅ Avatar logic
+  const hasPhoto = doctor.imageUrl && doctor.imageUrl.trim() !== '';
+
+  // ✅ Dept label (avoid duplicate)
+  const deptLabel = formatDeptLabel(doctor.deptName);
 
   return (
     <View style={[styles.card, style]}>
       {/* ==========================================
-          HEADER ROW: Avatar + Name + Favorite
+          HEADER ROW
           ========================================== */}
       <View style={styles.headerRow}>
-        {/* Avatar (fallback) */}
+        {/* Avatar: Photo → Gender → Initials */}
         <View
           style={[
             styles.avatar,
-            { backgroundColor: doctor.deptColor || colors.primaryLight },
+            {
+              backgroundColor: hasPhoto
+                ? colors.primaryLight
+                : isFemale
+                ? '#FDE7F3'
+                : isMale
+                ? '#E6F0FA'
+                : colors.primaryLight,
+            },
           ]}
         >
-          <Text style={styles.avatarText}>{getInitials()}</Text>
+          {hasPhoto ? (
+            <Image
+              source={{ uri: doctor.imageUrl }}
+              style={styles.avatarImage}
+              resizeMode="cover"
+            />
+          ) : isFemale ? (
+            <Ionicons name="woman" size={34} color="#DB2777" />
+          ) : isMale ? (
+            <Ionicons name="man" size={34} color="#1c5fa8" />
+          ) : (
+            <Text style={[styles.avatarText, { color: colors.primary }]}>
+              {getDoctorInitials(doctor.name)}
+            </Text>
+          )}
         </View>
 
         {/* Name + Specialty + Verified */}
@@ -79,7 +163,6 @@ export default function DoctorDiscoveryCard({
             <Text style={styles.name} numberOfLines={2}>
               {doctor.name || 'ডাক্তার'}
             </Text>
-            {/* ✅ Verified badge */}
             <Ionicons
               name="checkmark-circle"
               size={16}
@@ -95,7 +178,6 @@ export default function DoctorDiscoveryCard({
           )}
         </View>
 
-        {/* Favorite button */}
         <FavoriteButton doctorId={doctor.id} size="sm" />
       </View>
 
@@ -103,7 +185,6 @@ export default function DoctorDiscoveryCard({
           INFO SECTION
           ========================================== */}
       <View style={styles.infoSection}>
-        {/* Department badge */}
         {doctor.deptName && (
           <View style={styles.deptBadgeWrap}>
             <View
@@ -115,25 +196,20 @@ export default function DoctorDiscoveryCard({
                 },
               ]}
             >
-              <View
-                style={[
-                  styles.deptDot,
-                  { backgroundColor: doctor.deptColor || colors.accent },
-                ]}
-              />
+              <DeptIcon size={12} color={doctor.deptColor || colors.accent} />
               <Text
                 style={[
                   styles.deptBadgeText,
                   { color: doctor.deptColor || colors.accent },
                 ]}
+                numberOfLines={1}
               >
-                {doctor.deptName} বিভাগ
+                {deptLabel}
               </Text>
             </View>
           </View>
         )}
 
-        {/* Workplace */}
         {doctor.workplace && (
           <View style={styles.infoRow}>
             <Ionicons
@@ -147,18 +223,13 @@ export default function DoctorDiscoveryCard({
           </View>
         )}
 
-        {/* Availability status */}
         <View style={styles.availabilityRow}>
           {inChamber ? (
-            // ✅ Live: chamber-এ আছেন
             <View style={[styles.statusPill, styles.statusPillLive]}>
               <View style={styles.liveDot} />
-              <Text style={styles.statusLiveText}>
-                এখন চেম্বারে আছেন
-              </Text>
+              <Text style={styles.statusLiveText}>এখন চেম্বারে আছেন</Text>
             </View>
           ) : availableToday ? (
-            // ✅ Available today
             <View style={[styles.statusPill, styles.statusPillAvailable]}>
               <View style={styles.availableDot} />
               <Text style={styles.statusAvailableText}>
@@ -166,7 +237,6 @@ export default function DoctorDiscoveryCard({
               </Text>
             </View>
           ) : (
-            // ❌ Not available
             <View style={[styles.statusPill, styles.statusPillUnavailable]}>
               <Ionicons
                 name="close-circle"
@@ -183,7 +253,6 @@ export default function DoctorDiscoveryCard({
           ACTION BUTTONS
           ========================================== */}
       <View style={styles.ctaRow}>
-        {/* বিস্তারিত (outline) */}
         <Button
           title="বিস্তারিত"
           onPress={onDetailsPress}
@@ -192,11 +261,9 @@ export default function DoctorDiscoveryCard({
           icon="information-circle-outline"
           style={styles.secondaryBtn}
         />
-
-        {/* সিরিয়াল নিন (primary) OR আজ সিরিয়াল নেই (disabled) */}
         <Button
           title={canBookToday ? 'সিরিয়াল নিন' : 'আজ সিরিয়াল নেই'}
-          onPress={handleBookPress}
+          onPress={onBookPress}
           disabled={!canBookToday}
           variant={canBookToday ? 'primary' : 'outline'}
           size="sm"
@@ -222,10 +289,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderSubtle,
   },
-
-  // ==========================================
-  // Header Row
-  // ==========================================
   headerRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -240,12 +303,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: colors.white,
+    overflow: 'hidden',
     ...shadows.sm,
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   avatarText: {
     fontFamily: fontFamily.bold,
     fontSize: 24,
-    color: colors.white,
   },
   nameWrap: {
     flex: 1,
@@ -273,10 +340,6 @@ const styles = StyleSheet.create({
     color: '#9c2a7e',
     lineHeight: 18,
   },
-
-  // ==========================================
-  // Info Section
-  // ==========================================
   infoSection: {
     gap: spacing.sm,
     marginBottom: spacing.md,
@@ -292,15 +355,12 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: radius.pill,
     borderWidth: 1,
-  },
-  deptDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+    maxWidth: '100%',
   },
   deptBadgeText: {
     fontFamily: fontFamily.semiBold,
     fontSize: 11.5,
+    flexShrink: 1,
   },
   infoRow: {
     flexDirection: 'row',
@@ -314,10 +374,6 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 18,
   },
-
-  // ==========================================
-  // Availability
-  // ==========================================
   availabilityRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -372,10 +428,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textSecondary,
   },
-
-  // ==========================================
-  // CTA Buttons
-  // ==========================================
   ctaRow: {
     flexDirection: 'row',
     gap: spacing.sm,

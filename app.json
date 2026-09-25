@@ -4,7 +4,7 @@
     "slug": "alafiyah-hospital",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/splash-icon.png",
     "userInterfaceStyle": "light",
     "scheme": "alafiyah",
     "updates": {
@@ -21,7 +21,7 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#ffffff",
-          "image": "./assets/icon.png",
+          "image": "./assets/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain"
         }
@@ -38,6 +38,14 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.524797545432-kshfpc8t138plq7dv3qb0tbe0707as5h"
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
       ]
     ],
     "android": {
@@ -51,9 +59,7 @@
         "VIBRATE"
       ],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png",
+        "foregroundImage": "./assets/splash-icon.png",
         "backgroundColor": "#1c5fa8"
       }
     },

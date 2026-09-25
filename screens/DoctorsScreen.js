@@ -2,9 +2,10 @@
 // ==================================================
 // 👨‍⚕️ DoctorsScreen — Doctor Discovery (Redesigned)
 // ==================================================
-// ✅ Redesigned header, search, filters, results
+// ✅ Header + Search + Filter icon (fixed)
+// ✅ Skeleton loading
+// ✅ Filter indicator
 // ✅ Firebase data অপরিবর্তিত
-// ✅ Search/filter logic অপরিবর্তিত
 // ==================================================
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
@@ -23,8 +24,8 @@ import { useHospital } from '../context/HospitalContext';
 import { loadDepartments, loadPanels } from '../services/dataService';
 
 import SearchBar from '../components/ui/SearchBar';
-import LoadingState from '../components/ui/LoadingState';
 import EmptyState from '../components/ui/EmptyState';
+import { DoctorListSkeleton } from '../components/ui/SkeletonScreens';
 import DoctorDiscoveryCard from '../components/doctors/DoctorDiscoveryCard';
 import DoctorFilterBar from '../components/doctors/DoctorFilterBar';
 import {
@@ -37,6 +38,7 @@ import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { fontFamily } from '../theme/typography';
 import { radius } from '../theme/radius';
+import { shadows } from '../theme/shadows';
 
 export default function DoctorsScreen({ navigation }) {
   const { hospitalId } = useHospital();
@@ -46,17 +48,13 @@ export default function DoctorsScreen({ navigation }) {
   const [departments, setDepartments] = useState([]);
   const [panels, setPanels] = useState([]);
 
-  // Filter state
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('all');
 
-  // ✅ আজকের দিন auto-select
   const todayDay = useMemo(() => getTodayBanglaDay(), []);
   const [selectedDay, setSelectedDay] = useState(todayDay);
 
-  // ==================================================
-  // ✅ Load data (Firebase — unchanged)
-  // ==================================================
+  // ✅ Load data
   const loadData = useCallback(async () => {
     if (!hospitalId) return;
     try {
@@ -89,9 +87,7 @@ export default function DoctorsScreen({ navigation }) {
     loadData();
   };
 
-  // ==================================================
-  // ✅ Filtered doctors (logic unchanged)
-  // ==================================================
+  // ✅ Filtered doctors
   const filteredDoctors = useMemo(() => {
     let doctors = flattenDoctors(departments);
 
@@ -120,9 +116,6 @@ export default function DoctorsScreen({ navigation }) {
     return doctors;
   }, [departments, panels, searchTerm, selectedDepartment, selectedDay]);
 
-  // ==================================================
-  // ✅ Navigate handlers (unchanged)
-  // ==================================================
   const handleBookDoctor = (doctor) => {
     navigation.navigate('Booking', { preselectedDoctor: doctor });
   };
@@ -140,21 +133,34 @@ export default function DoctorsScreen({ navigation }) {
     return count;
   }, [searchTerm, selectedDepartment, selectedDay, todayDay]);
 
-  // ✅ Bangla digit converter
   const toBangla = (num) => {
     const bangla = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
     return String(num).replace(/[0-9]/g, (d) => bangla[d]);
   };
 
   // ==================================================
-  // Loading
+  // ✅ Loading Skeleton
   // ==================================================
   if (loading) {
-    return <LoadingState message="ডাক্তার লোড হচ্ছে..." />;
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.header}>
+          <View style={styles.headerTopRow}>
+            <View style={styles.headerTextWrap}>
+              <Text style={styles.headerTitle}>ডাক্তার খুঁজুন</Text>
+              <Text style={styles.headerSubtitle}>
+                আপনার প্রয়োজন অনুযায়ী ডাক্তার খুঁজুন ও সিরিয়াল নিন
+              </Text>
+            </View>
+          </View>
+        </View>
+        <DoctorListSkeleton count={4} />
+      </SafeAreaView>
+    );
   }
 
   // ==================================================
-  // Render
+  // ✅ Render
   // ==================================================
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -162,14 +168,11 @@ export default function DoctorsScreen({ navigation }) {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        stickyHeaderIndices={[0]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* ==================================================
-            ✅ HEADER (Compact Blue)
-            ================================================== */}
+        {/* HEADER */}
         <View style={styles.header}>
           <View style={styles.headerTopRow}>
             <View style={styles.headerTextWrap}>
@@ -179,7 +182,6 @@ export default function DoctorsScreen({ navigation }) {
               </Text>
             </View>
 
-            {/* Health icon box (top-right) */}
             <View style={styles.headerIconBox}>
               <Ionicons name="heart" size={18} color={colors.white} />
               <Text style={styles.headerIconText}>
@@ -188,27 +190,30 @@ export default function DoctorsScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Search bar */}
+          {/* SEARCH ROW (fixed) */}
           <View style={styles.searchWrap}>
-            <SearchBar
-              value={searchTerm}
-              onChangeText={setSearchTerm}
-              placeholder="ডাক্তার, বিশেষজ্ঞতা বা বিভাগ খুঁজুন"
-            />
+            <View style={styles.searchBarWrapper}>
+              <SearchBar
+                value={searchTerm}
+                onChangeText={setSearchTerm}
+                placeholder="ডাক্তার, বিশেষজ্ঞতা বা বিভাগ খুঁজুন"
+              />
+            </View>
 
-            {/* Filter icon button */}
             <TouchableOpacity
               style={styles.filterIconBtn}
               activeOpacity={0.7}
             >
-              <Ionicons name="options-outline" size={20} color={colors.primary} />
+              <Ionicons
+                name="options-outline"
+                size={20}
+                color={colors.primary}
+              />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* ==================================================
-            ✅ DEPARTMENT + DAY FILTERS
-            ================================================== */}
+        {/* FILTERS */}
         <DoctorFilterBar
           departments={departments}
           selectedDepartment={selectedDepartment}
@@ -218,9 +223,7 @@ export default function DoctorsScreen({ navigation }) {
           todayDayName={todayDay}
         />
 
-        {/* ==================================================
-            ✅ RESULT SUMMARY
-            ================================================== */}
+        {/* RESULT SUMMARY */}
         <View style={styles.resultRow}>
           <Text style={styles.resultCount}>
             {toBangla(filteredDoctors.length)} জন ডাক্তার
@@ -228,7 +231,11 @@ export default function DoctorsScreen({ navigation }) {
 
           {activeFilterCount > 0 && (
             <View style={styles.filterBadge}>
-              <Ionicons name="funnel-outline" size={12} color={colors.primary} />
+              <Ionicons
+                name="funnel-outline"
+                size={12}
+                color={colors.primary}
+              />
               <Text style={styles.filterBadgeText}>
                 ফিল্টার প্রয়োগ করা হয়েছে ({toBangla(activeFilterCount)})
               </Text>
@@ -240,15 +247,17 @@ export default function DoctorsScreen({ navigation }) {
                 }}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Ionicons name="close-circle" size={14} color={colors.primary} />
+                <Ionicons
+                  name="close-circle"
+                  size={14}
+                  color={colors.primary}
+                />
               </TouchableOpacity>
             </View>
           )}
         </View>
 
-        {/* ==================================================
-            ✅ DOCTOR LIST
-            ================================================== */}
+        {/* DOCTOR LIST */}
         <View style={styles.listWrap}>
           {filteredDoctors.length === 0 ? (
             <EmptyState
@@ -290,9 +299,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl,
   },
 
-  // ==================================================
   // HEADER
-  // ==================================================
   header: {
     backgroundColor: colors.primary,
     paddingTop: spacing.md,
@@ -340,24 +347,30 @@ const styles = StyleSheet.create({
     lineHeight: 13,
   },
 
-  // Search row
+  // SEARCH
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    width: '100%',
+  },
+  searchBarWrapper: {
+    flex: 1,
+    minWidth: 0,
   },
   filterIconBtn: {
     width: 48,
     height: 48,
+    minWidth: 48,
+    flexShrink: 0,
     borderRadius: radius.lg,
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
+    ...shadows.xs,
   },
 
-  // ==================================================
   // RESULT ROW
-  // ==================================================
   resultRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -388,9 +401,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
 
-  // ==================================================
   // LIST
-  // ==================================================
   listWrap: {
     paddingHorizontal: spacing.lg,
   },

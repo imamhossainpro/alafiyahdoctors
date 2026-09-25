@@ -2,6 +2,8 @@
 // ==================================================
 // 🔍 SearchBar — Search input with clear button
 // ==================================================
+// ✅ flex: 1 & minWidth: 0 (Android squeeze fix)
+// ==================================================
 import React from 'react';
 import {
   View,
@@ -28,7 +30,7 @@ export default function SearchBar({
         name="search"
         size={20}
         color={colors.textTertiary}
-        style={{ marginRight: spacing.sm }}
+        style={styles.searchIcon}
       />
 
       <TextInput
@@ -50,6 +52,7 @@ export default function SearchBar({
           }}
           style={styles.clearButton}
           activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Ionicons
             name="close-circle"
@@ -72,6 +75,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     paddingHorizontal: spacing.md + 2,
     minHeight: 48,
+    flex: 1,           // ✅ যোগ করা হয়েছে
+    minWidth: 0,       // ✅ যোগ করা হয়েছে
+  },
+  searchIcon: {
+    marginRight: spacing.sm,
+    flexShrink: 0,
   },
   input: {
     flex: 1,
@@ -80,8 +89,10 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     paddingVertical: spacing.md,
     paddingLeft: 0,
+    minWidth: 0,       // ✅ যোগ করা হয়েছে
   },
   clearButton: {
     padding: 4,
+    flexShrink: 0,     // ✅ যোগ করা হয়েছে
   },
 });

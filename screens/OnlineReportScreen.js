@@ -2,6 +2,8 @@
 // ==================================================
 // 🌐 Online Report — WebView (App-এর ভিতরে)
 // ==================================================
+// ✅ HTTP support (cleartext fix)
+// ==================================================
 import React, { useState, useRef } from 'react';
 import {
   View,
@@ -25,24 +27,15 @@ export default function OnlineReportScreen({ navigation }) {
   const [error, setError] = useState(null);
   const [canGoBack, setCanGoBack] = useState(false);
 
-  // ==================================================
-  // ✅ Loading Start
-  // ==================================================
   const handleLoadStart = () => {
     setLoading(true);
     setError(null);
   };
 
-  // ==================================================
-  // ✅ Loading End
-  // ==================================================
   const handleLoadEnd = () => {
     setLoading(false);
   };
 
-  // ==================================================
-  // ✅ Error
-  // ==================================================
   const handleError = (syntheticEvent) => {
     const { nativeEvent } = syntheticEvent;
     console.warn('❌ WebView error:', nativeEvent);
@@ -50,16 +43,10 @@ export default function OnlineReportScreen({ navigation }) {
     setLoading(false);
   };
 
-  // ==================================================
-  // ✅ Navigation State Change
-  // ==================================================
   const handleNavigationStateChange = (navState) => {
     setCanGoBack(navState.canGoBack);
   };
 
-  // ==================================================
-  // ✅ Retry
-  // ==================================================
   const handleRetry = () => {
     setError(null);
     setLoading(true);
@@ -68,9 +55,6 @@ export default function OnlineReportScreen({ navigation }) {
     }
   };
 
-  // ==================================================
-  // ✅ Loading UI
-  // ==================================================
   const renderLoading = () => {
     if (!loading) return null;
     return (
@@ -82,7 +66,7 @@ export default function OnlineReportScreen({ navigation }) {
   };
 
   // ==================================================
-  // ✅ Error UI
+  // Error UI
   // ==================================================
   if (error) {
     return (
@@ -115,11 +99,11 @@ export default function OnlineReportScreen({ navigation }) {
   }
 
   // ==================================================
-  // ✅ Main Render
+  // Main Render
   // ==================================================
   return (
     <View style={styles.container}>
-      {/* Top Bar with back/forward/reload */}
+      {/* Top Bar */}
       <View style={styles.topBar}>
         <TouchableOpacity
           style={styles.topBarButton}
@@ -150,7 +134,7 @@ export default function OnlineReportScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* ✅ WebView with ALL permissions for HTTP */}
+      {/* ✅ WebView with HTTP support */}
       <WebView
         ref={webViewRef}
         source={{ uri: ONLINE_REPORT_URL }}
@@ -168,20 +152,21 @@ export default function OnlineReportScreen({ navigation }) {
         allowsInlineMediaPlayback
         // ✅ সব URL allow
         originWhitelist={['*']}
-        // ✅ Back/forward gesture
         allowsBackForwardNavigationGestures
-        // ✅ Cookies enabled (login/session এর জন্য)
+        // ✅ Cookies
         sharedCookiesEnabled
         thirdPartyCookiesEnabled
-        // ✅ Cache enabled (দ্রুত লোড)
+        // ✅ Cache
         cacheEnabled
         // ✅ File access
         allowFileAccess
         allowFileAccessFromFileURLs
         allowUniversalAccessFromFileURLs
-        // ✅ Media playback
+        // ✅ Media
         mediaPlaybackRequiresUserAction={false}
-        // ✅ User Agent (mobile-friendly view)
+        // ✅ Android HTTP-specific
+        androidLayerType="hardware"
+        // ✅ User Agent
         userAgent={
           Platform.OS === 'android'
             ? 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'
@@ -189,10 +174,8 @@ export default function OnlineReportScreen({ navigation }) {
         }
       />
 
-      {/* Loading Overlay */}
       {renderLoading()}
 
-      {/* Bottom Safe Area Padding */}
       <View style={{ height: insets.bottom, backgroundColor: '#fff' }} />
     </View>
   );

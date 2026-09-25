@@ -1,10 +1,6 @@
 // components/doctors/DoctorFilterBar.js
 // ==================================================
-// 🎛️ DoctorFilterBar — Department + Day chips (Redesigned)
-// ==================================================
-// ✅ Firebase data-driven
-// ✅ Horizontal scroll chips
-// ✅ Day chips with dates
+// 🎛️ DoctorFilterBar — Department + Day chips
 // ==================================================
 import React from 'react';
 import {
@@ -26,20 +22,7 @@ const toBangla = (num) => {
   return String(num).replace(/[0-9]/g, (d) => bangla[d]);
 };
 
-// ==================================================
-// ✅ Day filters (7 days including today's dynamic date)
-// ==================================================
-const DAY_KEYS = [
-  { key: 'রবিবার', short: 'রবি', offset: null },
-  { key: 'সোমবার', short: 'সোম', offset: null },
-  { key: 'মঙ্গলবার', short: 'মঙ্গল', offset: null },
-  { key: 'বুধবার', short: 'বুধ', offset: null },
-  { key: 'বৃহস্পতিবার', short: 'বৃহঃ', offset: null },
-  { key: 'শুক্রবার', short: 'শুক্র', offset: null },
-  { key: 'শনিবার', short: 'শনি', offset: null },
-];
-
-// ✅ আজকের দিন থেকে শুরু করে 7 দিন generate
+// ✅ Day chips with dynamic dates
 const generateDayChips = (todayDayName) => {
   const BANGLA_DAYS = [
     'রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার',
@@ -96,7 +79,6 @@ export default function DoctorFilterBar({
     [todayDayName]
   );
 
-  // ✅ "সব দেখুন" toggle for departments
   const [showAllDepts, setShowAllDepts] = React.useState(false);
   const visibleDepts = showAllDepts ? departments : departments.slice(0, 4);
 
@@ -174,7 +156,6 @@ export default function DoctorFilterBar({
         {dayChips.map((d) => (
           <DayChip
             key={d.key}
-            dayKey={d.key}
             label={d.label}
             date={d.date}
             isToday={d.isToday}
@@ -188,9 +169,6 @@ export default function DoctorFilterBar({
   );
 }
 
-// ==================================================
-// ✅ Department Chip
-// ==================================================
 function Chip({ label, icon, color, active, onPress }) {
   return (
     <TouchableOpacity
@@ -215,11 +193,7 @@ function Chip({ label, icon, color, active, onPress }) {
   );
 }
 
-// ==================================================
-// ✅ Day Chip (with date)
-// ==================================================
 function DayChip({ label, date, isToday, isAll, active, onPress }) {
-  // "সব দিন" chip
   if (isAll) {
     return (
       <TouchableOpacity
@@ -227,9 +201,7 @@ function DayChip({ label, date, isToday, isAll, active, onPress }) {
         activeOpacity={0.7}
         style={[styles.dayChip, active && styles.dayChipActive]}
       >
-        <Text
-          style={[styles.dayChipLabel, active && styles.dayChipLabelActive]}
-        >
+        <Text style={[styles.dayChipLabel, active && styles.dayChipLabelActive]}>
           {label}
         </Text>
       </TouchableOpacity>
@@ -242,29 +214,16 @@ function DayChip({ label, date, isToday, isAll, active, onPress }) {
       activeOpacity={0.7}
       style={[styles.dayChip, active && styles.dayChipActive]}
     >
-      <Text
-        style={[
-          styles.dayChipTop,
-          active && styles.dayChipTopActive,
-        ]}
-      >
+      <Text style={[styles.dayChipTop, active && styles.dayChipTopActive]}>
         {isToday ? 'আজ' : label}
       </Text>
-      <Text
-        style={[
-          styles.dayChipDate,
-          active && styles.dayChipDateActive,
-        ]}
-      >
+      <Text style={[styles.dayChipDate, active && styles.dayChipDateActive]}>
         {date}
       </Text>
     </TouchableOpacity>
   );
 }
 
-// ==================================================
-// 🎨 Styles
-// ==================================================
 const styles = StyleSheet.create({
   container: {
     backgroundColor: colors.surface,
@@ -288,8 +247,6 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     color: colors.primary,
   },
-
-  // Today badge (right side of "দিন" row)
   todayBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -305,17 +262,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.primary,
   },
-
-  // Chip row
   chipRow: {
     paddingHorizontal: spacing.lg,
     gap: spacing.sm,
     paddingBottom: spacing.md,
   },
-
-  // ==========================================
-  // Department Chip
-  // ==========================================
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -339,10 +290,6 @@ const styles = StyleSheet.create({
   chipLabelActive: {
     color: colors.white,
   },
-
-  // ==========================================
-  // Day Chip
-  // ==========================================
   dayChip: {
     minWidth: 62,
     paddingHorizontal: 12,
