@@ -1,11 +1,10 @@
 // components/doctors/DoctorFilterBar.js
 // ==================================================
-// 🎛️ DoctorFilterBar — Department, Day + Info text
+// 🎛️ DoctorFilterBar — Department + Day chips (Redesigned)
 // ==================================================
-// ✅ Time filter সরানো হয়েছে
-// ✅ "আজ" chip সরানো হয়েছে (auto-select)
-// ✅ "শুধু আজ উপলব্ধ" toggle সরানো হয়েছে
-// ✅ নতুন info text: "আজকে {বার} সেসকল ডাক্তার চেম্বার করছেন"
+// ✅ Firebase data-driven
+// ✅ Horizontal scroll chips
+// ✅ Day chips with dates
 // ==================================================
 import React from 'react';
 import {
@@ -21,17 +20,67 @@ import { spacing } from '../../theme/spacing';
 import { fontFamily } from '../../theme/typography';
 import { radius } from '../../theme/radius';
 
-// ✅ Day filters — "আজ" বাদ
-const DAY_FILTERS = [
-  { key: 'all', label: 'সব দিন', short: 'সব দিন' },
-  { key: 'শনিবার', label: 'শনিবার', short: 'শনি' },
-  { key: 'রবিবার', label: 'রবিবার', short: 'রবি' },
-  { key: 'সোমবার', label: 'সোমবার', short: 'সোম' },
-  { key: 'মঙ্গলবার', label: 'মঙ্গলবার', short: 'মঙ্গল' },
-  { key: 'বুধবার', label: 'বুধবার', short: 'বুধ' },
-  { key: 'বৃহস্পতিবার', label: 'বৃহস্পতিবার', short: 'বৃহঃ' },
-  { key: 'শুক্রবার', label: 'শুক্রবার', short: 'শুক্র' },
+// ✅ Bangla digit converter
+const toBangla = (num) => {
+  const bangla = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+  return String(num).replace(/[0-9]/g, (d) => bangla[d]);
+};
+
+// ==================================================
+// ✅ Day filters (7 days including today's dynamic date)
+// ==================================================
+const DAY_KEYS = [
+  { key: 'রবিবার', short: 'রবি', offset: null },
+  { key: 'সোমবার', short: 'সোম', offset: null },
+  { key: 'মঙ্গলবার', short: 'মঙ্গল', offset: null },
+  { key: 'বুধবার', short: 'বুধ', offset: null },
+  { key: 'বৃহস্পতিবার', short: 'বৃহঃ', offset: null },
+  { key: 'শুক্রবার', short: 'শুক্র', offset: null },
+  { key: 'শনিবার', short: 'শনি', offset: null },
 ];
+
+// ✅ আজকের দিন থেকে শুরু করে 7 দিন generate
+const generateDayChips = (todayDayName) => {
+  const BANGLA_DAYS = [
+    'রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার',
+    'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার',
+  ];
+  const SHORT_DAYS = ['রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহঃ', 'শুক্র', 'শনি'];
+
+  const today = new Date();
+  const todayIndex = BANGLA_DAYS.indexOf(todayDayName);
+  const startIdx = todayIndex >= 0 ? todayIndex : today.getDay();
+
+  const chips = [
+    {
+      key: 'all',
+      label: 'সব দিন',
+      isAll: true,
+    },
+    {
+      key: BANGLA_DAYS[startIdx],
+      label: 'আজ',
+      date: toBangla(today.getDate()),
+      short: SHORT_DAYS[startIdx],
+      isToday: true,
+    },
+  ];
+
+  for (let i = 1; i <= 6; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    const dayIdx = d.getDay();
+    chips.push({
+      key: BANGLA_DAYS[dayIdx],
+      label: SHORT_DAYS[dayIdx],
+      date: toBangla(d.getDate()),
+      short: SHORT_DAYS[dayIdx],
+      isToday: false,
+    });
+  }
+
+  return chips;
+};
 
 export default function DoctorFilterBar({
   departments = [],
@@ -39,30 +88,61 @@ export default function DoctorFilterBar({
   onDepartmentChange,
   selectedDay,
   onDayChange,
-  todayDayName,   // ✅ NEW: আজকের দিনের নাম (e.g., "শনিবার")
+  todayDayName,
   style,
 }) {
+  const dayChips = React.useMemo(
+    () => generateDayChips(todayDayName),
+    [todayDayName]
+  );
+
+  // ✅ "সব দেখুন" toggle for departments
+  const [showAllDepts, setShowAllDepts] = React.useState(false);
+  const visibleDepts = showAllDepts ? departments : departments.slice(0, 4);
+
   return (
     <View style={[styles.container, style]}>
-      {/* Department filter */}
-      <Text style={styles.filterLabel}>বিভাগ</Text>
+      {/* ==========================================
+          DEPARTMENT FILTER
+          ========================================== */}
+      <View style={styles.filterHeaderRow}>
+        <Text style={styles.filterLabel}>বিভাগ</Text>
+        {departments.length > 4 && (
+          <TouchableOpacity
+            onPress={() => setShowAllDepts(!showAllDepts)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.filterAction}>
+              {showAllDepts ? 'কম দেখুন' : 'সব দেখুন'}{' '}
+              <Ionicons
+                name={showAllDepts ? 'arrow-back' : 'arrow-forward'}
+                size={12}
+                color={colors.primary}
+              />
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.chipRow}
       >
         <Chip
-          label={`সব বিভাগ (${departments.length})`}
+          label={`সব বিভাগ (${toBangla(departments.length)})`}
+          icon="grid-outline"
           active={selectedDepartment === 'all'}
           onPress={() => onDepartmentChange('all')}
         />
-        {departments.map((dept) => {
+        {visibleDepts.map((dept) => {
           const count = (dept.doctors || []).length;
           return (
             <Chip
               key={dept.id}
-              label={`${dept.name} (${count})`}
-              dotColor={dept.color}
+              label={`${dept.name} (${toBangla(count)})`}
+              icon={dept.icon}
+              color={dept.color}
               active={selectedDepartment === dept.id}
               onPress={() => onDepartmentChange(dept.id)}
             />
@@ -70,52 +150,60 @@ export default function DoctorFilterBar({
         })}
       </ScrollView>
 
-      {/* Day filter */}
-      <Text style={styles.filterLabel}>দিন</Text>
+      {/* ==========================================
+          DAY FILTER
+          ========================================== */}
+      <View style={styles.filterHeaderRow}>
+        <Text style={styles.filterLabel}>দিন</Text>
+        {todayDayName && (
+          <View style={styles.todayBadgeRow}>
+            <Text style={styles.todayText}>আজ</Text>
+            <Ionicons name="calendar-outline" size={12} color={colors.primary} />
+            <Text style={styles.todayDate}>
+              {dayChips[1]?.short || ''}, {dayChips[1]?.date || ''}
+            </Text>
+          </View>
+        )}
+      </View>
+
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.chipRow}
       >
-        {DAY_FILTERS.map((d) => (
-          <Chip
+        {dayChips.map((d) => (
+          <DayChip
             key={d.key}
-            label={d.short || d.label}
+            dayKey={d.key}
+            label={d.label}
+            date={d.date}
+            isToday={d.isToday}
+            isAll={d.isAll}
             active={selectedDay === d.key}
             onPress={() => onDayChange(d.key)}
           />
         ))}
       </ScrollView>
-
-      {/* ✅ Today's info text — নতুন */}
-      {todayDayName ? (
-        <View style={styles.todayInfoBox}>
-          <Ionicons
-            name="information-circle"
-            size={16}
-            color={colors.primary}
-          />
-          <Text style={styles.todayInfoText}>
-            আজকে {todayDayName} সেসকল ডাক্তার চেম্বার করছেন
-          </Text>
-        </View>
-      ) : null}
     </View>
   );
 }
 
 // ==================================================
-// ✅ Chip component
+// ✅ Department Chip
 // ==================================================
-function Chip({ label, active, onPress, dotColor }) {
+function Chip({ label, icon, color, active, onPress }) {
   return (
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.7}
       style={[styles.chip, active && styles.chipActive]}
     >
-      {dotColor && (
-        <View style={[styles.chipDot, { backgroundColor: dotColor }]} />
+      {icon && (
+        <Ionicons
+          name={icon}
+          size={14}
+          color={active ? colors.white : color || colors.primary}
+        />
       )}
       <Text
         style={[styles.chipLabel, active && styles.chipLabelActive]}
@@ -127,34 +215,115 @@ function Chip({ label, active, onPress, dotColor }) {
   );
 }
 
+// ==================================================
+// ✅ Day Chip (with date)
+// ==================================================
+function DayChip({ label, date, isToday, isAll, active, onPress }) {
+  // "সব দিন" chip
+  if (isAll) {
+    return (
+      <TouchableOpacity
+        onPress={onPress}
+        activeOpacity={0.7}
+        style={[styles.dayChip, active && styles.dayChipActive]}
+      >
+        <Text
+          style={[styles.dayChipLabel, active && styles.dayChipLabelActive]}
+        >
+          {label}
+        </Text>
+      </TouchableOpacity>
+    );
+  }
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.7}
+      style={[styles.dayChip, active && styles.dayChipActive]}
+    >
+      <Text
+        style={[
+          styles.dayChipTop,
+          active && styles.dayChipTopActive,
+        ]}
+      >
+        {isToday ? 'আজ' : label}
+      </Text>
+      <Text
+        style={[
+          styles.dayChipDate,
+          active && styles.dayChipDateActive,
+        ]}
+      >
+        {date}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+// ==================================================
+// 🎨 Styles
+// ==================================================
 const styles = StyleSheet.create({
   container: {
     backgroundColor: colors.surface,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
   },
-  filterLabel: {
-    fontFamily: fontFamily.semiBold,
-    fontSize: 12,
-    color: colors.textSecondary,
+  filterHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.sm,
-    marginTop: spacing.xs,
   },
+  filterLabel: {
+    fontFamily: fontFamily.bold,
+    fontSize: 15,
+    color: colors.textPrimary,
+  },
+  filterAction: {
+    fontFamily: fontFamily.semiBold,
+    fontSize: 12.5,
+    color: colors.primary,
+  },
+
+  // Today badge (right side of "দিন" row)
+  todayBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  todayText: {
+    fontFamily: fontFamily.bold,
+    fontSize: 12,
+    color: colors.primary,
+  },
+  todayDate: {
+    fontFamily: fontFamily.semiBold,
+    fontSize: 12,
+    color: colors.primary,
+  },
+
+  // Chip row
   chipRow: {
     paddingHorizontal: spacing.lg,
     gap: spacing.sm,
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.md,
   },
+
+  // ==========================================
+  // Department Chip
+  // ==========================================
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.surfaceVariant,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -162,36 +331,56 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
-  chipDot: { width: 7, height: 7, borderRadius: 4 },
   chipLabel: {
-    fontFamily: fontFamily.medium,
-    fontSize: 12.5,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 13,
     color: colors.textPrimary,
   },
   chipLabelActive: {
     color: colors.white,
-    fontFamily: fontFamily.semiBold,
   },
 
-  // ✅ Today's info box
-  todayInfoBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.sm,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+  // ==========================================
+  // Day Chip
+  // ==========================================
+  dayChip: {
+    minWidth: 62,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: radius.lg,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.surfaceVariant,
     borderWidth: 1,
-    borderColor: colors.primary + '30',
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  todayInfoText: {
-    flex: 1,
+  dayChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  dayChipLabel: {
     fontFamily: fontFamily.semiBold,
     fontSize: 13,
-    color: colors.primary,
-    lineHeight: 18,
+    color: colors.textPrimary,
+  },
+  dayChipLabelActive: {
+    color: colors.white,
+  },
+  dayChipTop: {
+    fontFamily: fontFamily.semiBold,
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 2,
+  },
+  dayChipTopActive: {
+    color: colors.white,
+  },
+  dayChipDate: {
+    fontFamily: fontFamily.bold,
+    fontSize: 14,
+    color: colors.textPrimary,
+  },
+  dayChipDateActive: {
+    color: colors.white,
   },
 });

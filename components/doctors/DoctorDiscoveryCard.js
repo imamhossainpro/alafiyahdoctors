@@ -1,6 +1,11 @@
 // components/doctors/DoctorDiscoveryCard.js
 // ==================================================
-// 👨‍⚕️ DoctorDiscoveryCard — Modern compact card with favorite
+// 👨‍⚕️ DoctorDiscoveryCard — Redesigned (Premium)
+// ==================================================
+// ✅ Fallback avatar (no imageUrl)
+// ✅ Verified badge (all doctors)
+// ✅ Availability status (green/gray)
+// ✅ Redesigned action buttons
 // ==================================================
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
@@ -18,6 +23,13 @@ import { fontFamily } from '../../theme/typography';
 import { radius } from '../../theme/radius';
 import { shadows } from '../../theme/shadows';
 
+// ✅ Bangla digit converter
+const toBangla = (num) => {
+  if (num === undefined || num === null) return '';
+  const bangla = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+  return String(num).replace(/[0-9]/g, (d) => bangla[d]);
+};
+
 export default function DoctorDiscoveryCard({
   doctor,
   panels,
@@ -32,6 +44,14 @@ export default function DoctorDiscoveryCard({
   const todayTime = getTodayTimeDisplay(doctor);
   const canBookToday = availableToday;
 
+  // ✅ Initials for fallback avatar
+  const getInitials = () => {
+    const name = doctor.name || '';
+    // Bengali name থেকে প্রথম অক্ষর নিন
+    const cleaned = name.replace(/^(ডাঃ|ডা\.|Dr\.?)\s*/i, '').trim();
+    return cleaned.charAt(0) || 'ড';
+  };
+
   const handleBookPress = () => {
     if (!canBookToday) return;
     onBookPress?.();
@@ -39,56 +59,86 @@ export default function DoctorDiscoveryCard({
 
   return (
     <View style={[styles.card, style]}>
-      {/* Left color bar */}
-      <View
-        style={[
-          styles.colorBar,
-          { backgroundColor: doctor.deptColor || colors.primary },
-        ]}
-      />
+      {/* ==========================================
+          HEADER ROW: Avatar + Name + Favorite
+          ========================================== */}
+      <View style={styles.headerRow}>
+        {/* Avatar (fallback) */}
+        <View
+          style={[
+            styles.avatar,
+            { backgroundColor: doctor.deptColor || colors.primaryLight },
+          ]}
+        >
+          <Text style={styles.avatarText}>{getInitials()}</Text>
+        </View>
 
-      {/* Content */}
-      <View style={styles.content}>
-        {/* Header row: avatar + name + favorite */}
-        <View style={styles.headerRow}>
-          <View style={styles.avatarBox}>
-            <Ionicons name="person" size={26} color={colors.primary} />
-          </View>
-
-          <View style={styles.nameWrap}>
+        {/* Name + Specialty + Verified */}
+        <View style={styles.nameWrap}>
+          <View style={styles.nameRow}>
             <Text style={styles.name} numberOfLines={2}>
               {doctor.name || 'ডাক্তার'}
             </Text>
-
-            {doctor.specialty && (
-              <Text style={styles.specialty} numberOfLines={2}>
-                {doctor.specialty}
-              </Text>
-            )}
+            {/* ✅ Verified badge */}
+            <Ionicons
+              name="checkmark-circle"
+              size={16}
+              color={colors.primary}
+              style={styles.verifiedIcon}
+            />
           </View>
 
-          {/* ✅ Favorite button */}
-          <FavoriteButton doctorId={doctor.id} size="sm" />
+          {doctor.specialty && (
+            <Text style={styles.specialty} numberOfLines={2}>
+              {doctor.specialty}
+            </Text>
+          )}
         </View>
 
-        {/* Info rows */}
+        {/* Favorite button */}
+        <FavoriteButton doctorId={doctor.id} size="sm" />
+      </View>
+
+      {/* ==========================================
+          INFO SECTION
+          ========================================== */}
+      <View style={styles.infoSection}>
+        {/* Department badge */}
         {doctor.deptName && (
-          <View style={styles.infoRow}>
+          <View style={styles.deptBadgeWrap}>
             <View
               style={[
-                styles.deptDot,
-                { backgroundColor: doctor.deptColor || colors.accent },
+                styles.deptBadge,
+                {
+                  backgroundColor: (doctor.deptColor || colors.accent) + '15',
+                  borderColor: (doctor.deptColor || colors.accent) + '40',
+                },
               ]}
-            />
-            <Text style={styles.deptName}>{doctor.deptName}</Text>
+            >
+              <View
+                style={[
+                  styles.deptDot,
+                  { backgroundColor: doctor.deptColor || colors.accent },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.deptBadgeText,
+                  { color: doctor.deptColor || colors.accent },
+                ]}
+              >
+                {doctor.deptName} বিভাগ
+              </Text>
+            </View>
           </View>
         )}
 
+        {/* Workplace */}
         {doctor.workplace && (
           <View style={styles.infoRow}>
             <Ionicons
               name="business-outline"
-              size={13}
+              size={14}
               color={colors.textTertiary}
             />
             <Text style={styles.infoText} numberOfLines={2}>
@@ -97,221 +147,244 @@ export default function DoctorDiscoveryCard({
           </View>
         )}
 
-        {/* Availability + time */}
+        {/* Availability status */}
         <View style={styles.availabilityRow}>
           {inChamber ? (
+            // ✅ Live: chamber-এ আছেন
             <View style={[styles.statusPill, styles.statusPillLive]}>
               <View style={styles.liveDot} />
-              <Text style={styles.statusLiveText}>চেম্বারে আছেন</Text>
+              <Text style={styles.statusLiveText}>
+                এখন চেম্বারে আছেন
+              </Text>
             </View>
           ) : availableToday ? (
+            // ✅ Available today
             <View style={[styles.statusPill, styles.statusPillAvailable]}>
-              <Ionicons
-                name="checkmark-circle"
-                size={12}
-                color={colors.successDark}
-              />
-              <Text style={styles.statusAvailableText}>আজ উপলব্ধ</Text>
+              <View style={styles.availableDot} />
+              <Text style={styles.statusAvailableText}>
+                আজ {todayTime || ''}
+              </Text>
             </View>
           ) : (
+            // ❌ Not available
             <View style={[styles.statusPill, styles.statusPillUnavailable]}>
               <Ionicons
                 name="close-circle"
-                size={12}
+                size={13}
                 color={colors.textSecondary}
               />
               <Text style={styles.statusUnavailableText}>আজ নেই</Text>
             </View>
           )}
-
-          {todayTime && availableToday && (
-            <View style={styles.timeBadge}>
-              <Ionicons
-                name="time-outline"
-                size={11}
-                color={colors.warningDark}
-              />
-              <Text style={styles.timeText} numberOfLines={1}>
-                {todayTime}
-              </Text>
-            </View>
-          )}
         </View>
+      </View>
 
-        {/* Info note when unavailable today */}
-        {!availableToday && (
-          <View style={styles.noteRow}>
-            <Ionicons
-              name="information-circle-outline"
-              size={12}
-              color={colors.textTertiary}
-            />
-            <Text style={styles.noteText}>
-              আজ সিরিয়াল দেওয়া যাবে না, বিস্তারিত দেখুন
-            </Text>
-          </View>
-        )}
+      {/* ==========================================
+          ACTION BUTTONS
+          ========================================== */}
+      <View style={styles.ctaRow}>
+        {/* বিস্তারিত (outline) */}
+        <Button
+          title="বিস্তারিত"
+          onPress={onDetailsPress}
+          variant="outline"
+          size="sm"
+          icon="information-circle-outline"
+          style={styles.secondaryBtn}
+        />
 
-        {/* CTAs */}
-        <View style={styles.ctaRow}>
-          <Button
-            title="বিস্তারিত"
-            onPress={onDetailsPress}
-            variant="outline"
-            size="sm"
-            icon="information-circle-outline"
-            style={styles.secondaryBtn}
-          />
-          <Button
-            title={canBookToday ? 'সিরিয়াল নিন' : 'আজ নেই'}
-            onPress={handleBookPress}
-            disabled={!canBookToday}
-            variant={canBookToday ? 'primary' : 'outline'}
-            size="sm"
-            icon={canBookToday ? 'calendar-outline' : 'close-circle-outline'}
-            style={styles.primaryBtn}
-          />
-        </View>
+        {/* সিরিয়াল নিন (primary) OR আজ সিরিয়াল নেই (disabled) */}
+        <Button
+          title={canBookToday ? 'সিরিয়াল নিন' : 'আজ সিরিয়াল নেই'}
+          onPress={handleBookPress}
+          disabled={!canBookToday}
+          variant={canBookToday ? 'primary' : 'outline'}
+          size="sm"
+          icon={canBookToday ? 'arrow-forward' : 'close-circle-outline'}
+          iconPosition={canBookToday ? 'right' : 'left'}
+          style={styles.primaryBtn}
+        />
       </View>
     </View>
   );
 }
 
+// ==================================================
+// 🎨 Styles
+// ==================================================
 const styles = StyleSheet.create({
   card: {
-    flexDirection: 'row',
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
-    overflow: 'hidden',
+    padding: spacing.lg,
     marginBottom: spacing.md,
     ...shadows.sm,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
   },
-  colorBar: { width: 5 },
-  content: {
-    flex: 1,
-    padding: spacing.md,
-  },
+
+  // ==========================================
+  // Header Row
+  // ==========================================
   headerRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: spacing.sm,
-    gap: spacing.sm,
+    gap: spacing.md,
+    marginBottom: spacing.md,
   },
-  avatarBox: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: colors.primaryLight,
+  avatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.white,
+    ...shadows.sm,
   },
-  nameWrap: { flex: 1 },
+  avatarText: {
+    fontFamily: fontFamily.bold,
+    fontSize: 24,
+    color: colors.white,
+  },
+  nameWrap: {
+    flex: 1,
+    paddingTop: 2,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 3,
+  },
   name: {
-    fontFamily: fontFamily.semiBold,
-    fontSize: 15,
+    fontFamily: fontFamily.bold,
+    fontSize: 16,
     color: colors.textPrimary,
-    marginBottom: 2,
+    lineHeight: 22,
+    flexShrink: 1,
+  },
+  verifiedIcon: {
+    marginTop: 1,
   },
   specialty: {
     fontFamily: fontFamily.regular,
-    fontSize: 12,
+    fontSize: 12.5,
     color: '#9c2a7e',
-    lineHeight: 17,
+    lineHeight: 18,
+  },
+
+  // ==========================================
+  // Info Section
+  // ==========================================
+  infoSection: {
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  deptBadgeWrap: {
+    flexDirection: 'row',
+  },
+  deptBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+  },
+  deptDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  deptBadgeText: {
+    fontFamily: fontFamily.semiBold,
+    fontSize: 11.5,
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    marginBottom: 4,
-  },
-  deptDot: { width: 6, height: 6, borderRadius: 3 },
-  deptName: {
-    fontFamily: fontFamily.medium,
-    fontSize: 12,
-    color: colors.textSecondary,
-    flex: 1,
+    gap: 8,
   },
   infoText: {
     fontFamily: fontFamily.regular,
-    fontSize: 11.5,
-    color: colors.textTertiary,
+    fontSize: 12.5,
+    color: colors.textSecondary,
     flex: 1,
-    lineHeight: 16,
+    lineHeight: 18,
   },
+
+  // ==========================================
+  // Availability
+  // ==========================================
   availabilityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacing.sm,
     flexWrap: 'wrap',
-    marginTop: spacing.xs,
-    marginBottom: spacing.sm,
   },
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: radius.pill,
   },
-  statusPillLive: { backgroundColor: colors.successLight },
-  statusPillAvailable: { backgroundColor: colors.successLight },
-  statusPillUnavailable: { backgroundColor: colors.surfaceMuted },
+  statusPillLive: {
+    backgroundColor: colors.successLight,
+  },
+  statusPillAvailable: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  statusPillUnavailable: {
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.success,
+  },
+  availableDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: colors.success,
   },
   statusLiveText: {
-    fontFamily: fontFamily.semiBold,
-    fontSize: 10.5,
+    fontFamily: fontFamily.bold,
+    fontSize: 12,
     color: colors.successDark,
   },
   statusAvailableText: {
-    fontFamily: fontFamily.semiBold,
-    fontSize: 10.5,
+    fontFamily: fontFamily.bold,
+    fontSize: 12,
     color: colors.successDark,
   },
   statusUnavailableText: {
     fontFamily: fontFamily.semiBold,
-    fontSize: 10.5,
+    fontSize: 12,
     color: colors.textSecondary,
   },
-  timeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radius.pill,
-    backgroundColor: colors.warningLight,
-    flexShrink: 1,
-  },
-  timeText: {
-    fontFamily: fontFamily.semiBold,
-    fontSize: 10.5,
-    color: colors.warningDark,
-    flexShrink: 1,
-  },
-  noteRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: spacing.sm,
-    paddingHorizontal: 2,
-  },
-  noteText: {
-    fontFamily: fontFamily.regular,
-    fontSize: 10.5,
-    color: colors.textTertiary,
-    flex: 1,
-    fontStyle: 'italic',
-  },
+
+  // ==========================================
+  // CTA Buttons
+  // ==========================================
   ctaRow: {
     flexDirection: 'row',
     gap: spacing.sm,
+    marginTop: spacing.xs,
   },
-  secondaryBtn: { flex: 1 },
-  primaryBtn: { flex: 1.4 },
+  secondaryBtn: {
+    flex: 1,
+  },
+  primaryBtn: {
+    flex: 1.2,
+  },
 });

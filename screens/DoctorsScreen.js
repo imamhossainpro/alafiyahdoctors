@@ -1,11 +1,10 @@
 // screens/DoctorsScreen.js
 // ==================================================
-// 👨‍⚕️ DoctorsScreen — Doctor Discovery
+// 👨‍⚕️ DoctorsScreen — Doctor Discovery (Redesigned)
 // ==================================================
-// ✅ Time filter বাদ
-// ✅ আজকের দিন auto-select
-// ✅ "শুধু আজ উপলব্ধ" toggle বাদ
-// ✅ আজকের দিনের info text
+// ✅ Redesigned header, search, filters, results
+// ✅ Firebase data অপরিবর্তিত
+// ✅ Search/filter logic অপরিবর্তিত
 // ==================================================
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
@@ -14,9 +13,11 @@ import {
   ScrollView,
   StyleSheet,
   RefreshControl,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { useHospital } from '../context/HospitalContext';
 import { loadDepartments, loadPanels } from '../services/dataService';
@@ -24,7 +25,6 @@ import { loadDepartments, loadPanels } from '../services/dataService';
 import SearchBar from '../components/ui/SearchBar';
 import LoadingState from '../components/ui/LoadingState';
 import EmptyState from '../components/ui/EmptyState';
-import AppText from '../components/ui/AppText';
 import DoctorDiscoveryCard from '../components/doctors/DoctorDiscoveryCard';
 import DoctorFilterBar from '../components/doctors/DoctorFilterBar';
 import {
@@ -36,6 +36,7 @@ import {
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { fontFamily } from '../theme/typography';
+import { radius } from '../theme/radius';
 
 export default function DoctorsScreen({ navigation }) {
   const { hospitalId } = useHospital();
@@ -54,7 +55,7 @@ export default function DoctorsScreen({ navigation }) {
   const [selectedDay, setSelectedDay] = useState(todayDay);
 
   // ==================================================
-  // ✅ Load data
+  // ✅ Load data (Firebase — unchanged)
   // ==================================================
   const loadData = useCallback(async () => {
     if (!hospitalId) return;
@@ -89,17 +90,15 @@ export default function DoctorsScreen({ navigation }) {
   };
 
   // ==================================================
-  // ✅ Filtered doctors
+  // ✅ Filtered doctors (logic unchanged)
   // ==================================================
   const filteredDoctors = useMemo(() => {
     let doctors = flattenDoctors(departments);
 
-    // Department filter
     if (selectedDepartment !== 'all') {
       doctors = doctors.filter((d) => d.deptId === selectedDepartment);
     }
 
-    // Search filter
     if (searchTerm.trim()) {
       const term = searchTerm.trim().toLowerCase();
       doctors = doctors.filter((d) => {
@@ -112,7 +111,6 @@ export default function DoctorsScreen({ navigation }) {
       });
     }
 
-    // ✅ Day filter
     if (selectedDay !== 'all') {
       doctors = doctors.filter((d) =>
         isDoctorAvailableOnDay(d.id, selectedDay, panels)
@@ -120,27 +118,32 @@ export default function DoctorsScreen({ navigation }) {
     }
 
     return doctors;
-  }, [
-    departments,
-    panels,
-    searchTerm,
-    selectedDepartment,
-    selectedDay,
-  ]);
+  }, [departments, panels, searchTerm, selectedDepartment, selectedDay]);
 
   // ==================================================
-  // ✅ Navigate handlers
+  // ✅ Navigate handlers (unchanged)
   // ==================================================
   const handleBookDoctor = (doctor) => {
-    navigation.navigate('Booking', {
-      preselectedDoctor: doctor,
-    });
+    navigation.navigate('Booking', { preselectedDoctor: doctor });
   };
 
   const handleViewDetails = (doctor) => {
-    navigation.navigate('DoctorDetails', {
-      doctorId: doctor.id,
-    });
+    navigation.navigate('DoctorDetails', { doctorId: doctor.id });
+  };
+
+  // ✅ Active filter count
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (searchTerm.trim()) count++;
+    if (selectedDepartment !== 'all') count++;
+    if (selectedDay !== todayDay) count++;
+    return count;
+  }, [searchTerm, selectedDepartment, selectedDay, todayDay]);
+
+  // ✅ Bangla digit converter
+  const toBangla = (num) => {
+    const bangla = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+    return String(num).replace(/[0-9]/g, (d) => bangla[d]);
   };
 
   // ==================================================
@@ -155,74 +158,116 @@ export default function DoctorsScreen({ navigation }) {
   // ==================================================
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <AppText variant="h2" color="textInverse">
-          ডাক্তার খুঁজুন
-        </AppText>
-        <AppText variant="bodySmall" color="textInverse" style={styles.headerSub}>
-          আপনার প্রয়োজন অনুযায়ী ডাক্তার খুঁজুন ও সিরিয়াল নিন
-        </AppText>
-      </View>
-
-      {/* Search */}
-      <View style={styles.searchWrap}>
-        <SearchBar
-          value={searchTerm}
-          onChangeText={setSearchTerm}
-          placeholder="ডাক্তারের নাম লিখুন"
-        />
-      </View>
-
-      {/* Filters */}
-      <DoctorFilterBar
-        departments={departments}
-        selectedDepartment={selectedDepartment}
-        onDepartmentChange={setSelectedDepartment}
-        selectedDay={selectedDay}
-        onDayChange={setSelectedDay}
-        todayDayName={todayDay}
-      />
-
-      {/* Results */}
       <ScrollView
-        style={styles.listContainer}
-        contentContainerStyle={styles.listContent}
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        stickyHeaderIndices={[0]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Result count */}
-        <View style={styles.countRow}>
-          <Text style={styles.countText}>
-            {filteredDoctors.length} জন ডাক্তার
+        {/* ==================================================
+            ✅ HEADER (Compact Blue)
+            ================================================== */}
+        <View style={styles.header}>
+          <View style={styles.headerTopRow}>
+            <View style={styles.headerTextWrap}>
+              <Text style={styles.headerTitle}>ডাক্তার খুঁজুন</Text>
+              <Text style={styles.headerSubtitle}>
+                আপনার প্রয়োজন অনুযায়ী ডাক্তার খুঁজুন ও সিরিয়াল নিন
+              </Text>
+            </View>
+
+            {/* Health icon box (top-right) */}
+            <View style={styles.headerIconBox}>
+              <Ionicons name="heart" size={18} color={colors.white} />
+              <Text style={styles.headerIconText}>
+                সুস্থ থাকুন{'\n'}নিরাপদ থাকুন
+              </Text>
+            </View>
+          </View>
+
+          {/* Search bar */}
+          <View style={styles.searchWrap}>
+            <SearchBar
+              value={searchTerm}
+              onChangeText={setSearchTerm}
+              placeholder="ডাক্তার, বিশেষজ্ঞতা বা বিভাগ খুঁজুন"
+            />
+
+            {/* Filter icon button */}
+            <TouchableOpacity
+              style={styles.filterIconBtn}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="options-outline" size={20} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ==================================================
+            ✅ DEPARTMENT + DAY FILTERS
+            ================================================== */}
+        <DoctorFilterBar
+          departments={departments}
+          selectedDepartment={selectedDepartment}
+          onDepartmentChange={setSelectedDepartment}
+          selectedDay={selectedDay}
+          onDayChange={setSelectedDay}
+          todayDayName={todayDay}
+        />
+
+        {/* ==================================================
+            ✅ RESULT SUMMARY
+            ================================================== */}
+        <View style={styles.resultRow}>
+          <Text style={styles.resultCount}>
+            {toBangla(filteredDoctors.length)} জন ডাক্তার
           </Text>
-          {(searchTerm ||
-            selectedDepartment !== 'all' ||
-            selectedDay !== 'all') && (
-            <Text style={styles.filteredText}>ফিল্টার প্রয়োগ করা হয়েছে</Text>
+
+          {activeFilterCount > 0 && (
+            <View style={styles.filterBadge}>
+              <Ionicons name="funnel-outline" size={12} color={colors.primary} />
+              <Text style={styles.filterBadgeText}>
+                ফিল্টার প্রয়োগ করা হয়েছে ({toBangla(activeFilterCount)})
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setSearchTerm('');
+                  setSelectedDepartment('all');
+                  setSelectedDay(todayDay);
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close-circle" size={14} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
           )}
         </View>
 
-        {/* List */}
-        {filteredDoctors.length === 0 ? (
-          <EmptyState
-            icon="medkit-outline"
-            title="কোনো ডাক্তার পাওয়া যায়নি"
-            message="ফিল্টার পরিবর্তন করুন অথবা অন্য নাম দিয়ে খুঁজুন"
-          />
-        ) : (
-          filteredDoctors.map((doctor) => (
-            <DoctorDiscoveryCard
-              key={doctor.id}
-              doctor={doctor}
-              panels={panels}
-              onBookPress={() => handleBookDoctor(doctor)}
-              onDetailsPress={() => handleViewDetails(doctor)}
+        {/* ==================================================
+            ✅ DOCTOR LIST
+            ================================================== */}
+        <View style={styles.listWrap}>
+          {filteredDoctors.length === 0 ? (
+            <EmptyState
+              icon="medkit-outline"
+              title="কোনো ডাক্তার পাওয়া যায়নি"
+              message="ফিল্টার পরিবর্তন করুন অথবা অন্য নাম দিয়ে খুঁজুন"
             />
-          ))
-        )}
+          ) : (
+            filteredDoctors.map((doctor) => (
+              <DoctorDiscoveryCard
+                key={doctor.id}
+                doctor={doctor}
+                panels={panels}
+                onBookPress={() => handleBookDoctor(doctor)}
+                onDetailsPress={() => handleViewDetails(doctor)}
+              />
+            ))
+          )}
+        </View>
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
@@ -230,42 +275,123 @@ export default function DoctorsScreen({ navigation }) {
   );
 }
 
+// ==================================================
+// 🎨 Styles
+// ==================================================
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
+  safe: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: spacing.xl,
+  },
+
+  // ==================================================
+  // HEADER
+  // ==================================================
   header: {
     backgroundColor: colors.primary,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.lg,
-  },
-  headerSub: { marginTop: 4, opacity: 0.9 },
-  searchWrap: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.surface,
-  },
-  listContainer: { flex: 1 },
-  listContent: {
-    paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
-  countRow: {
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: spacing.lg,
+  },
+  headerTextWrap: {
+    flex: 1,
+    paddingRight: spacing.md,
+  },
+  headerTitle: {
+    fontFamily: fontFamily.bold,
+    fontSize: 24,
+    color: colors.white,
+    marginBottom: 4,
+    letterSpacing: 0.2,
+  },
+  headerSubtitle: {
+    fontFamily: fontFamily.regular,
+    fontSize: 12.5,
+    color: 'rgba(255, 255, 255, 0.85)',
+    lineHeight: 18,
+  },
+  headerIconBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: radius.lg,
+  },
+  headerIconText: {
+    fontFamily: fontFamily.semiBold,
+    fontSize: 10,
+    color: colors.white,
+    lineHeight: 13,
+  },
+
+  // Search row
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  filterIconBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.lg,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // ==================================================
+  // RESULT ROW
+  // ==================================================
+  resultRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
-  countText: {
-    fontFamily: fontFamily.semiBold,
-    fontSize: 13.5,
-    color: colors.textSecondary,
+  resultCount: {
+    fontFamily: fontFamily.bold,
+    fontSize: 16,
+    color: colors.textPrimary,
   },
-  filteredText: {
-    fontFamily: fontFamily.medium,
-    fontSize: 11.5,
-    color: colors.primary,
+  filterBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: colors.primaryLight,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+  },
+  filterBadgeText: {
+    fontFamily: fontFamily.semiBold,
+    fontSize: 11,
+    color: colors.primary,
+  },
+
+  // ==================================================
+  // LIST
+  // ==================================================
+  listWrap: {
+    paddingHorizontal: spacing.lg,
   },
 });

@@ -4,6 +4,8 @@
 // ==================================================
 // ✅ Animated Splash Screen integrated
 // ✅ In-App Notifications route added
+// ✅ Google Sign-In configured
+// ✅ Bottom Tab pill highlight (redesigned)
 // ==================================================
 import React, { useEffect, useState } from 'react';
 import * as Notifications from 'expo-notifications';
@@ -15,6 +17,9 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
+
+// ✅ Google Sign-In
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
 // ✅ Context Providers
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -58,6 +63,18 @@ import DesignSystemShowcase from './screens/DesignSystemShowcase';
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
+// ==================================================
+// ✅ Google Sign-In Configuration
+// ==================================================
+// ⚠️ webClientId — Firebase Console → Authentication → Sign-in method
+//    → Google → Web SDK configuration → Web client ID
+GoogleSignin.configure({
+  webClientId:
+    '524797545432-kshfpc8t138plq7dv3qb0tbe0707as5h.apps.googleusercontent.com',
+  offlineAccess: true,       // idToken পেতে প্রয়োজন
+  scopes: ['email', 'profile'],
+});
+
 // ✅ Native splash auto-hide বন্ধ (আমরা manual control করব)
 SplashScreenLib.preventAutoHideAsync().catch(() => {});
 
@@ -81,7 +98,7 @@ Notifications.setNotificationHandler({
 });
 
 // ==================================================
-// ✅ Main Tabs (5 tabs)
+// ✅ Main Tabs (5 tabs) — with pill highlight
 // ==================================================
 function MainTabs() {
   const insets = useSafeAreaInsets();
@@ -94,17 +111,24 @@ function MainTabs() {
         tabBarActiveTintColor: '#1c5fa8',
         tabBarInactiveTintColor: '#94a3b8',
         tabBarStyle: {
-          height: 60 + bottomPadding,
+          height: 64 + bottomPadding,
           paddingBottom: bottomPadding + 6,
-          paddingTop: 6,
+          paddingTop: 8,
           backgroundColor: '#ffffff',
           borderTopColor: '#f1f5f9',
           borderTopWidth: 1,
+          // ✅ soft shadow on top edge
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.04,
+          shadowRadius: 8,
+          elevation: 8,
         },
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '600',
           marginTop: 2,
+          marginBottom: 4,
         },
         tabBarIcon: ({ color, size, focused }) => {
           let iconName;
@@ -118,7 +142,24 @@ function MainTabs() {
             iconName = focused ? 'document-text' : 'document-text-outline';
           else if (route.name === 'Profile')
             iconName = focused ? 'person' : 'person-outline';
-          return <Ionicons name={iconName} size={size} color={color} />;
+
+          // ✅ Pill background when active
+          return (
+            <View
+              style={[
+                {
+                  width: 52,
+                  height: 30,
+                  borderRadius: 15,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                },
+                focused && { backgroundColor: '#e6f0fa' },
+              ]}
+            >
+              <Ionicons name={iconName} size={size || 22} color={color} />
+            </View>
+          );
         },
       })}
     >
@@ -375,6 +416,9 @@ export default function App() {
   );
 }
 
+// ==================================================
+// 🎨 Styles
+// ==================================================
 const styles = StyleSheet.create({
   rootContainer: {
     flex: 1,

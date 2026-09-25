@@ -32,7 +32,13 @@
           "color": "#1c5fa8"
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.524797545432-kshfpc8t138plq7dv3qb0tbe0707as5h"
+        }
+      ]
     ],
     "android": {
       "package": "com.alafiyah.hospital",
