@@ -1,6 +1,9 @@
 // components/doctors/DoctorFilterBar.js
 // ==================================================
-// 🎛️ DoctorFilterBar — Department + Day chips
+// 🎛️ DoctorFilterBar — Department + Day chips (Fixed)
+// ==================================================
+// ✅ Icon fallback (no ?)
+// ✅ Department icon mapping
 // ==================================================
 import React from 'react';
 import {
@@ -22,7 +25,82 @@ const toBangla = (num) => {
   return String(num).replace(/[0-9]/g, (d) => bangla[d]);
 };
 
-// ✅ Day chips with dynamic dates
+// ==================================================
+// ✅ Department Name → Ionicons Icon Map
+// ==================================================
+const DEPT_NAME_TO_ICON = {
+  // বাংলা নাম → icon
+  'গাইনী': 'female-outline',
+  'গাইনি': 'female-outline',
+  'গাইনোকোলজি': 'female-outline',
+  'স্ত্রীরোগ': 'female-outline',
+  'প্রসূতি': 'female-outline',
+  'শিশু': 'happy-outline',
+  'পেডিয়াট্রিক': 'happy-outline',
+  'মেডিসিন': 'medkit-outline',
+  'ঔষধ': 'medkit-outline',
+  'সার্জারি': 'bandage-outline',
+  'সার্জারী': 'bandage-outline',
+  'অর্থোপেডিক': 'walk-outline',
+  'হাড়': 'walk-outline',
+  'হৃদরোগ': 'heart-outline',
+  'কার্ডিওলজি': 'heart-outline',
+  'চর্ম': 'hand-left-outline',
+  'চর্মরোগ': 'hand-left-outline',
+  'নাক': 'ear-outline',
+  'কান': 'ear-outline',
+  'গলা': 'ear-outline',
+  'চোখ': 'eye-outline',
+  'নিউরো': 'fitness-outline',
+  'মস্তিষ্ক': 'fitness-outline',
+  'ডায়াবেটিস': 'water-outline',
+  'কিডনি': 'water-outline',
+  'দাঁত': 'happy-outline',
+  'ডেন্টাল': 'happy-outline',
+  'ফিজিওথেরাপি': 'fitness-outline',
+  'মুখ': 'happy-outline',
+  'রক্ত': 'water-outline',
+  'বাত': 'walk-outline',
+  'ফুসফুস': 'cloud-outline',
+  'অ্যালার্জি': 'warning-outline',
+  'বিশেষজ্ঞ': 'star-outline',
+};
+
+// ✅ Fallback icons (rotation for unknown departments)
+const FALLBACK_ICONS = [
+  'medkit-outline',
+  'person-outline',
+  'heart-outline',
+  'fitness-outline',
+  'happy-outline',
+  'eye-outline',
+];
+
+// ==================================================
+// ✅ Get icon for department (by name, not by field)
+// ==================================================
+const getDeptIcon = (dept, index) => {
+  const name = (dept.name || '').trim();
+
+  // Exact match
+  if (DEPT_NAME_TO_ICON[name]) {
+    return DEPT_NAME_TO_ICON[name];
+  }
+
+  // Partial match (Bengali substring)
+  for (const [key, icon] of Object.entries(DEPT_NAME_TO_ICON)) {
+    if (name.includes(key) || key.includes(name)) {
+      return icon;
+    }
+  }
+
+  // Fallback (rotate based on index)
+  return FALLBACK_ICONS[index % FALLBACK_ICONS.length];
+};
+
+// ==================================================
+// ✅ Day chips generator
+// ==================================================
 const generateDayChips = (todayDayName) => {
   const BANGLA_DAYS = [
     'রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার',
@@ -80,7 +158,7 @@ export default function DoctorFilterBar({
   );
 
   const [showAllDepts, setShowAllDepts] = React.useState(false);
-  const visibleDepts = showAllDepts ? departments : departments.slice(0, 4);
+  const visibleDepts = showAllDepts ? departments : departments.slice(0, 3);
 
   return (
     <View style={[styles.container, style]}>
@@ -89,7 +167,7 @@ export default function DoctorFilterBar({
           ========================================== */}
       <View style={styles.filterHeaderRow}>
         <Text style={styles.filterLabel}>বিভাগ</Text>
-        {departments.length > 4 && (
+        {departments.length > 3 && (
           <TouchableOpacity
             onPress={() => setShowAllDepts(!showAllDepts)}
             activeOpacity={0.7}
@@ -113,17 +191,18 @@ export default function DoctorFilterBar({
       >
         <Chip
           label={`সব বিভাগ (${toBangla(departments.length)})`}
-          icon="grid-outline"
+          iconName="grid-outline"
           active={selectedDepartment === 'all'}
           onPress={() => onDepartmentChange('all')}
         />
-        {visibleDepts.map((dept) => {
+        {visibleDepts.map((dept, idx) => {
           const count = (dept.doctors || []).length;
+          const iconName = getDeptIcon(dept, idx);
           return (
             <Chip
               key={dept.id}
               label={`${dept.name} (${toBangla(count)})`}
-              icon={dept.icon}
+              iconName={iconName}
               color={dept.color}
               active={selectedDepartment === dept.id}
               onPress={() => onDepartmentChange(dept.id)}
@@ -169,20 +248,24 @@ export default function DoctorFilterBar({
   );
 }
 
-function Chip({ label, icon, color, active, onPress }) {
+// ==================================================
+// ✅ Chip (with safe icon)
+// ==================================================
+function Chip({ label, iconName, color, active, onPress }) {
+  // ✅ Only render icon if valid Ionicons name
+  const safeIcon = iconName || 'ellipse-outline';
+
   return (
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.7}
       style={[styles.chip, active && styles.chipActive]}
     >
-      {icon && (
-        <Ionicons
-          name={icon}
-          size={14}
-          color={active ? colors.white : color || colors.primary}
-        />
-      )}
+      <Ionicons
+        name={safeIcon}
+        size={14}
+        color={active ? colors.white : color || colors.primary}
+      />
       <Text
         style={[styles.chipLabel, active && styles.chipLabelActive]}
         numberOfLines={1}
@@ -193,6 +276,9 @@ function Chip({ label, icon, color, active, onPress }) {
   );
 }
 
+// ==================================================
+// ✅ Day Chip
+// ==================================================
 function DayChip({ label, date, isToday, isAll, active, onPress }) {
   if (isAll) {
     return (
@@ -224,6 +310,9 @@ function DayChip({ label, date, isToday, isAll, active, onPress }) {
   );
 }
 
+// ==================================================
+// 🎨 Styles
+// ==================================================
 const styles = StyleSheet.create({
   container: {
     backgroundColor: colors.surface,

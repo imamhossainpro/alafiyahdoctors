@@ -1,34 +1,14 @@
 // components/doctors/DoctorDiscoveryCard.js
 // ==================================================
-// 👨‍⚕️ DoctorDiscoveryCard — Redesigned + Fixed
+// 👨‍⚕️ DoctorDiscoveryCard — Fixed Avatar & Icon
 // ==================================================
-// ✅ Lucide icons for departments
-// ✅ No duplicate "বিভাগ" suffix
-// ✅ Gender-based avatar fallback (Female/Male)
-// ✅ Photo support (imageUrl)
+// ✅ Male/Female icon (no "ড" letter)
+// ✅ Photo from imageUrl if available
+// ✅ Safe dept icon
 // ==================================================
 import React from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import {
-  Stethoscope,
-  Scissors,
-  Heart,
-  Baby,
-  Bone,
-  Syringe,
-  Pill,
-  Activity,
-  Brain,
-  Eye,
-  Utensils,
-  Smile,
-  Sparkles,
-  User,
-  Droplet,
-  Thermometer,
-  Ear,
-} from 'lucide-react-native';
 import Button from '../ui/Button';
 import FavoriteButton from './FavoriteButton';
 import {
@@ -43,30 +23,48 @@ import { radius } from '../../theme/radius';
 import { shadows } from '../../theme/shadows';
 
 // ==================================================
-// ✅ Department Icon Map (lucide-react-native)
+// ✅ Dept name → Ionicons icon (same mapping)
 // ==================================================
-const DEPT_ICONS = {
-  Stethoscope,
-  Scissors,
-  Heart,
-  Baby,
-  Bone,
-  Syringe,
-  Pill,
-  Activity,
-  Brain,
-  Eye,
-  Utensils,
-  Smile,
-  Sparkles,
-  User,
-  Droplet,
-  Thermometer,
-  Ear,
+const DEPT_NAME_TO_ICON = {
+  'গাইনী': 'female-outline',
+  'গাইনি': 'female-outline',
+  'গাইনোকোলজি': 'female-outline',
+  'স্ত্রীরোগ': 'female-outline',
+  'প্রসূতি': 'female-outline',
+  'শিশু': 'happy-outline',
+  'মেডিসিন': 'medkit-outline',
+  'সার্জারি': 'bandage-outline',
+  'অর্থোপেডিক': 'walk-outline',
+  'হাড়': 'walk-outline',
+  'হৃদরোগ': 'heart-outline',
+  'কার্ডিওলজি': 'heart-outline',
+  'চর্ম': 'hand-left-outline',
+  'চোখ': 'eye-outline',
+  'নাক': 'ear-outline',
+  'কান': 'ear-outline',
+  'গলা': 'ear-outline',
+  'দাঁত': 'happy-outline',
+  'ডেন্টাল': 'happy-outline',
+  'মুখ': 'happy-outline',
+  'ডায়াবেটিস': 'water-outline',
+  'কিডনি': 'water-outline',
+  'রক্ত': 'water-outline',
+  'ফিজিওথেরাপি': 'fitness-outline',
+  'বাত': 'walk-outline',
+};
+
+const getDeptIcon = (deptName, fallback = 'medkit-outline') => {
+  if (!deptName) return fallback;
+  const name = deptName.trim();
+  if (DEPT_NAME_TO_ICON[name]) return DEPT_NAME_TO_ICON[name];
+  for (const [key, icon] of Object.entries(DEPT_NAME_TO_ICON)) {
+    if (name.includes(key) || key.includes(name)) return icon;
+  }
+  return fallback;
 };
 
 // ==================================================
-// ✅ Dept name + "বিভাগ" (avoid duplicate)
+// ✅ Dept label (avoid duplicate "বিভাগ")
 // ==================================================
 const formatDeptLabel = (deptName) => {
   if (!deptName) return '';
@@ -78,12 +76,22 @@ const formatDeptLabel = (deptName) => {
 };
 
 // ==================================================
-// ✅ Doctor initials for fallback avatar
+// ✅ Gender detection from name (fallback)
 // ==================================================
-const getDoctorInitials = (name) => {
-  if (!name) return 'ডা';
-  const cleaned = name.replace(/^(ডাঃ|ডা\.|Dr\.?|Dr\s*)/i, '').trim();
-  return cleaned.charAt(0) || 'ডা';
+const guessGenderFromName = (name) => {
+  if (!name) return 'unknown';
+  const femaleIndicators = [
+    'ডা. মিসেস', 'ডা. মিস', 'ডা. সেলিনা', 'ডা. ফারহানা', 'ডা. নাসরিন',
+    'ডা. শাহানা', 'ডা. নূরুন', 'ডা. রুবিনা', 'ডা. সাবরিনা', 'ডা. সাদিয়া',
+    'ডা. রেহানা', 'ডা. তাসলিমা', 'ডা. সুরাইয়া', 'ডা. ফরিদা', 'ডা. মমতাজ',
+    'ডা. জাহানারা', 'ডা. আয়েশা', 'ডা. খালেদা', 'ডা. সাজেদা', 'ডা. রোকেয়া',
+    'ডা. সাবিহা', 'ডা. আনোয়ারা', 'ডা. শিরিন', 'ডা. লুবনা', 'ডা. সুমাইয়া',
+    'ডা. মারিয়া', 'ডা. নাদিয়া', 'ডা. সানজিদা', 'ডা. জান্নাত', 'ডা. তাহমিনা',
+  ];
+  for (const indicator of femaleIndicators) {
+    if (name.includes(indicator)) return 'female';
+  }
+  return 'unknown';
 };
 
 export default function DoctorDiscoveryCard({
@@ -100,24 +108,38 @@ export default function DoctorDiscoveryCard({
   const todayTime = getTodayTimeDisplay(doctor);
   const canBookToday = availableToday;
 
-  // ✅ Department icon
-  const DeptIcon = DEPT_ICONS[doctor.deptIcon] || Stethoscope;
+  // ✅ Dept icon (safe)
+  const deptIconName = getDeptIcon(doctor.deptName, 'medkit-outline');
+  const deptLabel = formatDeptLabel(doctor.deptName);
 
-  // ✅ Gender detection
-  const isFemale =
-    doctor.gender === 'female' ||
-    doctor.gender === 'মহিলা' ||
-    doctor.gender === 'female_doctor';
-  const isMale =
-    doctor.gender === 'male' ||
-    doctor.gender === 'পুরুষ' ||
-    doctor.gender === 'male_doctor';
-
-  // ✅ Avatar logic
+  // ✅ Avatar logic: Photo → Gender → Icon
   const hasPhoto = doctor.imageUrl && doctor.imageUrl.trim() !== '';
 
-  // ✅ Dept label (avoid duplicate)
-  const deptLabel = formatDeptLabel(doctor.deptName);
+  // ✅ Gender detection: explicit field → name-based guess
+  let gender = (doctor.gender || '').toLowerCase();
+  if (gender === 'মহিলা' || gender === 'female' || gender === 'female_doctor') {
+    gender = 'female';
+  } else if (gender === 'পুরুষ' || gender === 'male' || gender === 'male_doctor') {
+    gender = 'male';
+  } else if (!gender || gender === '') {
+    gender = guessGenderFromName(doctor.name);
+  }
+
+  // ✅ Avatar colors
+  const getAvatarStyle = () => {
+    if (hasPhoto) return { bg: colors.primaryLight, icon: null };
+    if (gender === 'female') return { bg: '#FDE7F3', icon: 'female' };
+    if (gender === 'male') return { bg: '#E6F0FA', icon: 'male' };
+    return { bg: colors.primaryLight, icon: 'person' };
+  };
+
+  const avatarStyle = getAvatarStyle();
+  const avatarIconColor =
+    gender === 'female'
+      ? '#DB2777'
+      : gender === 'male'
+      ? '#1c5fa8'
+      : colors.primary;
 
   return (
     <View style={[styles.card, style]}>
@@ -125,35 +147,20 @@ export default function DoctorDiscoveryCard({
           HEADER ROW
           ========================================== */}
       <View style={styles.headerRow}>
-        {/* Avatar: Photo → Gender → Initials */}
-        <View
-          style={[
-            styles.avatar,
-            {
-              backgroundColor: hasPhoto
-                ? colors.primaryLight
-                : isFemale
-                ? '#FDE7F3'
-                : isMale
-                ? '#E6F0FA'
-                : colors.primaryLight,
-            },
-          ]}
-        >
+        {/* ✅ Avatar: Photo → Gender icon → Person */}
+        <View style={[styles.avatar, { backgroundColor: avatarStyle.bg }]}>
           {hasPhoto ? (
             <Image
               source={{ uri: doctor.imageUrl }}
               style={styles.avatarImage}
               resizeMode="cover"
             />
-          ) : isFemale ? (
-            <Ionicons name="woman" size={34} color="#DB2777" />
-          ) : isMale ? (
-            <Ionicons name="man" size={34} color="#1c5fa8" />
           ) : (
-            <Text style={[styles.avatarText, { color: colors.primary }]}>
-              {getDoctorInitials(doctor.name)}
-            </Text>
+            <Ionicons
+              name={avatarStyle.icon || 'person'}
+              size={34}
+              color={avatarIconColor}
+            />
           )}
         </View>
 
@@ -185,6 +192,7 @@ export default function DoctorDiscoveryCard({
           INFO SECTION
           ========================================== */}
       <View style={styles.infoSection}>
+        {/* ✅ Dept badge with safe icon */}
         {doctor.deptName && (
           <View style={styles.deptBadgeWrap}>
             <View
@@ -196,7 +204,11 @@ export default function DoctorDiscoveryCard({
                 },
               ]}
             >
-              <DeptIcon size={12} color={doctor.deptColor || colors.accent} />
+              <Ionicons
+                name={deptIconName}
+                size={12}
+                color={doctor.deptColor || colors.accent}
+              />
               <Text
                 style={[
                   styles.deptBadgeText,
@@ -309,10 +321,6 @@ const styles = StyleSheet.create({
   avatarImage: {
     width: '100%',
     height: '100%',
-  },
-  avatarText: {
-    fontFamily: fontFamily.bold,
-    fontSize: 24,
   },
   nameWrap: {
     flex: 1,

@@ -2,19 +2,28 @@
 // ==================================================
 // 🏥 আল-আফিয়া হাসপাতাল — Mobile App
 // ==================================================
-// ✅ Animated Splash Screen integrated
-// ✅ In-App Notifications route added
+// ✅ Animated Splash Screen
+// ✅ In-App Notifications
 // ✅ Google Sign-In configured
-// ✅ Bottom Tab pill highlight (redesigned)
+// ✅ Bottom Tab pill highlight
+// ✅ Notification Channel (Android) — System Tray Notification
 // ==================================================
 import React, { useEffect, useState } from 'react';
 import * as Notifications from 'expo-notifications';
 import * as SplashScreenLib from 'expo-splash-screen';
-import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
+import {
+  View,
+  ActivityIndicator,
+  StyleSheet,
+  Platform,
+} from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 
@@ -66,16 +75,14 @@ const Stack = createStackNavigator();
 // ==================================================
 // ✅ Google Sign-In Configuration
 // ==================================================
-// ⚠️ webClientId — Firebase Console → Authentication → Sign-in method
-//    → Google → Web SDK configuration → Web client ID
 GoogleSignin.configure({
   webClientId:
     '524797545432-kshfpc8t138plq7dv3qb0tbe0707as5h.apps.googleusercontent.com',
-  offlineAccess: true,       // idToken পেতে প্রয়োজন
+  offlineAccess: true,
   scopes: ['email', 'profile'],
 });
 
-// ✅ Native splash auto-hide বন্ধ (আমরা manual control করব)
+// ✅ Native splash auto-hide বন্ধ (manual control)
 SplashScreenLib.preventAutoHideAsync().catch(() => {});
 
 // ==================================================
@@ -87,7 +94,9 @@ const getBottomPadding = (insetsBottom) => {
   return 0;
 };
 
-// ✅ Notification Handler
+// ==================================================
+// ✅ Notification Handler (Foreground behavior)
+// ==================================================
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldPlaySound: true,
@@ -96,6 +105,74 @@ Notifications.setNotificationHandler({
     shouldShowList: true,
   }),
 });
+
+// ==================================================
+// ✅ Notification Channel Setup (Android)
+// ==================================================
+// ⚠️ CRITICAL: Android 8+ এ Notification Channel তৈরি না হলে
+//    system tray-তে notification আসে না।
+//
+// Backend `fcmService.js`-এ যে channelId ব্যবহার হচ্ছে:
+//    channelId: 'alafiyah_default'
+// → ঠিক এই নামেই App-এ channel তৈরি করতে হবে।
+// ==================================================
+async function setupNotificationChannel() {
+  if (Platform.OS !== 'android') return;
+
+  try {
+    // ✅ Main channel (default) — backend যেটি ব্যবহার করে
+    await Notifications.setNotificationChannelAsync('alafiyah_default', {
+      name: 'আল-আফিয়া হাসপাতাল',
+      description: 'বুকিং, সিরিয়াল ও অন্যান্য নোটিফিকেশন',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#1c5fa8',
+      sound: 'default',
+      lockscreenVisibility:
+        Notifications.AndroidNotificationVisibility.PUBLIC,
+      bypassDnd: true,
+      enableVibrate: true,
+      enableLights: true,
+      showBadge: true,
+    });
+
+    // ✅ Booking confirmed channel
+    await Notifications.setNotificationChannelAsync('booking_confirmed', {
+      name: 'সিরিয়াল নিশ্চিত',
+      description: 'বুকিং নিশ্চিত হলে নোটিফিকেশন',
+      importance: Notifications.AndroidImportance.HIGH,
+      sound: 'default',
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#22c55e',
+      showBadge: true,
+    });
+
+    // ✅ Queue update channel
+    await Notifications.setNotificationChannelAsync('queue_update', {
+      name: 'সিরিয়াল আপডেট',
+      description: 'আপনার সিরিয়াল আসছে',
+      importance: Notifications.AndroidImportance.MAX,
+      sound: 'default',
+      vibrationPattern: [0, 500, 250, 500],
+      lightColor: '#f59e0b',
+      bypassDnd: true,
+      showBadge: true,
+    });
+
+    // ✅ Promo channel
+    await Notifications.setNotificationChannelAsync('promo', {
+      name: 'প্রচার ও অফার',
+      description: 'হাসপাতালের প্রচারমূলক বার্তা',
+      importance: Notifications.AndroidImportance.DEFAULT,
+      sound: 'default',
+      showBadge: false,
+    });
+
+    console.log('✅ Notification channels created');
+  } catch (error) {
+    console.error('❌ Notification channel setup error:', error);
+  }
+}
 
 // ==================================================
 // ✅ Main Tabs (5 tabs) — with pill highlight
@@ -117,7 +194,6 @@ function MainTabs() {
           backgroundColor: '#ffffff',
           borderTopColor: '#f1f5f9',
           borderTopWidth: 1,
-          // ✅ soft shadow on top edge
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -2 },
           shadowOpacity: 0.04,
@@ -143,7 +219,6 @@ function MainTabs() {
           else if (route.name === 'Profile')
             iconName = focused ? 'person' : 'person-outline';
 
-          // ✅ Pill background when active
           return (
             <View
               style={[
@@ -314,19 +389,22 @@ function LoadingScreen() {
 }
 
 // ==================================================
-// ✅ App Navigator — FCM Setup এখানে (Provider-এর ভিতরে)
+// ✅ App Navigator — FCM Setup
 // ==================================================
 function AppNavigator() {
   const { user, loading } = useAuth();
   const { hospitalId } = useHospital();
 
-  // ✅ FCM Token Registration — শুধু লগইন করা ইউজারের জন্য
+  // ✅ FCM Token Registration — logged-in user
   useEffect(() => {
     if (!user || !hospitalId) return;
 
     const setupNotifications = async () => {
       try {
-        const token = await registerForPushNotificationsAsync(user, hospitalId);
+        const token = await registerForPushNotificationsAsync(
+          user,
+          hospitalId
+        );
         if (token) {
           await saveFcmToken(user, hospitalId, token);
         }
@@ -348,7 +426,7 @@ function AppNavigator() {
 }
 
 // ==================================================
-// ✅ App Root — Custom Splash + Providers
+// ✅ App Root
 // ==================================================
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -361,14 +439,25 @@ export default function App() {
 
   const [showSplash, setShowSplash] = useState(true);
   const [splashStartTime] = useState(Date.now());
+  const [channelsReady, setChannelsReady] = useState(false);
 
   const isAppReady = fontsLoaded;
+
+  // ==================================================
+  // ✅ Notification Channel Setup (App Startup)
+  // ==================================================
+  useEffect(() => {
+    (async () => {
+      await setupNotificationChannel();
+      setChannelsReady(true);
+    })();
+  }, []);
 
   // ==================================================
   // ✅ Minimum Splash Duration + Exit Animation
   // ==================================================
   useEffect(() => {
-    if (!isAppReady) return;
+    if (!isAppReady || !channelsReady) return;
 
     const MIN_SPLASH_DURATION = 1400;
     const elapsed = Date.now() - splashStartTime;
@@ -387,10 +476,10 @@ export default function App() {
     }, remaining);
 
     return () => clearTimeout(timer);
-  }, [isAppReady, splashStartTime]);
+  }, [isAppReady, channelsReady, splashStartTime]);
 
   // ==================================================
-  // ✅ Render: Custom Splash OR Main App
+  // ✅ Render
   // ==================================================
   if (showSplash) {
     return (
@@ -400,9 +489,6 @@ export default function App() {
     );
   }
 
-  // ==================================================
-  // ✅ Main App
-  // ==================================================
   return (
     <SafeAreaProvider>
       <AuthProvider>
@@ -416,9 +502,6 @@ export default function App() {
   );
 }
 
-// ==================================================
-// 🎨 Styles
-// ==================================================
 const styles = StyleSheet.create({
   rootContainer: {
     flex: 1,

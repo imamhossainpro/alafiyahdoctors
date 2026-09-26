@@ -4,7 +4,7 @@
     "slug": "alafiyah-hospital",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/splash-icon.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "scheme": "alafiyah",
     "updates": {
@@ -20,7 +20,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#1c5fa8",
           "image": "./assets/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain"
@@ -59,7 +59,7 @@
         "VIBRATE"
       ],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/splash-icon.png",
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#1c5fa8"
       }
     },
