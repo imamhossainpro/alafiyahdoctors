@@ -180,7 +180,10 @@ export default function UserAccessManager({ user: currentUser }) {
           user={selectedUser}
           currentUser={currentUser}
           onClose={() => setSelectedUser(null)}
-          onSaved={() => setSelectedUser(null)}
+          onSaved={() => {
+            console.log('✅ Permissions saved — real-time listener will refresh');
+            setSelectedUser(null);
+          }}
         />
       )}
     </div>

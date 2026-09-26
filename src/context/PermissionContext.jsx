@@ -3,8 +3,8 @@
 // 🔐 Permission Context — Fixed
 // ==================================================
 // ✅ Real-time listener on user document
-// ✅ Debug logs
-// ✅ Error handling
+// ✅ Auto-approve when permissions are managed
+// ✅ Debug logs + Error handling
 // ✅ Auto refresh on permission change
 // ==================================================
 import React, {
@@ -68,21 +68,28 @@ export function PermissionProvider({ children }) {
             overridesCount: Object.keys(data.permissionOverrides || {}).length,
           });
 
-          // ✅ Check approved
+          // ⚠️ Only warn — do NOT block permissions based on `approved`.
+          // Admin must explicitly set `isActive: false` to disable a user.
           if (data.approved !== true) {
-            console.warn('⚠️ [PermissionContext] User NOT approved');
+            console.warn(
+              '⚠️ [PermissionContext] User NOT approved — but permissions will still be computed from role/overrides'
+            );
           }
 
-          // ✅ Check active
           if (data.isActive === false) {
-            console.warn('⚠️ [PermissionContext] User is inactive');
+            console.warn(
+              '⚠️ [PermissionContext] User is INACTIVE — permissions will be emptied'
+            );
           }
 
           setUserData(data);
 
-          const calculated = calculateEffectivePermissions(data);
+          // ✅ If user is inactive, empty permissions. Otherwise compute normally.
+          const calculated =
+            data.isActive === false
+              ? {}
+              : calculateEffectivePermissions(data);
 
-          // ✅ Debug: Show granted permissions count
           const grantedCount = Object.values(calculated).filter(
             (v) => v === true
           ).length;
@@ -103,9 +110,7 @@ export function PermissionProvider({ children }) {
       },
       (err) => {
         console.error('❌ [PermissionContext] Listener error:', err);
-        console.error(
-          '   → সম্ভবত Firestore Rules-এ read permission নেই'
-        );
+        console.error('   → সম্ভবত Firestore Rules-এ read permission নেই');
         console.error('   → Firebase Console → Firestore → Rules check করুন');
         setError(err.message);
         setLoading(false);

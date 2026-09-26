@@ -1,6 +1,6 @@
 // src/components/admin/PermissionMatrix.jsx
 // ==================================================
-// 🔐 PermissionMatrix — With applyDependencies fix
+// 🔐 PermissionMatrix — Fixed: auto-approve on save
 // ==================================================
 import React, { useState, useMemo, useEffect } from 'react';
 import { db, doc, updateDoc, serverTimestamp } from '../../firebase';
@@ -189,18 +189,20 @@ export default function PermissionMatrix({
       const roleChanged = role !== user.role;
       const activeChanged = isActive !== (user.isActive !== false);
 
+      // ✅ FIX: `approved: true` added — this was the primary bug!
       await updateDoc(userRef, {
         role,
         isActive,
+        approved: true,
         permissionOverrides: overrides,
         permissionsUpdatedAt: serverTimestamp(),
         permissionsUpdatedBy:
           currentUser?.id || currentUser?.uid || null,
       });
 
-      console.log('✅ [PermissionMatrix] Save SUCCESS');
+      console.log('✅ [PermissionMatrix] Save SUCCESS — approved set to true');
 
-      // Activity Log
+      // Activity Log (best-effort, never blocks save)
       try {
         if (roleChanged) {
           await logActivity({
@@ -251,12 +253,12 @@ export default function PermissionMatrix({
           });
         }
       } catch (logErr) {
-        console.error('Activity log error:', logErr);
+        console.error('Activity log error (non-critical):', logErr);
       }
 
       setMessage('✅ Permissions সফলভাবে সংরক্ষণ করা হয়েছে');
 
-      // ✅ Notify user to logout/login OR auto-refresh
+      // ✅ Notify parent to refresh
       setTimeout(() => {
         if (onSaved) onSaved();
       }, 800);
