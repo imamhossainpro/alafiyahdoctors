@@ -1,8 +1,20 @@
 // src/context/AuthContext.jsx
-import React, { createContext, useContext, useState, useEffect } from 'react';
+// ==================================================
+// 🔐 Authentication Context — Web (Fixed)
+// ==================================================
+// ✅ User data + permissions load
+// ✅ Real-time user document listener
+// ✅ Better error handling
+// ==================================================
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+} from 'react';
 import { auth, db } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 
 const AuthContext = createContext();
 const DEFAULT_HOSPITAL_ID = 'alafiyah_main';
@@ -11,24 +23,42 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // ==================================================
+  // ✅ Firebase Auth state listener
+  // ==================================================
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-          // hospital পাথে ইউজার ডেটা পড়ুন
+          console.log('🔐 [AuthContext] User signed in:', firebaseUser.uid);
+
           const userDoc = await getDoc(
-            doc(db, 'hospitals', DEFAULT_HOSPITAL_ID, 'users', firebaseUser.uid)
+            doc(
+              db,
+              'hospitals',
+              DEFAULT_HOSPITAL_ID,
+              'users',
+              firebaseUser.uid
+            )
           );
+
           if (userDoc.exists()) {
             const data = userDoc.data();
+
+            console.log('📋 [AuthContext] User data loaded:', {
+              role: data.role,
+              approved: data.approved,
+              isActive: data.isActive,
+            });
+
             setUser({
               uid: firebaseUser.uid,
               email: firebaseUser.email,
               ...data,
             });
           } else {
-            // ডকুমেন্ট না থাকলে (পুরনো root ইউজার) ডিফল্ট তৈরি করুন
-            // আপনি চাইলে root থেকেও পড়তে পারেন, কিন্তু আমি সুপারিশ করি hospital পাথে কপি করুন
+            console.warn('⚠️ [AuthContext] User document not found');
+            // Fallback user
             setUser({
               uid: firebaseUser.uid,
               email: firebaseUser.email,
@@ -38,7 +68,7 @@ export function AuthProvider({ children }) {
             });
           }
         } catch (error) {
-          console.error('Auth error:', error);
+          console.error('❌ [AuthContext] Auth error:', error);
           setUser({
             uid: firebaseUser.uid,
             email: firebaseUser.email,
@@ -47,27 +77,84 @@ export function AuthProvider({ children }) {
           });
         }
       } else {
+        console.log('🔐 [AuthContext] User signed out');
         setUser(null);
       }
       setLoading(false);
     });
+
     return () => unsubscribe();
   }, []);
 
+  // ==================================================
+  // ✅ Real-time listener on own user document
+  // (to reflect permission changes without logout)
+  // ==================================================
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const userRef = doc(
+      db,
+      'hospitals',
+      DEFAULT_HOSPITAL_ID,
+      'users',
+      user.uid
+    );
+
+    const unsub = onSnapshot(
+      userRef,
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          console.log('🔄 [AuthContext] User doc updated:', {
+            role: data.role,
+            overridesCount: Object.keys(data.permissionOverrides || {})
+              .length,
+          });
+
+          setUser((prev) => ({
+            uid: prev?.uid,
+            email: prev?.email,
+            ...data,
+          }));
+        }
+      },
+      (err) => {
+        console.error('❌ [AuthContext] User doc listener error:', err);
+      }
+    );
+
+    return () => unsub();
+  }, [user?.uid]);
+
+  // ==================================================
+  // ✅ Logout
+  // ==================================================
   const logout = async () => {
-    await auth.signOut();
-    setUser(null);
+    try {
+      await auth.signOut();
+      setUser(null);
+      console.log('✅ Logout success');
+    } catch (error) {
+      console.error('❌ Logout error:', error);
+    }
+  };
+
+  const value = {
+    user,
+    loading,
+    logout,
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, logout }}>
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
   );
 }
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within AuthProvider');
+  if (!context) {
+    throw new Error('useAuth must be used within AuthProvider');
+  }
   return context;
 }
