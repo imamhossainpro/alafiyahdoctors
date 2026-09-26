@@ -81,15 +81,11 @@ const CSS = `
 .dpb h1,.dpb h2,.dpb h3,.dpb p{margin:0;padding:0;}
 .dpb button{font-family:inherit;cursor:pointer;}
 
-/* ==================================================
-   TOPBAR
-   ================================================== */
 .dpb .topbar{display:flex;align-items:center;justify-content:space-between;background:#ffffff;border-bottom:1px solid #e2e6ee;padding:14px 20px;position:sticky;top:0;z-index:20;flex-wrap:wrap;gap:10px;width:100%;}
 .dpb .topbar-title{display:flex;align-items:center;gap:8px;font-weight:700;font-size:17px;color:#154a82;}
 .dpb .topbar-right{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
 .dpb .save-indicator{font-size:12.5px;color:#6b7280;white-space:nowrap;}
 
-/* ✅ Logout Button — Red with matching color shadow + radius */
 .dpb .logout-btn{
   background:#dc2626;
   color:#fff;
@@ -111,7 +107,6 @@ const CSS = `
   box-shadow:0 5px 14px rgba(220,38,38,0.40);
 }
 
-/* ✅ Login Button — Blue with matching color shadow + radius */
 .dpb .login-btn{
   background:#1c5fa8;
   color:#fff;
@@ -133,9 +128,6 @@ const CSS = `
   box-shadow:0 5px 14px rgba(28,95,168,0.40);
 }
 
-/* ==================================================
-   TABS — Border Radius + Colored Shadow
-   ================================================== */
 .dpb .tabs{display:flex;background:transparent;border-radius:12px;padding:3px;gap:6px;flex-wrap:wrap;}
 .dpb .tab{
   border:none;
@@ -155,14 +147,12 @@ const CSS = `
   box-shadow:0 2px 6px rgba(0,0,0,0.08);
 }
 
-/* ✅ Active tab — Blue with matching shadow */
 .dpb .tab.active{
   background:#1c5fa8;
   color:#fff;
   box-shadow:0 4px 12px rgba(28,95,168,0.35);
 }
 
-/* ✅ Booking Tab — Teal gradient with matching shadow */
 .dpb .tab.booking-tab{
   background:linear-gradient(45deg,#0d9488,#14b8a6);
   color:#fff;
@@ -187,13 +177,9 @@ const CSS = `
 .dpb .tab.booking-tab svg{animation:pulse-booking 2s infinite;}
 @keyframes pulse-booking{0%,100%{transform:scale(1);}50%{transform:scale(1.1);}}
 
-/* ==================================================
-   PANEL SWITCHER — Normal flow (non-sticky)
-   ================================================== */
 .dpb .panel-switcher{display:flex;align-items:center;gap:10px;padding:10px 20px;background:#fff;border-bottom:1px solid #e2e6ee;flex-wrap:wrap;position:relative;z-index:18;}
 .dpb .panel-switcher-scroll{display:flex;gap:6px;flex-wrap:wrap;flex:1;min-width:0;}
 
-/* ✅ Panel Pill — with radius + colored shadow when active */
 .dpb .panel-pill{
   display:flex;
   align-items:center;
@@ -227,16 +213,10 @@ const CSS = `
 .dpb .panel-pill-icon.danger-confirm{color:#dc2626;font-weight:700;}
 .dpb .panel-add-btn{padding:7px 14px;font-size:12.5px;border-radius:12px;}
 
-/* ==================================================
-   LOADING
-   ================================================== */
 .dpb .loading-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:10px;color:#6b7280;}
 .dpb .spin{animation:dpb-spin 1s linear infinite;}
 @keyframes dpb-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 
-/* ==================================================
-   EDIT PANEL
-   ================================================== */
 .dpb .edit-panel{max-width:880px;margin:0 auto;padding:20px;display:flex;flex-direction:column;gap:18px;}
 .dpb .panel-section{background:#fff;border:1px solid #e2e6ee;border-radius:14px;padding:18px 20px;}
 .dpb .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;}
@@ -262,9 +242,6 @@ const CSS = `
   box-shadow:0 3px 8px rgba(28,95,168,0.15);
 }
 
-/* ==================================================
-   INPUTS
-   ================================================== */
 .dpb .input,.dpb .textarea{width:100%;border:1px solid #e2e6ee;border-radius:10px;padding:10px 14px;font-size:14px;font-family:inherit;color:#1f2937;background:#fff;transition:all 0.2s;}
 .dpb .input:focus,.dpb .textarea:focus{outline:none;border-color:#1c5fa8;box-shadow:0 0 0 3px rgba(28,95,168,0.14);}
 .dpb .textarea{resize:vertical;line-height:1.5;}
@@ -274,9 +251,6 @@ const CSS = `
 .dpb .checkbox-row{display:flex;align-items:center;gap:8px;font-size:13px;color:#1f2937;cursor:pointer;font-weight:500;}
 .dpb .checkbox-row input{width:16px;height:16px;cursor:pointer;flex-shrink:0;}
 
-/* ==================================================
-   BUTTONS — Consistent Radius + Colored Shadow
-   ================================================== */
 .dpb .btn{
   display:inline-flex;
   align-items:center;
@@ -290,7 +264,6 @@ const CSS = `
   transition:all 0.2s ease;
 }
 
-/* ✅ Primary — Blue with matching shadow */
 .dpb .btn-primary{
   background:#1c5fa8;
   color:#fff;
@@ -308,7 +281,6 @@ const CSS = `
   transform:none;
 }
 
-/* ✅ Secondary — Gray with soft shadow */
 .dpb .btn-secondary{
   background:#eef1f7;
   color:#1f2937;
@@ -320,7 +292,6 @@ const CSS = `
   box-shadow:0 4px 10px rgba(0,0,0,0.10);
 }
 
-/* ✅ Danger — Red with matching shadow */
 .dpb .btn-danger{
   background:#dc2626;
   color:#fff;
@@ -332,7 +303,6 @@ const CSS = `
   box-shadow:0 5px 14px rgba(220,38,38,0.40);
 }
 
-/* ✅ Outline — White with subtle border */
 .dpb .btn-outline{
   background:#fff;
   border:1px solid #e2e6ee;
@@ -345,7 +315,6 @@ const CSS = `
   transform:translateY(-1px);
 }
 
-/* ✅ Toggle All — Blue pill with matching shadow */
 .dpb .toggle-all-btn{
   background:#1c5fa8;
   color:#fff;
@@ -364,7 +333,6 @@ const CSS = `
   box-shadow:0 4px 12px rgba(28,95,168,0.40);
 }
 
-/* ✅ Dept Toggle — Outlined pill with matching hover */
 .dpb .dept-toggle-btn{
   background:transparent;
   border:1.5px solid #1c5fa8;
@@ -381,9 +349,6 @@ const CSS = `
   box-shadow:0 2px 6px rgba(28,95,168,0.15);
 }
 
-/* ==================================================
-   DEPARTMENT CARD
-   ================================================== */
 .dpb .dept-card{border:1px solid #e2e6ee;border-left:5px solid #ccc;border-radius:14px;margin-bottom:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.03);}
 .dpb .dept-card-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:#fafbfd;flex-wrap:wrap;gap:8px;}
 .dpb .dept-card-title{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
@@ -392,7 +357,6 @@ const CSS = `
 .dpb .dept-doctor-count{font-size:11.5px;color:#6b7280;background:#eef1f7;padding:3px 10px;border-radius:20px;}
 .dpb .dept-card-actions{display:flex;gap:4px;}
 
-/* ✅ Icon Button — Radius + soft hover */
 .dpb .icon-btn{
   background:transparent;
   border:1px solid transparent;
@@ -413,7 +377,6 @@ const CSS = `
 }
 .dpb .icon-btn:disabled{opacity:0.35;cursor:not-allowed;box-shadow:none;}
 
-/* ✅ Danger Confirm — Red with matching shadow */
 .dpb .icon-btn.danger-confirm{
   background:#dc2626;
   color:#fff;
@@ -424,9 +387,6 @@ const CSS = `
   box-shadow:0 2px 8px rgba(220,38,38,0.30);
 }
 
-/* ==================================================
-   DOCTOR ROW
-   ================================================== */
 .dpb .doctor-mini-list{padding:4px 14px 12px;}
 .dpb .doctor-row{display:flex;align-items:center;justify-content:space-between;padding:9px 4px;border-top:1px dashed #e2e6ee;gap:10px;}
 .dpb .doctor-checkbox{width:18px;height:18px;flex-shrink:0;cursor:pointer;accent-color:#1c5fa8;margin-right:4px;}
@@ -437,7 +397,6 @@ const CSS = `
 .dpb .doctor-row-time-slot-item{background:#fef3c7;padding:3px 12px;border-radius:12px;display:inline-block;width:fit-content;}
 .dpb .doctor-row-actions{display:flex;gap:2px;flex-shrink:0;}
 
-/* ✅ Add Doctor Button — Dashed with matching hover */
 .dpb .add-doctor-btn{
   display:flex;
   align-items:center;
@@ -462,18 +421,12 @@ const CSS = `
 
 .dpb .empty-state{text-align:center;color:#6b7280;font-size:13px;padding:20px;}
 
-/* ==================================================
-   FOOTER FORM
-   ================================================== */
 .dpb .footer-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;}
 @media (max-width:600px){.dpb .footer-form-grid{grid-template-columns:1fr;}}
 .dpb .danger-zone{border:1px dashed #f0b4b4;background:#fff8f8;border-radius:12px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
 .dpb .danger-zone-title{font-weight:700;font-size:13.5px;margin-bottom:2px;}
 .dpb .danger-zone-text{font-size:12.5px;color:#8a3a3a;}
 
-/* ==================================================
-   MODAL
-   ================================================== */
 .dpb .modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,0.5);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px;}
 .dpb .modal-box{background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.25);}
 .dpb .modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #e2e6ee;}
@@ -481,9 +434,6 @@ const CSS = `
 .dpb .modal-body{padding:16px 20px;overflow-y:auto;}
 .dpb .modal-footer{display:flex;justify-content:flex-end;gap:8px;padding:14px 20px;border-top:1px solid #e2e6ee;}
 
-/* ==================================================
-   ICON PICKER & COLOR PICKER
-   ================================================== */
 .dpb .icon-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;}
 .dpb .icon-choice{
   border:1.5px solid #e2e6ee;
@@ -511,9 +461,6 @@ const CSS = `
 .dpb .color-choice:hover{transform:scale(1.08);}
 .dpb .color-choice.selected{border-color:#1f2937;box-shadow:0 0 0 2px #fff inset;}
 
-/* ==================================================
-   PREVIEW / POSTER
-   ================================================== */
 .dpb .preview-wrap{max-width:1000px;margin:0 auto;padding:20px;}
 .dpb .preview-toolbar{display:flex;justify-content:flex-end;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
 .dpb .preview-toolbar .btn{font-size:13px;padding:9px 18px;border-radius:12px;}
@@ -551,202 +498,63 @@ const CSS = `
 
 .dpb .doctor-entry,.dpb .doctor-row,.dpb .doctor-name,.dpb .doctor-quals,.dpb .doctor-specialty,.dpb .doctor-workplace,.dpb .doctor-time-slots,.dpb .doctor-row-name,.dpb .doctor-row-specialty{text-align:left !important;}
 
-/* ==================================================
-   📱 MOBILE RESPONSIVE — Standard Size Buttons
-   ================================================== */
-
-/* ---------- Tablet (max-width: 900px) ---------- */
 @media (max-width: 900px) {
-  .dpb .topbar {
-    padding: 12px 16px;
-    gap: 10px;
-    flex-wrap: wrap;
-    align-items: center;
-    position: sticky;
-  }
-
-  .dpb .topbar-title {
-    font-size: 16px;
-    gap: 6px;
-    flex: 1;
-    min-width: 0;
-  }
+  .dpb .topbar { padding: 12px 16px; gap: 10px; flex-wrap: wrap; align-items: center; position: sticky; }
+  .dpb .topbar-title { font-size: 16px; gap: 6px; flex: 1; min-width: 0; }
   .dpb .topbar-title svg { width: 20px; height: 20px; }
-
-  .dpb .topbar-right {
-    width: 100%;
-    gap: 10px;
-    flex-wrap: wrap;
-    justify-content: flex-start;
-  }
-
-  .dpb .tabs {
-    background: transparent;
-    padding: 0;
-    gap: 8px;
-    flex-wrap: wrap;
-    flex: 1;
-    width: 100%;
-    overflow: visible;
-  }
-
-  .dpb .tab {
-    padding: 10px 18px;
-    font-size: 14px;
-    font-weight: 600;
-    background: #f1f5f9;
-    border: none;
-    border-radius: 12px;
-    white-space: nowrap;
-    flex-shrink: 0;
-    color: #64748b;
-    transition: all 0.2s;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-  }
-  .dpb .tab:hover {
-    background: #e2e8f0;
-    color: #334155;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-  }
-  .dpb .tab.active {
-    background: #1c5fa8;
-    color: #ffffff;
-    box-shadow: 0 4px 12px rgba(28,95,168,0.35);
-  }
-
-  .dpb .tab.booking-tab {
-    background: linear-gradient(45deg, #0d9488, #14b8a6);
-    color: #ffffff;
-    border: none;
-    padding: 10px 18px;
-    font-size: 14px;
-    border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(13,148,136,0.35);
-  }
-  .dpb .tab.booking-tab.active {
-    background: linear-gradient(45deg, #0f766e, #14b8a6);
-    box-shadow: 0 6px 16px rgba(13,148,136,0.55);
-  }
+  .dpb .topbar-right { width: 100%; gap: 10px; flex-wrap: wrap; justify-content: flex-start; }
+  .dpb .tabs { background: transparent; padding: 0; gap: 8px; flex-wrap: wrap; flex: 1; width: 100%; overflow: visible; }
+  .dpb .tab { padding: 10px 18px; font-size: 14px; font-weight: 600; background: #f1f5f9; border: none; border-radius: 12px; white-space: nowrap; flex-shrink: 0; color: #64748b; transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .dpb .tab:hover { background: #e2e8f0; color: #334155; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+  .dpb .tab.active { background: #1c5fa8; color: #ffffff; box-shadow: 0 4px 12px rgba(28,95,168,0.35); }
+  .dpb .tab.booking-tab { background: linear-gradient(45deg, #0d9488, #14b8a6); color: #ffffff; border: none; padding: 10px 18px; font-size: 14px; border-radius: 12px; box-shadow: 0 4px 12px rgba(13,148,136,0.35); }
+  .dpb .tab.booking-tab.active { background: linear-gradient(45deg, #0f766e, #14b8a6); box-shadow: 0 6px 16px rgba(13,148,136,0.55); }
   .dpb .tab.booking-tab svg { width: 15px; height: 15px; }
-
-  .dpb .logout-btn {
-    padding: 10px 16px;
-    font-size: 13px;
-    gap: 5px;
-    flex-shrink: 0;
-    border-radius: 12px;
-  }
+  .dpb .logout-btn { padding: 10px 16px; font-size: 13px; gap: 5px; flex-shrink: 0; border-radius: 12px; }
   .dpb .logout-btn svg { width: 14px; height: 14px; }
-
-  .dpb .panel-switcher {
-    padding: 10px 16px;
-    position: relative;
-    top: auto;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-  .dpb .panel-switcher-scroll {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .dpb .panel-pill {
-    font-size: 13px;
-    padding: 6px 12px;
-    flex-shrink: 0;
-  }
+  .dpb .panel-switcher { padding: 10px 16px; position: relative; top: auto; gap: 8px; flex-wrap: wrap; }
+  .dpb .panel-switcher-scroll { flex-wrap: wrap; gap: 8px; }
+  .dpb .panel-pill { font-size: 13px; padding: 6px 12px; flex-shrink: 0; }
   .dpb .panel-pill-label { font-size: 13px; }
   .dpb .panel-pill-icon { font-size: 11px; padding: 2px 5px; }
   .dpb .panel-add-btn { padding: 8px 12px; font-size: 12.5px; }
 }
 
-/* ---------- Mobile (max-width: 640px) ---------- */
 @media (max-width: 640px) {
-  .dpb .topbar {
-    padding: 12px 14px;
-    gap: 10px;
-  }
-  .dpb .topbar-title {
-    font-size: 15px;
-    gap: 6px;
-  }
+  .dpb .topbar { padding: 12px 14px; gap: 10px; }
+  .dpb .topbar-title { font-size: 15px; gap: 6px; }
   .dpb .topbar-title svg { width: 18px; height: 18px; }
-
   .dpb .topbar-right { gap: 8px; }
-
   .dpb .tabs { gap: 6px; padding: 0; }
-
-  .dpb .tab {
-    padding: 9px 14px;
-    font-size: 13px;
-    border-radius: 12px;
-  }
-  .dpb .tab.booking-tab {
-    padding: 9px 14px;
-    font-size: 13px;
-  }
+  .dpb .tab { padding: 9px 14px; font-size: 13px; border-radius: 12px; }
+  .dpb .tab.booking-tab { padding: 9px 14px; font-size: 13px; }
   .dpb .tab.booking-tab svg { width: 14px; height: 14px; }
-
-  .dpb .logout-btn {
-    padding: 9px 14px;
-    font-size: 12.5px;
-    border-radius: 12px;
-  }
+  .dpb .logout-btn { padding: 9px 14px; font-size: 12.5px; border-radius: 12px; }
   .dpb .logout-btn svg { width: 13px; height: 13px; }
-
-  .dpb .panel-switcher {
-    padding: 8px 14px;
-    gap: 6px;
-  }
-  .dpb .panel-pill {
-    font-size: 12px;
-    padding: 5px 10px;
-  }
+  .dpb .panel-switcher { padding: 8px 14px; gap: 6px; }
+  .dpb .panel-pill { font-size: 12px; padding: 5px 10px; }
   .dpb .panel-pill-label { font-size: 12px; }
   .dpb .panel-pill-icon { font-size: 10px; padding: 1px 4px; }
   .dpb .panel-add-btn { padding: 7px 10px; font-size: 12px; }
-
   .dpb .edit-panel { padding: 12px; gap: 12px; }
   .dpb .panel-section { padding: 14px; }
-
   .dpb .preview-wrap { padding: 10px; }
   .dpb .preview-toolbar { gap: 6px; }
   .dpb .preview-toolbar .btn { padding: 8px 12px; font-size: 12px; }
 }
 
-/* ---------- Small Mobile (max-width: 420px) ---------- */
 @media (max-width: 420px) {
   .dpb .topbar { padding: 10px 12px; gap: 8px; }
   .dpb .topbar-title { font-size: 14px; }
-
-  .dpb .tab {
-    padding: 8px 12px;
-    font-size: 12px;
-    border-radius: 12px;
-  }
-  .dpb .tab.booking-tab {
-    padding: 8px 12px;
-    font-size: 12px;
-  }
-
-  .dpb .logout-btn {
-    padding: 8px 12px;
-    font-size: 12px;
-  }
-
-  .dpb .panel-pill {
-    font-size: 11px;
-    padding: 4px 9px;
-  }
+  .dpb .tab { padding: 8px 12px; font-size: 12px; border-radius: 12px; }
+  .dpb .tab.booking-tab { padding: 8px 12px; font-size: 12px; }
+  .dpb .logout-btn { padding: 8px 12px; font-size: 12px; }
+  .dpb .panel-pill { font-size: 11px; padding: 4px 9px; }
   .dpb .panel-pill-label { font-size: 11px; }
-
   .dpb .edit-panel { padding: 10px; gap: 10px; }
   .dpb .panel-section { padding: 12px; }
 }
 
-/* ==================================================
-   PRINT
-   ================================================== */
 @media print{ .no-print{display:none !important;} .dpb{background:#fff;} .dpb .preview-wrap{max-width:100%;padding:0;margin:0;} .dpb .poster-page{box-shadow:none;border:none;border-radius:0;} .dpb .poster-body{display:grid !important; grid-template-columns: repeat(3, 1fr) !important;} .dpb *{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;} }
 @page{margin:10mm;}
 `;
@@ -783,6 +591,7 @@ function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
                       <option value="admin">অ্যাডমিন</option>
                       <option value="sub-admin">সাব-অ্যাডমিন</option>
                       <option value="editor">এডিটর</option>
+                      <option value="moderator">মডারেটর</option>
                       <option value="viewer">ভিউয়ার</option>
                     </select>
                   </td>
@@ -1271,9 +1080,13 @@ export default function DoctorPanelBuilder() {
   const hospitalId = currentHospital?.id || 'alafiyah_main';
   const { user, logout } = useAuth();
 
+  // ==================================================
+  // ✅ Role flags — isModerator যোগ করা হয়েছে
+  // ==================================================
   const isAdmin = user?.role === 'admin';
   const isSubAdmin = user?.role === 'sub-admin';
   const isEditor = user?.role === 'editor';
+  const isModerator = user?.role === 'moderator';
   const isViewer = user?.role === 'viewer';
   const isGuest = !user;
 
@@ -1576,11 +1389,14 @@ export default function DoctorPanelBuilder() {
   };
   const handleRefreshData = () => setReloadKey(prev => prev + 1);
 
+  // ==================================================
+  // ✅ Authorized path check — isModerator যোগ করা হয়েছে
+  // ==================================================
   const getIsAuthorized = () => {
     if (path === '/' || path === '/booking' || path === '/display' || path === '/preview' || path === '/login') return true;
-    if (path === '/edit' && (isEditor || isSubAdmin || isAdmin)) return true;
+    if (path === '/edit' && (isEditor || isModerator || isSubAdmin || isAdmin)) return true;
     if (path === '/doctors' && (isSubAdmin || isAdmin)) return true;
-    if (path === '/dashboard' && (isSubAdmin || isAdmin)) return true;
+    if (path === '/dashboard' && (isEditor || isModerator || isSubAdmin || isAdmin)) return true;
     if (path === '/admin' && isAdmin) return true;
     return false;
   };
@@ -1628,7 +1444,7 @@ export default function DoctorPanelBuilder() {
               আজকের ডাক্তার সময়সূচি
             </button>
 
-            {!isGuest && (isEditor || isSubAdmin || isAdmin) && (
+            {!isGuest && (isEditor || isModerator || isSubAdmin || isAdmin) && (
               <button className={activeView === 'edit' ? 'tab active' : 'tab'} onClick={() => setActiveView('edit')}>
                 প্যানেল বিল্ডার
               </button>
@@ -1638,7 +1454,7 @@ export default function DoctorPanelBuilder() {
                 ডাক্তার লিস্ট
               </button>
             )}
-            {!isGuest && (isSubAdmin || isAdmin) && (
+            {!isGuest && (isEditor || isModerator || isSubAdmin || isAdmin) && (
               <button className={activeView === 'dashboard' ? 'tab active' : 'tab'} onClick={() => setActiveView('dashboard')}>
                 ড্যাশবোর্ড
               </button>
@@ -1665,8 +1481,8 @@ export default function DoctorPanelBuilder() {
           panels={panels}
           activePanelId={activePanelId}
           onSwitch={handleSwitchPanel}
-          onAdd={!isGuest && (isEditor || isSubAdmin || isAdmin) ? () => setPanelModal({ mode: 'add', departments }) : () => {}}
-          onRename={!isGuest && (isEditor || isSubAdmin || isAdmin) ? (panel) => setPanelModal({ mode: 'rename', panel }) : () => {}}
+          onAdd={!isGuest && (isEditor || isModerator || isSubAdmin || isAdmin) ? () => setPanelModal({ mode: 'add', departments }) : () => {}}
+          onRename={!isGuest && (isEditor || isModerator || isSubAdmin || isAdmin) ? (panel) => setPanelModal({ mode: 'rename', panel }) : () => {}}
           onDelete={isAdmin ? handleDeletePanel : () => {}}
           isReadOnly={isGuest || isViewer}
         />
@@ -1674,14 +1490,14 @@ export default function DoctorPanelBuilder() {
 
       {activeView === 'booking' && <BookingSystem departments={departments} panels={panels} onBack={() => setActiveView('preview')} />}
       {activeView === 'preview' && <PreviewPanel panel={activePanel} departments={departments} checkedIds={checkedIds} footer={footer} user={user} />}
-      {activeView === 'edit' && !isGuest && (isEditor || isSubAdmin || isAdmin) && (
+      {activeView === 'edit' && !isGuest && (isEditor || isModerator || isSubAdmin || isAdmin) && (
         <EditPanel panel={activePanel} departments={departments} footer={footer} checkedIds={checkedIds} allChecked={allChecked} onUpdateTitle={handleUpdateTitle} onUpdateFooter={handleUpdateFooter} onUpdatePhone={handleUpdatePhone} onAddPhone={handleAddPhone} onRemovePhone={handleRemovePhone} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={isAdmin ? handleDeleteDept : () => {}} onMoveDept={handleMoveDept} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={() => {}} onMoveDoctor={handleMoveDoctor} onToggleDoctorChecked={handleToggleDoctorChecked} onToggleDeptAllChecked={handleToggleDeptAllChecked} onToggleAll={handleToggleAll} clearConfirm={clearConfirm} onClearAll={() => {}} onGoPreview={() => setActiveView('preview')} />
       )}
       {activeView === 'doctors' && (isSubAdmin || isAdmin) && (
         <ManageDoctorsView departments={departments} onAddDept={handleAddDept} onEditDept={handleEditDept} onDeleteDept={handleDeleteDept} onMoveDept={handleMoveDept} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={handleDeleteDoctor} onMoveDoctor={handleMoveDoctor} isAdmin={isAdmin} onRefreshData={handleRefreshData} />
       )}
       {activeView === 'admin' && isAdmin && <AdminPanel users={allUsers} onApprove={handleApprove} onSetRole={handleSetRole} onDeleteUser={handleDeleteUser} />}
-      {activeView === 'dashboard' && (isSubAdmin || isAdmin) && <AdminDashboard user={user} />}
+      {activeView === 'dashboard' && (isEditor || isModerator || isSubAdmin || isAdmin) && <AdminDashboard user={user} />}
 
       {showAuth && <AuthPage onClose={() => setShowAuth(false)} />}
       {deptModal && <DepartmentModal initial={deptModal.mode === 'edit' ? deptModal.dept : null} onSave={handleSaveDept} onClose={() => setDeptModal(null)} />}
