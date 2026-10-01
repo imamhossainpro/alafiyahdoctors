@@ -1,8 +1,10 @@
 // screens/HomeScreen.js
 // ==================================================
-// 🏠 HomeScreen — Patient Home Dashboard
+// 🏠 HomeScreen — Patient Home Dashboard (Fixed)
 // ==================================================
+// ✅ Loading infinite loop fix
 // ✅ Bell icon notification badge (real-time unread count)
+// ✅ HospitalId/User null হলে loading বন্ধ
 // ==================================================
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -65,24 +67,44 @@ export default function HomeScreen({ navigation }) {
   const [upcomingAppointments, setUpcomingAppointments] = useState([]);
   const [todayDoctors, setTodayDoctors] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-
-  // ✅ Real-time unread notification count
   const [unreadCount, setUnreadCount] = useState(0);
 
   // ==================================================
-  // ✅ Load Home data
+  // ✅ Load Home data — Fixed: loading সর্বদা false হবে
   // ==================================================
   const loadHomeData = useCallback(async () => {
-    if (!hospitalId || !user) return;
+    console.log('🏠 HomeScreen: loadHomeData শুরু', { hospitalId, hasUser: !!user });
+
+    // ✅ hospitalId না থাকলে loading বন্ধ করুন
+    if (!hospitalId) {
+      console.warn('⚠️ HomeScreen: hospitalId নেই — loading বন্ধ');
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
+    // ✅ user না থাকলে loading বন্ধ করুন
+    if (!user) {
+      console.warn('⚠️ HomeScreen: user নেই — loading বন্ধ');
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
 
     try {
+      console.log('📦 HomeScreen: appointments লোড হচ্ছে...');
       const upcoming = await findUpcomingAppointments(hospitalId, user);
       setUpcomingAppointments(upcoming || []);
+      console.log(`✅ HomeScreen: ${upcoming?.length || 0} টি appointments`);
 
+      console.log('📦 HomeScreen: departments & panels লোড হচ্ছে...');
       const [departments, panels] = await Promise.all([
         loadDepartments(hospitalId),
         loadPanels(hospitalId),
       ]);
+      console.log(
+        `✅ HomeScreen: ${departments?.length || 0} departments, ${panels?.length || 0} panels`
+      );
 
       const todayName = getTodayBanglaDay();
       const todayPanel = panels.find(
@@ -107,14 +129,17 @@ export default function HomeScreen({ navigation }) {
         });
 
         setTodayDoctors(docs);
+        console.log(`✅ HomeScreen: ${docs.length} জন today doctors`);
       } else {
         setTodayDoctors([]);
       }
     } catch (err) {
-      console.error('❌ Home load error:', err);
+      console.error('❌ HomeScreen load error:', err);
     } finally {
+      // ✅ সব ক্ষেত্রে loading false হবে
       setLoading(false);
       setRefreshing(false);
+      console.log('✅ HomeScreen: loading বন্ধ করা হলো');
     }
   }, [hospitalId, user]);
 
@@ -124,8 +149,11 @@ export default function HomeScreen({ navigation }) {
 
   useFocusEffect(
     useCallback(() => {
-      loadHomeData();
-    }, [loadHomeData])
+      // ✅ শুধু data refresh করব, loading state ট্রিগার করব না
+      if (!loading) {
+        loadHomeData();
+      }
+    }, [loadHomeData, loading])
   );
 
   // ==================================================
@@ -172,6 +200,7 @@ export default function HomeScreen({ navigation }) {
     });
   };
 
+  // ✅ Loading state
   if (loading) {
     return <LoadingState message="লোড হচ্ছে..." />;
   }

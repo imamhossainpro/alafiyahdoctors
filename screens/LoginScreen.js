@@ -2,6 +2,8 @@
 // ==================================================
 // 🔐 Login Screen — Email + Google Sign-In
 // ==================================================
+// ✅ Google Branding Guidelines অনুযায়ী Dark Theme Button
+// ==================================================
 import React, { useState } from 'react';
 import {
   View,
@@ -14,6 +16,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
@@ -65,23 +68,16 @@ export default function LoginScreen({ navigation }) {
 
       await GoogleSignin.hasPlayServices();
 
-      // Google account picker দেখাবে
       const userInfo = await GoogleSignin.signIn();
-
-      // idToken বের করুন (লাইব্রেরি version অনুযায়ী data.idToken বা idToken)
       const idToken = userInfo.data?.idToken || userInfo.idToken;
 
       if (!idToken) {
         throw new Error('Google idToken পাওয়া যায়নি');
       }
 
-      // Firebase Credential তৈরি
       const googleCredential = GoogleAuthProvider.credential(idToken);
-
-      // Firebase-এ সাইন ইন
       await signInWithCredential(auth, googleCredential);
 
-      // ✅ AuthContext-এর onAuthStateChanged listener বাকিটা handle করবে
       console.log('✅ Google Sign-In সফল');
     } catch (error) {
       console.error('❌ Google Sign-In error:', error);
@@ -132,18 +128,26 @@ export default function LoginScreen({ navigation }) {
           <Text style={styles.title}>লগইন করুন</Text>
           <Text style={styles.subtitle2}>আপনার অ্যাকাউন্টে প্রবেশ করুন</Text>
 
-          {/* ✅ Google Sign-In Button */}
+          {/* ==========================================
+              ✅ Google Sign-In Button
+              Google Branding Guidelines — Dark Theme
+              ========================================== */}
           <TouchableOpacity
             style={styles.googleButton}
             onPress={handleGoogleLogin}
             disabled={googleLoading || loading}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
           >
             {googleLoading ? (
-              <ActivityIndicator size="small" color="#1c5fa8" />
+              <ActivityIndicator size="small" color="#E3E3E3" />
             ) : (
               <>
-                <Ionicons name="logo-google" size={20} color="#DB4437" />
+                {/* ✅ Google G Logo — আপনার g-logo.png */}
+                <Image
+                  source={require('../../assets/g-logo.png')}
+                  style={styles.googleLogo}
+                  resizeMode="contain"
+                />
                 <Text style={styles.googleButtonText}>
                   Sign in with Google
                 </Text>
@@ -312,23 +316,49 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
 
-  // ✅ Google Button
+  // ==========================================
+  // ✅ Google Button — Dark Theme (Google Guidelines)
+  // Fill: #131314
+  // Stroke: #8E918F (1px inside)
+  // Text: #E3E3E3 | Roboto Medium
+  // ==========================================
   googleButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 13,
-    borderWidth: 1.5,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    backgroundColor: '#fff',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    // ✅ Dark Theme Background
+    backgroundColor: '#131314',
+    // ✅ Border (inside — RN-এ border ভেতরে)
+    borderWidth: 1,
+    borderColor: '#8E918F',
+    borderRadius: 8,
     marginBottom: 20,
+    minHeight: 48,
+    // ✅ Shadow
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
+
+  // ✅ Google G Logo — 20x20, সাদা background সহ
+  googleLogo: {
+    width: 20,
+    height: 20,
+    backgroundColor: '#ffffff',
+    borderRadius: 3,
+  },
+
+  // ✅ Text — Google Guidelines: Roboto Medium, 14/20, #E3E3E3
   googleButtonText: {
-    fontSize: 14.5,
-    fontWeight: '700',
-    color: '#334155',
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#E3E3E3',
+    letterSpacing: 0.2,
   },
 
   // Divider

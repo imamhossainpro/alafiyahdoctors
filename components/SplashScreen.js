@@ -1,6 +1,9 @@
 // components/SplashScreen.js
 // ==================================================
-// ✨ Animated Splash Screen — Premium & Smooth
+// ✨ Animated Splash Screen — Premium & Smooth (Fixed)
+// ==================================================
+// ✅ Larger logo (160px)
+// ✅ High-quality image rendering
 // ==================================================
 import React, { useEffect, useRef } from 'react';
 import {
@@ -11,17 +14,17 @@ import {
   Easing,
   Image,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { fontFamily } from '../theme/typography';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const LOGO_SIZE = 140;
+
+// ✅ Larger logo size for better quality
+const LOGO_SIZE = Math.min(180, SCREEN_WIDTH * 0.45);
 
 export default function SplashScreen({ onFinish }) {
-  // ==================================================
-  // Animated Values
-  // ==================================================
   const backgroundOpacity = useRef(new Animated.Value(0)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
   const logoScale = useRef(new Animated.Value(0.8)).current;
@@ -32,18 +35,13 @@ export default function SplashScreen({ onFinish }) {
   const dot2 = useRef(new Animated.Value(0.3)).current;
   const dot3 = useRef(new Animated.Value(0.3)).current;
 
-  // Exit animation values
   const exitOpacity = useRef(new Animated.Value(1)).current;
   const exitScale = useRef(new Animated.Value(1)).current;
 
-  // ==================================================
-  // Entry Animation Sequence
-  // ==================================================
   useEffect(() => {
     let isMounted = true;
     const animationTimers = [];
 
-    // 1. Background fade-in
     Animated.timing(backgroundOpacity, {
       toValue: 1,
       duration: 300,
@@ -51,7 +49,6 @@ export default function SplashScreen({ onFinish }) {
       useNativeDriver: true,
     }).start();
 
-    // 2. Logo animation (after background starts)
     const logoTimer = setTimeout(() => {
       Animated.parallel([
         Animated.timing(logoOpacity, {
@@ -67,7 +64,6 @@ export default function SplashScreen({ onFinish }) {
           useNativeDriver: true,
         }),
       ]).start(() => {
-        // 3. Breathing effect (starts after entry animation completes)
         if (!isMounted) return;
         Animated.loop(
           Animated.sequence([
@@ -89,7 +85,6 @@ export default function SplashScreen({ onFinish }) {
     }, 200);
     animationTimers.push(logoTimer);
 
-    // 4. Text fade-in (after logo)
     const textTimer = setTimeout(() => {
       Animated.timing(textOpacity, {
         toValue: 1,
@@ -100,7 +95,6 @@ export default function SplashScreen({ onFinish }) {
     }, 500);
     animationTimers.push(textTimer);
 
-    // 5. Loading dots fade-in
     const dotsTimer = setTimeout(() => {
       Animated.timing(dotsOpacity, {
         toValue: 1,
@@ -111,9 +105,6 @@ export default function SplashScreen({ onFinish }) {
     }, 700);
     animationTimers.push(dotsTimer);
 
-    // ==================================================
-    // Loading Dots Animation (loop)
-    // ==================================================
     const createDotAnimation = (dotValue, delay) => {
       return Animated.loop(
         Animated.sequence([
@@ -155,15 +146,10 @@ export default function SplashScreen({ onFinish }) {
       dot2Anim.stop();
       dot3Anim.stop();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ==================================================
-  // Exit Animation (public method)
-  // ==================================================
   useEffect(() => {
     if (!onFinish) return;
-    // Register a global exit function
     SplashScreen.exit = (callback) => {
       Animated.parallel([
         Animated.timing(exitOpacity, {
@@ -182,7 +168,6 @@ export default function SplashScreen({ onFinish }) {
         if (callback) callback();
       });
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onFinish]);
 
   return (
@@ -194,19 +179,11 @@ export default function SplashScreen({ onFinish }) {
         },
       ]}
     >
-      {/* ==================================================
-          Background Gradient Layer (subtle)
-          ================================================== */}
       <Animated.View
-        style={[
-          styles.bgLayer,
-          { opacity: backgroundOpacity },
-        ]}
+        style={[styles.bgLayer, { opacity: backgroundOpacity }]}
       />
 
-      {/* ==================================================
-          Logo (with breathing effect)
-          ================================================== */}
+      {/* ✅ High-quality Logo */}
       <Animated.View
         style={[
           styles.logoWrapper,
@@ -223,12 +200,11 @@ export default function SplashScreen({ onFinish }) {
           source={require('../assets/icon.png')}
           style={styles.logo}
           resizeMode="contain"
+          // ✅ High quality rendering
+          fadeDuration={0}
         />
       </Animated.View>
 
-      {/* ==================================================
-          App Name Text
-          ================================================== */}
       <Animated.View
         style={[
           styles.textWrapper,
@@ -239,9 +215,6 @@ export default function SplashScreen({ onFinish }) {
         <Text style={styles.tagline}>স্বাস্থ্যসেবায় বিশ্বাস</Text>
       </Animated.View>
 
-      {/* ==================================================
-          Loading Dots
-          ================================================== */}
       <Animated.View
         style={[
           styles.dotsContainer,
@@ -256,14 +229,8 @@ export default function SplashScreen({ onFinish }) {
   );
 }
 
-// ==================================================
-// Static method for exit animation
-// ==================================================
 SplashScreen.exit = null;
 
-// ==================================================
-// Styles
-// ==================================================
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
@@ -282,11 +249,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 32,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 8,
+    // ✅ Remove shadow to prevent blur
+    backgroundColor: 'transparent',
   },
   logo: {
     width: LOGO_SIZE,

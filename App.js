@@ -1,7 +1,8 @@
 // App.js
 // ==================================================
-// 🏥 আল-আফিয়া হাসপাতাল — Mobile App
+// 🏥 আল-আফিয়া হাসপাতাল — Mobile App (Fixed)
 // ==================================================
+// ✅ Safety timeout in AppNavigator
 // ✅ Animated Splash Screen
 // ✅ In-App Notifications
 // ✅ Google Sign-In configured
@@ -109,18 +110,10 @@ Notifications.setNotificationHandler({
 // ==================================================
 // ✅ Notification Channel Setup (Android)
 // ==================================================
-// ⚠️ CRITICAL: Android 8+ এ Notification Channel তৈরি না হলে
-//    system tray-তে notification আসে না।
-//
-// Backend `fcmService.js`-এ যে channelId ব্যবহার হচ্ছে:
-//    channelId: 'alafiyah_default'
-// → ঠিক এই নামেই App-এ channel তৈরি করতে হবে।
-// ==================================================
 async function setupNotificationChannel() {
   if (Platform.OS !== 'android') return;
 
   try {
-    // ✅ Main channel (default) — backend যেটি ব্যবহার করে
     await Notifications.setNotificationChannelAsync('alafiyah_default', {
       name: 'আল-আফিয়া হাসপাতাল',
       description: 'বুকিং, সিরিয়াল ও অন্যান্য নোটিফিকেশন',
@@ -136,7 +129,6 @@ async function setupNotificationChannel() {
       showBadge: true,
     });
 
-    // ✅ Booking confirmed channel
     await Notifications.setNotificationChannelAsync('booking_confirmed', {
       name: 'সিরিয়াল নিশ্চিত',
       description: 'বুকিং নিশ্চিত হলে নোটিফিকেশন',
@@ -147,7 +139,6 @@ async function setupNotificationChannel() {
       showBadge: true,
     });
 
-    // ✅ Queue update channel
     await Notifications.setNotificationChannelAsync('queue_update', {
       name: 'সিরিয়াল আপডেট',
       description: 'আপনার সিরিয়াল আসছে',
@@ -159,7 +150,6 @@ async function setupNotificationChannel() {
       showBadge: true,
     });
 
-    // ✅ Promo channel
     await Notifications.setNotificationChannelAsync('promo', {
       name: 'প্রচার ও অফার',
       description: 'হাসপাতালের প্রচারমূলক বার্তা',
@@ -389,11 +379,24 @@ function LoadingScreen() {
 }
 
 // ==================================================
-// ✅ App Navigator — FCM Setup
+// ✅ App Navigator — with Safety Timeout
 // ==================================================
 function AppNavigator() {
   const { user, loading } = useAuth();
   const { hospitalId } = useHospital();
+
+  // ✅ Safety timeout — ৫ সেকেন্ডের মধ্যে loading শেষ না হলে force render
+  const [forceReady, setForceReady] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (loading) {
+        console.warn('⚠️ AppNavigator: loading timeout — force rendering');
+        setForceReady(true);
+      }
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [loading]);
 
   // ✅ FCM Token Registration — logged-in user
   useEffect(() => {
@@ -401,10 +404,8 @@ function AppNavigator() {
 
     const setupNotifications = async () => {
       try {
-        const token = await registerForPushNotificationsAsync(
-          user,
-          hospitalId
-        );
+        console.log('📱 AppNavigator: FCM setup শুরু');
+        const token = await registerForPushNotificationsAsync(user, hospitalId);
         if (token) {
           await saveFcmToken(user, hospitalId, token);
         }
@@ -416,7 +417,8 @@ function AppNavigator() {
     setupNotifications();
   }, [user, hospitalId]);
 
-  if (loading) return <LoadingScreen />;
+  // ✅ loading বা forceReady চেক
+  if (loading && !forceReady) return <LoadingScreen />;
   if (!user) return <AuthStack key="auth" />;
 
   const isPending = user.role === 'pending' || user.approved === false;

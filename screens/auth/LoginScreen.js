@@ -1,6 +1,6 @@
 // screens/auth/LoginScreen.js
 // ==================================================
-// 🔐 Login Screen (Keyboard Fixed)
+// 🔐 Login Screen — Email + Google Sign-In
 // ==================================================
 import React, { useState } from 'react';
 import {
@@ -16,7 +16,10 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
 import { useAuth } from '../../context/AuthContext';
+import { auth } from '../../firebase';
 
 export default function LoginScreen({ navigation }) {
   const { login } = useAuth();
@@ -25,11 +28,12 @@ export default function LoginScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
+  // ==================================================
+  // ✅ Email/Password Login
+  // ==================================================
   const handleLogin = async () => {
-    console.log('🔵 Login শুরু');
-
-    // Validation
     if (!email.trim()) {
       Alert.alert('⚠️', 'ইমেইল লিখুন');
       return;
@@ -47,14 +51,60 @@ export default function LoginScreen({ navigation }) {
     const result = await login(email, password);
     setLoading(false);
 
-    if (result.success) {
-      // ✅ সফল হলে কিছুই করবেন না — AppNavigator auto switch করবে
-      console.log('✅ Login সফল — AppNavigator switch করবে');
-    } else {
+    if (!result.success) {
       Alert.alert('❌ লগইন ব্যর্থ', result.error);
     }
   };
 
+  // ==================================================
+  // ✅ Google Sign-In
+  // ==================================================
+  const handleGoogleLogin = async () => {
+    try {
+      setGoogleLoading(true);
+
+      await GoogleSignin.hasPlayServices();
+
+      // Google account picker দেখাবে
+      const userInfo = await GoogleSignin.signIn();
+
+      // idToken বের করুন (লাইব্রেরি version অনুযায়ী data.idToken বা idToken)
+      const idToken = userInfo.data?.idToken || userInfo.idToken;
+
+      if (!idToken) {
+        throw new Error('Google idToken পাওয়া যায়নি');
+      }
+
+      // Firebase Credential তৈরি
+      const googleCredential = GoogleAuthProvider.credential(idToken);
+
+      // Firebase-এ সাইন ইন
+      await signInWithCredential(auth, googleCredential);
+
+      // ✅ AuthContext-এর onAuthStateChanged listener বাকিটা handle করবে
+      console.log('✅ Google Sign-In সফল');
+    } catch (error) {
+      console.error('❌ Google Sign-In error:', error);
+
+      let errorMessage = error.message || 'আবার চেষ্টা করুন';
+
+      if (error.code === 'SIGN_IN_CANCELLED') {
+        errorMessage = 'লগইন বাতিল করা হয়েছে';
+      } else if (error.code === 'IN_PROGRESS') {
+        errorMessage = 'লগইন চলছে...';
+      } else if (error.code === 'PLAY_SERVICES_NOT_AVAILABLE') {
+        errorMessage = 'Google Play Services পাওয়া যায়নি';
+      }
+
+      Alert.alert('❌ Google লগইন ব্যর্থ', errorMessage);
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  // ==================================================
+  // ✅ Render
+  // ==================================================
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -81,6 +131,35 @@ export default function LoginScreen({ navigation }) {
         <View style={styles.card}>
           <Text style={styles.title}>লগইন করুন</Text>
           <Text style={styles.subtitle2}>আপনার অ্যাকাউন্টে প্রবেশ করুন</Text>
+
+          {/* ✅ Google Sign-In Button — সাদা background, border সহ */}
+          <TouchableOpacity
+            style={styles.googleButton}
+            onPress={handleGoogleLogin}
+            disabled={googleLoading || loading}
+            activeOpacity={0.8}
+          >
+            {googleLoading ? (
+              <ActivityIndicator size="small" color="#1c5fa8" />
+            ) : (
+              <>
+                {/* ✅ Multi-color G logo (SVG-এর মতো দেখতে) */}
+                <View style={styles.googleLogoWrap}>
+                  <Text style={styles.googleLogoG}>G</Text>
+                </View>
+                <Text style={styles.googleButtonText}>
+                  Sign in with Google
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          {/* Divider */}
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>অথবা</Text>
+            <View style={styles.dividerLine} />
+          </View>
 
           {/* Email */}
           <View style={styles.formGroup}>
@@ -140,9 +219,12 @@ export default function LoginScreen({ navigation }) {
 
           {/* Login Button */}
           <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
+            style={[
+              styles.button,
+              (loading || googleLoading) && styles.buttonDisabled,
+            ]}
             onPress={handleLogin}
-            disabled={loading}
+            disabled={loading || googleLoading}
             activeOpacity={0.8}
           >
             {loading ? (
@@ -170,6 +252,9 @@ export default function LoginScreen({ navigation }) {
   );
 }
 
+// ==================================================
+// 🎨 Styles
+// ==================================================
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -229,6 +314,73 @@ const styles = StyleSheet.create({
     color: '#64748b',
     marginBottom: 20,
   },
+
+  // ✅ Google Button — সাদা background, border সহ
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    borderWidth: 1.5,
+    borderColor: '#dadce0',
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+    minHeight: 50,
+  },
+
+  // ✅ Google Logo G (multi-color style)
+  googleLogoWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#f1f3f4',
+  },
+  googleLogoG: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    // ✅ Multi-color ইফেক্টের জন্য layered styling
+    color: '#4285F4',
+    lineHeight: 22,
+  },
+
+  googleButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#3c4043',
+    letterSpacing: 0.2,
+  },
+
+  // Divider
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e2e8f0',
+  },
+  dividerText: {
+    marginHorizontal: 12,
+    fontSize: 12,
+    color: '#94a3b8',
+    fontWeight: '600',
+  },
+
+  // Form
   formGroup: {
     marginBottom: 14,
   },

@@ -1,6 +1,6 @@
 // context/AuthContext.js
 // ==================================================
-// 🔐 Authentication Context — সম্পূর্ণ
+// 🔐 Authentication Context — Fixed with Safety Timeout
 // ==================================================
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
@@ -22,7 +22,6 @@ import { normalizePhone } from '../utils/bengaliDigits';
 
 const AuthContext = createContext();
 
-// ✅ হাসপাতাল ID (web app-এর সাথে মিল)
 const DEFAULT_HOSPITAL_ID = 'alafiyah_main';
 
 // ==================================================
@@ -33,7 +32,6 @@ const enrichUser = (firebaseUser, userData) => {
     uid: firebaseUser.uid,
     email: firebaseUser.email,
     ...userData,
-    // ✅ Normalized phone (English digits) for Firebase queries
     phoneNormalized: normalizePhone(userData?.phone),
   };
 };
@@ -44,10 +42,25 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState(null);
 
   // ==================================================
-  // ✅ Firebase Auth State Listener
+  // ✅ Firebase Auth State Listener — with Safety Timeout
   // ==================================================
   useEffect(() => {
+    console.log('🔐 AuthContext: listener চালু হচ্ছে...');
+
+    // ✅ Safety timeout — ৮ সেকেন্ডের মধ্যে response না এলে loading false
+    const safetyTimer = setTimeout(() => {
+      console.warn('⚠️ AuthContext: safety timeout triggered');
+      setLoading(false);
+    }, 8000);
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      console.log(
+        '🔐 AuthContext: onAuthStateChanged fired —',
+        firebaseUser ? 'user found' : 'no user'
+      );
+
+      clearTimeout(safetyTimer);
+
       try {
         if (firebaseUser) {
           const userRef = doc(
@@ -85,7 +98,10 @@ export function AuthProvider({ children }) {
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(safetyTimer);
+      unsubscribe();
+    };
   }, []);
 
   // ==================================================
@@ -121,7 +137,6 @@ export function AuthProvider({ children }) {
       const userData = userSnap.data();
       console.log('📄 Firestore user data:', userData);
 
-      // Approved check
       if (userData.approved !== true) {
         await signOut(auth);
         throw new Error(
@@ -129,13 +144,11 @@ export function AuthProvider({ children }) {
         );
       }
 
-      // Active check
       if (userData.isActive === false) {
         await signOut(auth);
         throw new Error('❌ আপনার অ্যাকাউন্ট নিষ্ক্রিয় করা হয়েছে।');
       }
 
-      // ✅ user state set
       setUser(enrichUser(result.user, userData));
 
       console.log('✅ Login সম্পূর্ণ');
@@ -162,7 +175,7 @@ export function AuthProvider({ children }) {
   };
 
   // ==================================================
-  // ✅ Register — WITH DEBUG LOGS
+  // ✅ Register
   // ==================================================
   const register = async ({
     name,
@@ -173,14 +186,11 @@ export function AuthProvider({ children }) {
   }) => {
     setError(null);
 
-    // ✅ DEBUG LOG — register-এ data আসছে কিনা
     console.log('🔍 [AuthContext.register] RECEIVED:', {
       name,
       email,
       designation,
       phone,
-      phoneType: typeof phone,
-      phoneLength: phone?.length,
     });
 
     try {
@@ -200,14 +210,7 @@ export function AuthProvider({ children }) {
         result.user.uid
       );
 
-      // ✅ Normalize phone
       const normalizedPhone = normalizePhone(phone);
-
-      // ✅ DEBUG LOG — normalized value
-      console.log('🔍 [AuthContext.register] NORMALIZED PHONE:', {
-        raw: phone,
-        normalized: normalizedPhone,
-      });
 
       const userData = {
         name: name.trim(),
@@ -223,14 +226,10 @@ export function AuthProvider({ children }) {
         updatedAt: serverTimestamp(),
       };
 
-      // ✅ DEBUG LOG — what we're about to save
-      console.log('🔍 [AuthContext.register] SAVING TO FIRESTORE:', userData);
-
       await setDoc(userRef, userData);
 
       console.log('✅ [AuthContext.register] Firestore save SUCCESS');
 
-      // Sign out (user-কে login screen-এ ফিরিয়ে নিয়ে যাবে)
       await signOut(auth);
 
       console.log('✅ রেজিস্ট্রেশন সফল:', email);
@@ -332,9 +331,6 @@ export function AuthProvider({ children }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-// ==================================================
-// ✅ Custom Hook
-// ==================================================
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {
