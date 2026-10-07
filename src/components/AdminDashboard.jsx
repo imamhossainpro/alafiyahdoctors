@@ -1,12 +1,13 @@
 // src/components/AdminDashboard.jsx
 import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { OverviewSkeleton } from './ui/SkeletonScreens';
 import { useHospital } from '../context/HospitalContext';
 import { useAuth } from '../context/AuthContext';
 import { usePermission } from '../context/PermissionContext';
 import { db } from '../firebase';
 import { collection, getDocs, getDoc, doc, onSnapshot } from 'firebase/firestore';
-import { RefreshCw, Shield } from 'lucide-react';
+import { RefreshCw, Shield, FileText } from 'lucide-react';
 import {
   updateAppointmentStatus,
   archiveAppointment,
@@ -20,9 +21,6 @@ import {
   LOG_ACTIONS,
 } from '../services/activityLogService';
 
-// ==================================================
-// ✅ Lazy Load Components
-// ==================================================
 const AppointmentsTable = lazy(() => import('./admin/AppointmentsTable'));
 const Overview = lazy(() => import('./admin/Overview'));
 const MarketingTeamManager = lazy(() => import('./admin/MarketingTeamManager'));
@@ -33,9 +31,6 @@ const UserAccessManager = lazy(() => import('./admin/UserAccessManager'));
 const QueueControlPanel = lazy(() => import('./admin/QueueControlPanel'));
 const PromoManager = lazy(() => import('./admin/PromoManager'));
 
-// ==================================================
-// ✅ Tab Loader
-// ==================================================
 const TabLoader = () => (
   <div style={{ padding: '60px 20px', textAlign: 'center', color: '#64748b', background: '#fff', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
     <div style={{ display: 'inline-block', width: '32px', height: '32px', border: '3px solid #e2e8f0', borderTopColor: '#1c5fa8', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
@@ -44,9 +39,6 @@ const TabLoader = () => (
   </div>
 );
 
-// ==================================================
-// ✅ SafeArea (Error Boundary)
-// ==================================================
 class SafeArea extends React.Component {
   constructor(props) {
     super(props);
@@ -67,10 +59,8 @@ class SafeArea extends React.Component {
   }
 }
 
-// ==================================================
-// ✅ MAIN COMPONENT
-// ==================================================
 export default function AdminDashboard({ user: propUser }) {
+  const navigate = useNavigate();
   const { currentHospital } = useHospital();
   const hospitalId = currentHospital?.id || 'alafiyah_main';
   const { user: authUser } = useAuth();
@@ -89,14 +79,9 @@ export default function AdminDashboard({ user: propUser }) {
   const [startDate, setStartDate] = useState('2020-01-01');
   const [endDate, setEndDate] = useState('2030-12-31');
   const [filterPreset, setFilterPreset] = useState('all');
-
-  // ✅ NEW: Departments + Panels (for EditBookingModal)
   const [departments, setDepartments] = useState([]);
   const [panels, setPanels] = useState([]);
 
-  // ==================================================
-  // ✅ Initial Load – Marketing Team
-  // ==================================================
   useEffect(() => {
     if (!hospitalId) return;
     let mounted = true;
@@ -122,9 +107,6 @@ export default function AdminDashboard({ user: propUser }) {
     };
   }, [hospitalId]);
 
-  // ==================================================
-  // ✅ Real-time Appointments
-  // ==================================================
   useEffect(() => {
     if (!hospitalId) return;
     const ref = collection(db, 'hospitals', hospitalId, 'appointments');
@@ -141,10 +123,6 @@ export default function AdminDashboard({ user: propUser }) {
     return () => unsub();
   }, [hospitalId]);
 
-  // ==================================================
-  // ✅ NEW: Real-time Departments + Panels
-  // (needed by EditBookingModal for date-wise doctor list)
-  // ==================================================
   useEffect(() => {
     if (!hospitalId) return;
 
@@ -155,7 +133,6 @@ export default function AdminDashboard({ user: propUser }) {
         const data = snapshot.docs
           .map((d) => ({ id: d.id, ...d.data() }))
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-        console.log('📚 [AdminDashboard] departments loaded:', data.length);
         setDepartments(data);
       },
       (err) => console.error('❌ Departments listener error:', err)
@@ -166,7 +143,6 @@ export default function AdminDashboard({ user: propUser }) {
       panelRef,
       (snapshot) => {
         const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-        console.log('📚 [AdminDashboard] panels loaded:', data.length);
         setPanels(data);
       },
       (err) => console.error('❌ Panels listener error:', err)
@@ -178,9 +154,6 @@ export default function AdminDashboard({ user: propUser }) {
     };
   }, [hospitalId]);
 
-  // ==================================================
-  // ✅ Silent Refresh
-  // ==================================================
   const refreshData = async () => {
     if (!hospitalId) return;
     try {
@@ -193,9 +166,6 @@ export default function AdminDashboard({ user: propUser }) {
     }
   };
 
-  // ==================================================
-  // ✅ Activity Logs
-  // ==================================================
   useEffect(() => {
     if (!hospitalId || tab !== 'logs' || !can('activity_log.view')) return;
     setLogsLoading(true);
@@ -216,9 +186,6 @@ export default function AdminDashboard({ user: propUser }) {
     };
   }, [hospitalId, tab, can]);
 
-  // ==================================================
-  // ✅ Status Change
-  // ==================================================
   const handleStatusChange = async (id, newStatus) => {
     if (!hospitalId) return;
     if (!can('booking.status_change')) {
@@ -252,9 +219,6 @@ export default function AdminDashboard({ user: propUser }) {
     }
   };
 
-  // ==================================================
-  // ✅ ARCHIVE
-  // ==================================================
   const handleArchive = async (appointmentId) => {
     if (!can('booking.archive')) {
       alert('❌ আপনার আর্কাইভ করার permission নেই।');
@@ -283,9 +247,6 @@ export default function AdminDashboard({ user: propUser }) {
     }
   };
 
-  // ==================================================
-  // ✅ RESTORE
-  // ==================================================
   const handleRestore = async (appointmentId) => {
     if (!can('archive.restore')) {
       alert('❌ আপনার restore permission নেই।');
@@ -315,9 +276,6 @@ export default function AdminDashboard({ user: propUser }) {
     }
   };
 
-  // ==================================================
-  // ✅ PERMANENT DELETE
-  // ==================================================
   const handlePermanentDelete = async (appointmentId) => {
     if (!can('archive.delete')) {
       alert('❌ আপনার permanent delete permission নেই।');
@@ -338,11 +296,7 @@ export default function AdminDashboard({ user: propUser }) {
         action: 'BOOKING_PERMANENTLY_DELETED',
         recordId: appointmentId,
         description: `বুকিং স্থায়ীভাবে মুছে ফেলা হয়েছে: ${appt.name || 'Unknown'} (সিরিয়াল ${appt.serialNo || '-'})`,
-        oldValue: {
-          name: appt.name,
-          serialNo: appt.serialNo,
-          isArchived: true,
-        },
+        oldValue: { name: appt.name, serialNo: appt.serialNo, isArchived: true },
         newValue: null,
         user,
       });
@@ -353,9 +307,6 @@ export default function AdminDashboard({ user: propUser }) {
     }
   };
 
-  // ==================================================
-  // ✅ Filter Presets
-  // ==================================================
   const applyPreset = (preset) => {
     setFilterPreset(preset);
     const now = new Date();
@@ -408,9 +359,6 @@ export default function AdminDashboard({ user: propUser }) {
     setFilterPreset('custom');
   };
 
-  // ==================================================
-  // ✅ Filtered Data
-  // ==================================================
   const filteredAppointments = useMemo(() => {
     if (!appointments || !Array.isArray(appointments)) return [];
     return appointments.filter((item) => {
@@ -456,18 +404,12 @@ export default function AdminDashboard({ user: propUser }) {
     });
   }, [activityLogs, startDate, endDate]);
 
-  // ==================================================
-  // ✅ Loading State
-  // ==================================================
   if (loading) return <OverviewSkeleton />;
 
   if (error) {
     return <div style={{ padding: '20px', color: '#dc2626' }}>❌ Error: {error}</div>;
   }
 
-  // ==================================================
-  // ✅ No Access Check
-  // ==================================================
   const hasAnyTab =
     can('dashboard.view') ||
     can('booking.view') ||
@@ -480,16 +422,7 @@ export default function AdminDashboard({ user: propUser }) {
 
   if (!hasAnyTab) {
     return (
-      <div
-        style={{
-          padding: '60px 20px',
-          textAlign: 'center',
-          background: '#fff',
-          borderRadius: '10px',
-          margin: '20px',
-          border: '1px solid #e2e8f0',
-        }}
-      >
+      <div style={{ padding: '60px 20px', textAlign: 'center', background: '#fff', borderRadius: '10px', margin: '20px', border: '1px solid #e2e8f0' }}>
         <div style={{ fontSize: '64px', marginBottom: '16px' }}>🚫</div>
         <h3 style={{ color: '#dc2626', marginBottom: '8px' }}>Access Denied</h3>
         <p style={{ color: '#64748b' }}>
@@ -501,39 +434,14 @@ export default function AdminDashboard({ user: propUser }) {
     );
   }
 
-  // ==================================================
-  // ✅ RENDER
-  // ==================================================
   return (
-    <div
-      style={{
-        padding: '20px',
-        width: '100%',
-        boxSizing: 'border-box',
-        background: '#f9fafb',
-        color: '#1f2937',
-      }}
-    >
-      {/* ============ Top Bar ============ */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '20px',
-          flexWrap: 'wrap',
-          gap: '10px',
-        }}
-      >
+    <div style={{ padding: '20px', width: '100%', boxSizing: 'border-box', background: '#f9fafb', color: '#1f2937' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
         <h2>অ্যাডমিন ড্যাশবোর্ড</h2>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-          {/* Dashboard / Overview */}
           {can('dashboard.view') && (
             <button
-              onClick={() => {
-                setShowArchived(false);
-                setTab('overview');
-              }}
+              onClick={() => { setShowArchived(false); setTab('overview'); }}
               style={{
                 padding: '8px 16px',
                 background: tab === 'overview' && !showArchived ? '#1c5fa8' : '#ffffff',
@@ -548,13 +456,9 @@ export default function AdminDashboard({ user: propUser }) {
             </button>
           )}
 
-          {/* ✅ Queue Control */}
           {can('booking.view') && (
             <button
-              onClick={() => {
-                setShowArchived(false);
-                setTab('queue');
-              }}
+              onClick={() => { setShowArchived(false); setTab('queue'); }}
               style={{
                 padding: '8px 16px',
                 background: tab === 'queue' ? '#1c5fa8' : '#ffffff',
@@ -569,13 +473,9 @@ export default function AdminDashboard({ user: propUser }) {
             </button>
           )}
 
-          {/* ✅ Promo Manager */}
           {can('dashboard.view') && (
             <button
-              onClick={() => {
-                setShowArchived(false);
-                setTab('promo');
-              }}
+              onClick={() => { setShowArchived(false); setTab('promo'); }}
               style={{
                 padding: '8px 16px',
                 background: tab === 'promo' ? '#1c5fa8' : '#ffffff',
@@ -590,19 +490,13 @@ export default function AdminDashboard({ user: propUser }) {
             </button>
           )}
 
-          {/* Booking List */}
           {can('booking.view') && (
             <button
-              onClick={() => {
-                setShowArchived(false);
-                setTab('appointments');
-              }}
+              onClick={() => { setShowArchived(false); setTab('appointments'); }}
               style={{
                 padding: '8px 16px',
-                background:
-                  tab === 'appointments' && !showArchived ? '#1c5fa8' : '#ffffff',
-                color:
-                  tab === 'appointments' && !showArchived ? '#ffffff' : '#333333',
+                background: tab === 'appointments' && !showArchived ? '#1c5fa8' : '#ffffff',
+                color: tab === 'appointments' && !showArchived ? '#ffffff' : '#333333',
                 border: '1px solid #e2e8f0',
                 borderRadius: '5px',
                 cursor: 'pointer',
@@ -613,13 +507,9 @@ export default function AdminDashboard({ user: propUser }) {
             </button>
           )}
 
-          {/* Marketing Report */}
           {can('marketing_report.view') && (
             <button
-              onClick={() => {
-                setShowArchived(false);
-                setTab('marketing');
-              }}
+              onClick={() => { setShowArchived(false); setTab('marketing'); }}
               style={{
                 padding: '8px 16px',
                 background: tab === 'marketing' ? '#1c5fa8' : '#ffffff',
@@ -634,13 +524,9 @@ export default function AdminDashboard({ user: propUser }) {
             </button>
           )}
 
-          {/* Display Settings */}
           {can('display.view') && (
             <button
-              onClick={() => {
-                setShowArchived(false);
-                setTab('display');
-              }}
+              onClick={() => { setShowArchived(false); setTab('display'); }}
               style={{
                 padding: '8px 16px',
                 background: tab === 'display' ? '#1c5fa8' : '#ffffff',
@@ -655,13 +541,9 @@ export default function AdminDashboard({ user: propUser }) {
             </button>
           )}
 
-          {/* Location Manager */}
           {can('location.view') && (
             <button
-              onClick={() => {
-                setShowArchived(false);
-                setTab('locations');
-              }}
+              onClick={() => { setShowArchived(false); setTab('locations'); }}
               style={{
                 padding: '8px 16px',
                 background: tab === 'locations' ? '#1c5fa8' : '#ffffff',
@@ -676,7 +558,6 @@ export default function AdminDashboard({ user: propUser }) {
             </button>
           )}
 
-          {/* Activity Log */}
           {can('activity_log.view') && (
             <button
               onClick={() => setTab('logs')}
@@ -694,13 +575,9 @@ export default function AdminDashboard({ user: propUser }) {
             </button>
           )}
 
-          {/* User Access Control */}
           {can('user.view') && (
             <button
-              onClick={() => {
-                setShowArchived(false);
-                setTab('user_access');
-              }}
+              onClick={() => { setShowArchived(false); setTab('user_access'); }}
               style={{
                 padding: '8px 16px',
                 background: tab === 'user_access' ? '#1c5fa8' : '#ffffff',
@@ -718,13 +595,30 @@ export default function AdminDashboard({ user: propUser }) {
             </button>
           )}
 
-          {/* Archived */}
+          {/* ✅ MoU Clients shortcut */}
+          {can('mou.view') && (
+            <button
+              onClick={() => navigate('/mou')}
+              style={{
+                padding: '8px 16px',
+                background: '#ffffff',
+                color: '#1c5fa8',
+                border: '1.5px solid #1c5fa8',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                fontWeight: '600',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <FileText size={14} /> 📄 MoU ক্লায়েন্ট
+            </button>
+          )}
+
           {can('archive.view') && (
             <button
-              onClick={() => {
-                setShowArchived(!showArchived);
-                setTab('appointments');
-              }}
+              onClick={() => { setShowArchived(!showArchived); setTab('appointments'); }}
               style={{
                 padding: '8px 16px',
                 background: showArchived ? '#374151' : '#ffffff',
@@ -744,8 +638,6 @@ export default function AdminDashboard({ user: propUser }) {
         </div>
       </div>
 
-      {/* ============ Tab Content ============ */}
-
       {tab === 'overview' && !showArchived && can('dashboard.view') && (
         <SafeArea>
           <Suspense fallback={<TabLoader />}>
@@ -762,7 +654,6 @@ export default function AdminDashboard({ user: propUser }) {
         </SafeArea>
       )}
 
-      {/* ✅ Promo Manager */}
       {tab === 'promo' && can('dashboard.view') && (
         <SafeArea>
           <Suspense fallback={<TabLoader />}>
@@ -837,24 +728,13 @@ export default function AdminDashboard({ user: propUser }) {
 
       {tab === 'logs' && can('activity_log.view') && (
         <SafeArea>
-          <div
-            style={{
-              background: '#fff',
-              padding: '20px',
-              borderRadius: '10px',
-              border: '1px solid #e2e8f0',
-            }}
-          >
+          <div style={{ background: '#fff', padding: '20px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
             <h3 style={{ margin: '0 0 16px 0' }}>📋 Activity Log</h3>
             <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
               {logsLoading ? (
-                <div style={{ textAlign: 'center', color: '#64748b', padding: '30px' }}>
-                  লোড হচ্ছে...
-                </div>
+                <div style={{ textAlign: 'center', color: '#64748b', padding: '30px' }}>লোড হচ্ছে...</div>
               ) : filteredAuditLogs.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#64748b', padding: '30px' }}>
-                  কোনো লগ নেই
-                </div>
+                <div style={{ textAlign: 'center', color: '#64748b', padding: '30px' }}>কোনো লগ নেই</div>
               ) : (
                 filteredAuditLogs.map((log, idx) => {
                   const ts = log.timestamp?.seconds
@@ -863,24 +743,10 @@ export default function AdminDashboard({ user: propUser }) {
                     ? new Date(log.timestamp)
                     : null;
                   return (
-                    <div
-                      key={log.id || idx}
-                      style={{ borderBottom: '1px solid #f1f5f9', padding: '12px 0' }}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          flexWrap: 'wrap',
-                          gap: '6px',
-                        }}
-                      >
-                        <strong style={{ color: '#1c5fa8', fontSize: '14px' }}>
-                          {log.description || log.action}
-                        </strong>
-                        <small style={{ color: '#64748b' }}>
-                          {ts ? ts.toLocaleString('bn-BD') : '—'}
-                        </small>
+                    <div key={log.id || idx} style={{ borderBottom: '1px solid #f1f5f9', padding: '12px 0' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
+                        <strong style={{ color: '#1c5fa8', fontSize: '14px' }}>{log.description || log.action}</strong>
+                        <small style={{ color: '#64748b' }}>{ts ? ts.toLocaleString('bn-BD') : '—'}</small>
                       </div>
                     </div>
                   );

@@ -12,11 +12,11 @@ export const TABS = {
   LOGS: 'logs',
   ARCHIVED: 'archived',
   USER_ACCESS: 'user_access',
+  MOU: 'mou',
 };
 
 // ==================================================
-// ✅ PERMISSION REGISTRY – সব permission এখানে
-// নতুন feature যোগ করলে শুধু এখানে add করুন
+// ✅ PERMISSION REGISTRY
 // ==================================================
 export const PERMISSION_REGISTRY = [
   {
@@ -34,7 +34,7 @@ export const PERMISSION_REGISTRY = [
       { key: 'booking.view', label: 'বুকিং দেখুন' },
       { key: 'booking.create', label: 'নতুন বুকিং' },
       { key: 'booking.edit', label: 'বুকিং এডিট' },
-        { key: 'booking.archive', label: 'বুকিং আর্কাইভ' },  
+      { key: 'booking.archive', label: 'বুকিং আর্কাইভ' },
       { key: 'booking.delete', label: 'বুকিং ডিলিট' },
       { key: 'booking.status_change', label: 'স্ট্যাটাস পরিবর্তন' },
       { key: 'booking.patient_type_change', label: 'রোগীর টাইপ পরিবর্তন' },
@@ -124,18 +124,24 @@ export const PERMISSION_REGISTRY = [
       { key: 'user.permission_manage', label: 'Permission' },
     ],
   },
+  {
+    module: 'MoU Clients',
+    icon: '📄',
+    permissions: [
+      { key: 'mou.view', label: 'MoU ক্লায়েন্ট দেখুন' },
+      { key: 'mou.create', label: 'নতুন MoU তৈরি' },
+      { key: 'mou.edit', label: 'MoU এডিট' },
+      { key: 'mou.delete', label: 'MoU ডিলিট' },
+      { key: 'mou.print', label: 'MoU প্রিন্ট' },
+      { key: 'mou.export_pdf', label: 'MoU PDF ডাউনলোড' },
+    ],
+  },
 ];
 
-// ==================================================
-// ✅ Flat list of all permission keys
-// ==================================================
 export const ALL_PERMISSIONS = PERMISSION_REGISTRY.flatMap((m) =>
   m.permissions.map((p) => p.key)
 );
 
-// ==================================================
-// ✅ Default Role Templates
-// ==================================================
 export const ROLE_TEMPLATES = {
   admin: {
     label: 'Admin',
@@ -148,6 +154,7 @@ export const ROLE_TEMPLATES = {
         'user.permission_manage',
         'user.delete',
         'booking.delete',
+        'mou.delete',
       ].includes(k);
       return acc;
     }, {}),
@@ -169,6 +176,11 @@ export const ROLE_TEMPLATES = {
       'marketing_report.view': true,
       'marketing_report.filter': true,
       'booking.archive': true,
+      'mou.view': true,
+      'mou.create': true,
+      'mou.edit': true,
+      'mou.print': true,
+      'mou.export_pdf': true,
     },
   },
   viewer: {
@@ -177,6 +189,7 @@ export const ROLE_TEMPLATES = {
       'dashboard.view': true,
       'statistics.view': true,
       'booking.view': true,
+      'mou.view': true,
     },
   },
   moderator: {
@@ -187,6 +200,7 @@ export const ROLE_TEMPLATES = {
       'booking.view': true,
       'booking.status_change': true,
       'activity_log.view': true,
+      'mou.view': true,
     },
   },
   pending: {
@@ -195,14 +209,9 @@ export const ROLE_TEMPLATES = {
   },
 };
 
-// ==================================================
-// ✅ Effective Permissions Calculator
-// Priority: user.overrides > role.permissions
-// ==================================================
 export const calculateEffectivePermissions = (userData) => {
   if (!userData) return {};
 
-  // Admin all-access
   if (userData.role === 'admin') {
     return ALL_PERMISSIONS.reduce((acc, k) => ({ ...acc, [k]: true }), {});
   }
@@ -213,7 +222,6 @@ export const calculateEffectivePermissions = (userData) => {
 
   const effective = {};
   ALL_PERMISSIONS.forEach((key) => {
-    // User-specific override takes priority
     if (Object.prototype.hasOwnProperty.call(overrides, key)) {
       effective[key] = overrides[key] === true;
     } else {
@@ -224,24 +232,15 @@ export const calculateEffectivePermissions = (userData) => {
   return effective;
 };
 
-// ==================================================
-// ✅ hasPermission helper
-// ==================================================
 export const hasPermission = (effectivePermissions, key) => {
   if (!effectivePermissions) return false;
   return effectivePermissions[key] === true;
 };
 
-// ==================================================
-// ✅ Role label helper
-// ==================================================
 export const getRoleLabel = (role) => {
   return ROLE_TEMPLATES[role]?.label || role || 'Unknown';
 };
 
-// ==================================================
-// ✅ Permission dependency (view required for others)
-// ==================================================
 export const PERMISSION_DEPENDENCIES = {
   'booking.create': 'booking.view',
   'booking.edit': 'booking.view',
@@ -284,9 +283,14 @@ export const PERMISSION_DEPENDENCIES = {
   'user.delete': 'user.view',
   'user.role_change': 'user.view',
   'user.permission_manage': 'user.view',
+
+  'mou.create': 'mou.view',
+  'mou.edit': 'mou.view',
+  'mou.delete': 'mou.view',
+  'mou.print': 'mou.view',
+  'mou.export_pdf': 'mou.view',
 };
 
-// ✅ Auto-enable dependent permission
 export const applyDependencies = (perms) => {
   const result = { ...perms };
   Object.entries(PERMISSION_DEPENDENCIES).forEach(([child, parent]) => {

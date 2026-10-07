@@ -3,7 +3,7 @@ import { lazy, Suspense } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { HospitalProvider } from './context/HospitalContext';
-import AnalyticsTracker from './components/AnalyticsTracker';   // ✅ GA4 tracker
+import AnalyticsTracker from './components/AnalyticsTracker';
 
 // Lazy load components
 const DoctorPanelBuilder = lazy(() => import('./doctor-panel-builder'));
@@ -30,7 +30,6 @@ function App() {
   return (
     <AuthProvider>
       <HospitalProvider>
-        {/* ✅ GA4 page_view tracking — route change হলে auto track করবে */}
         <AnalyticsTracker />
 
         <Suspense fallback={<Loader />}>
@@ -38,16 +37,17 @@ function App() {
             <Route path="/" element={<DoctorPanelBuilder />} />
             <Route path="/login" element={<DoctorPanelBuilder />} />
 
-            {/* ✅ Doctor-specific booking — MUST come BEFORE /booking */}
             <Route path="/booking/:doctorId" element={<DoctorPanelBuilder />} />
-
-            {/* Generic booking (all doctors) */}
             <Route path="/booking" element={<DoctorPanelBuilder />} />
 
             <Route path="/doctors" element={<DoctorPanelBuilder />} />
             <Route path="/edit" element={<DoctorPanelBuilder />} />
             <Route path="/dashboard" element={<DoctorPanelBuilder />} />
             <Route path="/admin" element={<DoctorPanelBuilder />} />
+
+            {/* ✅ MoU Clients route */}
+            <Route path="/mou" element={<DoctorPanelBuilder />} />
+
             <Route path="/display" element={<QueueDisplay />} />
             <Route path="/checkin/:appointmentId" element={<CheckIn />} />
             <Route path="*" element={<NotFoundPage />} />
