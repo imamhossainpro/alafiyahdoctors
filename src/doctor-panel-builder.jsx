@@ -10,7 +10,7 @@ import {
   MapPin, Globe, Phone, Loader2, Stethoscope, Scissors, Heart, Baby, Bone,
   Syringe, Pill, Activity, Brain, Eye, Utensils, Smile, Sparkles, User,
   Droplet, Thermometer, LogOut, CheckCircle, XCircle, RefreshCw, Link as LinkIcon,
-  Copy, QrCode, Check, Camera, Upload,
+  Copy, QrCode, Check, Camera, Upload, Ticket,
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -26,7 +26,6 @@ import NotFoundPage from './components/NotFoundPage';
 import { useHospital } from './context/HospitalContext';
 import { useAuth } from './context/AuthContext';
 import AuthPage from './components/AuthPage';
-import MOUGenerator from './components/MOUGenerator';
 
 // ==================================================
 // ✅ Utilities
@@ -2156,7 +2155,7 @@ export default function DoctorPanelBuilder() {
   const location = useLocation();
   const { currentHospital } = useHospital();
   const hospitalId = currentHospital?.id || 'alafiyah_main';
-  const { user, logout } = useAuth();
+ const { user, logout, loading: authLoading } = useAuth();
 
   const isAdmin = user?.role === 'admin';
   const isSubAdmin = user?.role === 'sub-admin';
@@ -2176,8 +2175,6 @@ export default function DoctorPanelBuilder() {
  let activeView;
 if (path === '/') {
   activeView = 'preview';
-} else if (path === '/mou') {
-  activeView = 'mou';                 // ← এই line থাকলে থাকে
 } else if (bookingDoctorId) {
   activeView = 'booking';
 } else {
@@ -2737,38 +2734,51 @@ if (path === '/') {
     path === '/booking' ||
     path === '/display' ||
     path === '/preview' ||
-    path === '/login' ||
-    path === '/mou'
+    path === '/login'
+    // ✅ '/mou' সরানো হয়েছে — App.jsx-এ handle হবে
   )
-      return true;
-    if (bookingDoctorId) return true;
-    if (path === '/edit' && (isEditor || isModerator || isSubAdmin || isAdmin)) return true;
-    if (path === '/doctors' && (isSubAdmin || isAdmin)) return true;
-    if (path === '/dashboard' && (isEditor || isModerator || isSubAdmin || isAdmin))
-      return true;
-    if (path === '/admin' && isAdmin) return true;
-    return false;
-  };
+    return true;
+  if (bookingDoctorId) return true;
+  if (path === '/edit' && (isEditor || isModerator || isSubAdmin || isAdmin)) return true;
+  if (path === '/doctors' && (isSubAdmin || isAdmin)) return true;
+  if (path === '/dashboard' && (isEditor || isModerator || isSubAdmin || isAdmin))
+    return true;
+  if (path === '/admin' && isAdmin) return true;
+  return false;
+};
 
   // ==================================================
   // ✅ Loading state
   // ==================================================
-  if (loading) {
-    return (
-      <>
-        <style>{CSS}</style>
-        <AppShellSkeleton />
-      </>
-    );
-  }
+  // ✅ Auth loading → show skeleton
+if (authLoading) {
+  return (
+    <>
+      <style>{CSS}</style>
+      <AppShellSkeleton />
+    </>
+  );
+}
 
-  // ==================================================
-  // ✅ Login / MOU — AuthPage দেখাও
-  // ==================================================
-  // ==================================================
-// ✅ /login → AuthPage
+if (loading) {
+  return (
+    <>
+      <style>{CSS}</style>
+      <AppShellSkeleton />
+    </>
+  );
+}
+
+ 
+// ==================================================
+// ✅ Login — AuthPage দেখাও
 // ==================================================
 if (path === '/login') {
+  // ✅ Already logged in → redirect to patient dashboard
+  if (user) {
+    return <Navigate to="/my-bookings" replace />;
+  }
+
   return (
     <div className="dpb">
       <style>{CSS}</style>
@@ -2835,7 +2845,20 @@ if (path === '/mou') {
                   প্যানেল বিল্ডার
                 </button>
               )}
-
+                {/* ✅ MOU Button — শুধু admin দেখবে */}
+                  {isAdmin && (
+                    <button
+                      className={activeView === 'mou' ? 'tab active' : 'tab'}
+                      onClick={() => navigate('/mou')}
+                      style={{
+                        background: 'linear-gradient(45deg, #7c3aed, #a78bfa)',
+                        color: '#fff',
+                        fontWeight: '700',
+                      }}
+                    >
+                      📄 MOU
+                    </button>
+                  )}
               {!isGuest && (isSubAdmin || isAdmin) && (
                 <button
                   className={activeView === 'doctors' ? 'tab active' : 'tab'}
@@ -2865,6 +2888,43 @@ if (path === '/mou') {
             </div>
 
             <NotificationBell user={user} />
+
+            {/* ✅ My Bookings button — logged-in users */}
+            {!isGuest && (
+              <button
+                onClick={() => navigate('/my-bookings')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 16px',
+                  background: 'linear-gradient(135deg, #8b5cf6, #a78bfa)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  boxShadow: '0 4px 12px rgba(139,92,246,0.35)',
+                  transition: 'all 0.2s ease',
+                  whiteSpace: 'nowrap',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow =
+                    '0 6px 16px rgba(139,92,246,0.45)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow =
+                    '0 4px 12px rgba(139,92,246,0.35)';
+                }}
+              >
+                <Ticket size={14} />
+                আমার সিরিয়াল
+              </button>
+            )}
 
             {!isGuest && (
               <button className="logout-btn" onClick={handleLogout}>

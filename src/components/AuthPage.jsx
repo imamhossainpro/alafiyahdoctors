@@ -1,302 +1,275 @@
 // src/components/AuthPage.jsx
 // ==================================================
-// 🔐 AuthPage — Login / Register Modal
+// 🔐 AuthPage — Google / Email Login
 // ==================================================
-// ✅ Firebase Auth (email/password)
-// ✅ Firestore user doc at hospitals/{id}/users/{uid}
-// ✅ GA4 tracking (login / sign_up)
+// ✅ Google Sign-In (popup)
+// ✅ Email/Password Sign-In + Register
+// ❌ Phone tab সম্পূর্ণ বাদ (Firebase free plan-এ কাজ করে না)
 // ✅ Bengali error messages
-// ✅ /mou এবং /login — দুই জায়গা থেকেই কাজ করে
+// ✅ GA4 tracking
+// ✅ Post-auth: সরাসরি home (/) এ redirect
 // ==================================================
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth, db, trackEvent } from '../firebase';
 import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  updateProfile,
-} from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+  Mail,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  X,
+  Shield,
+  User as UserIcon,
+} from 'lucide-react';
+
+import { db, trackEvent } from '../firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import {
+  emailSignIn,
+  emailSignUp,
+  googleSignIn,
+  ensureUserDoc,
+} from '../services/authService';
 
 const DEFAULT_HOSPITAL_ID = 'alafiyah_main';
 
+// ==================================================
+// ✅ Main Component
+// ==================================================
 export default function AuthPage({ onClose, redirectAfterLogin }) {
   const navigate = useNavigate();
 
-  const [isLogin, setIsLogin] = useState(true);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [designation, setDesignation] = useState('');
+  const [tab, setTab] = useState('google'); // 'google' | 'email'
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [loading, setLoading] = useState(false);
+
+  // ---------- Email state ----------
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isRegister, setIsRegister] = useState(false);
+  const [name, setName] = useState('');
 
   // ==================================================
-  // ✅ Submit handler
+  // ✅ Post-Auth Handler
   // ==================================================
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handlePostAuth = async (firebaseUser, provider) => {
+    try {
+      // Ensure user doc exists in Firestore
+      await ensureUserDoc(DEFAULT_HOSPITAL_ID, firebaseUser, {
+        authProvider: provider,
+        name: firebaseUser.displayName || '',
+      });
+
+      // GA4 tracking
+      trackEvent(`login_${provider}`, { method: provider });
+
+      // ✅ Redirect logic — সব user home-এ যাবে
+      if (redirectAfterLogin) {
+        navigate(redirectAfterLogin, { replace: true });
+      } else {
+        navigate('/', { replace: true });
+      }
+
+      // Close modal if opened as modal
+      if (onClose) onClose();
+    } catch (err) {
+      console.error('Post-auth error:', err);
+      setError('লগইন সম্পন্ন হয়েছে কিন্তু ব্যবহারকারীর তথ্য লোড করা যায়নি');
+    }
+  };
+
+  // ==================================================
+  // ✅ Google Sign-In
+  // ==================================================
+  const handleGoogleSignIn = async () => {
     setError('');
     setSuccess('');
     setLoading(true);
 
     try {
-      // ==================================================
-      // 🔹 LOGIN
-      // ==================================================
-      if (isLogin) {
-        const userCredential = await signInWithEmailAndPassword(
-          auth,
-          email.trim(),
-          password
-        );
-        const user = userCredential.user;
-
-        // ✅ সঠিক path: hospitals/{id}/users/{uid}
-        const userRef = doc(
-          db,
-          'hospitals',
-          DEFAULT_HOSPITAL_ID,
-          'users',
-          user.uid
-        );
-        const userDoc = await getDoc(userRef);
-
-        // ইউজার ডকুমেন্ট না থাকলে তৈরি করুন (fallback)
-        if (!userDoc.exists()) {
-          await setDoc(userRef, {
-            uid: user.uid,
-            name: user.displayName || '',
-            email: user.email,
-            role: 'viewer',
-            approved: false,
-            isActive: true,
-            hospitalId: DEFAULT_HOSPITAL_ID,
-            createdAt: new Date().toISOString(),
-          });
-          console.log('✅ User doc created (fallback) at:', userRef.path);
-        } else {
-          console.log('✅ User doc found:', userDoc.data());
-        }
-
-        // ✅ GA4 — login event
-        trackEvent('login', { method: 'email' });
-
-        // ✅ Redirect logic
-        if (redirectAfterLogin) {
-          navigate(redirectAfterLogin);
-        } else if (onClose) {
-          onClose();
-        }
-      }
-
-      // ==================================================
-      // 🔹 REGISTER
-      // ==================================================
-      else {
-        const userCredential = await createUserWithEmailAndPassword(
-          auth,
-          email.trim(),
-          password
-        );
-        const user = userCredential.user;
-
-        // Display name সেট করুন
-        if (name.trim()) {
-          await updateProfile(user, { displayName: name.trim() });
-        }
-
-        // ✅ সঠিক path: hospitals/{id}/users/{uid}
-        const userRef = doc(
-          db,
-          'hospitals',
-          DEFAULT_HOSPITAL_ID,
-          'users',
-          user.uid
-        );
-        await setDoc(userRef, {
-          uid: user.uid,
-          name: name.trim(),
-          email: user.email,
-          role: 'viewer',
-          approved: false,          // অ্যাডমিন এপ্রুভ করবে
-          isActive: true,
-          designation: designation.trim() || '',
-          hospitalId: DEFAULT_HOSPITAL_ID,
-          createdAt: new Date().toISOString(),
-        });
-
-        // ✅ GA4 — sign_up event
-        trackEvent('sign_up', { method: 'email' });
-
-        setSuccess(
-          '✅ রেজিস্ট্রেশন সফল! অ্যাডমিন এপ্রুভ করার পর লগইন করতে পারবেন।'
-        );
-        setIsLogin(true);
-        setName('');
-        setDesignation('');
-        setPassword('');
-        // email keep করে দিচ্ছি যাতে user সহজে login করতে পারে
-        setLoading(false);
-        return;
-      }
+      const result = await googleSignIn();
+      await handlePostAuth(result.user, 'google');
     } catch (err) {
-      console.error('❌ Auth error:', err);
+      console.error('Google sign-in error:', err);
 
-      // ---------- Friendly Bengali error messages ----------
-      let friendlyMessage = 'অনুগ্রহ করে আবার চেষ্টা করুন।';
-
-      switch (err.code) {
-        case 'auth/user-not-found':
-          friendlyMessage =
-            '❌ এই ইমেইলে কোনো অ্যাকাউন্ট নেই। অনুগ্রহ করে রেজিস্ট্রেশন করুন।';
-          break;
-        case 'auth/wrong-password':
-        case 'auth/invalid-credential':
-          friendlyMessage = '❌ পাসওয়ার্ড ভুল হয়েছে। আবার চেষ্টা করুন।';
-          break;
-        case 'auth/invalid-email':
-          friendlyMessage = '❌ ইমেইল ঠিকানাটি সঠিক নয়।';
-          break;
-        case 'auth/email-already-in-use':
-          friendlyMessage =
-            '❌ এই ইমেইল ইতিমধ্যে ব্যবহার হচ্ছে। লগইন করার চেষ্টা করুন।';
-          break;
-        case 'auth/weak-password':
-          friendlyMessage = '❌ পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।';
-          break;
-        case 'auth/network-request-failed':
-          friendlyMessage =
-            '❌ ইন্টারনেট সংযোগে সমস্যা হচ্ছে। আবার চেষ্টা করুন।';
-          break;
-        case 'auth/too-many-requests':
-          friendlyMessage =
-            '❌ অনেকবার চেষ্টা করা হয়েছে। কিছুক্ষণ পর আবার চেষ্টা করুন।';
-          break;
-        default:
-          friendlyMessage = err.message || friendlyMessage;
+      let msg = 'Google sign-in ব্যর্থ হয়েছে';
+      if (err.code === 'auth/popup-closed-by-user') {
+        msg = 'Google sign-in বাতিল করা হয়েছে';
+      } else if (err.code === 'auth/popup-blocked') {
+        msg = 'Popup blocked — অনুগ্রহ করে popup allow করুন';
+      } else if (err.code === 'auth/cancelled-popup-request') {
+        msg = 'অনুরোধ বাতিল হয়েছে';
+      } else if (err.code === 'auth/network-request-failed') {
+        msg = 'নেটওয়ার্ক সমস্যা — ইন্টারনেট চেক করুন';
+      } else if (err.code === 'auth/operation-not-allowed') {
+        msg =
+          'Google Sign-In Firebase Console-এ enable করা হয়নি। Firebase Console → Authentication → Sign-in method → Google enable করুন।';
+      } else {
+        msg = err.message || msg;
       }
 
-      setError(friendlyMessage);
+      setError(msg);
     } finally {
       setLoading(false);
     }
   };
 
   // ==================================================
-  // ✅ Toggle Login/Register
+  // ✅ Email Sign-In / Sign-Up
   // ==================================================
-  const handleToggleMode = () => {
-    setIsLogin((v) => !v);
+  const handleEmailSubmit = async (e) => {
+    e.preventDefault();
     setError('');
     setSuccess('');
+    setLoading(true);
+
+    try {
+      let result;
+      if (isRegister) {
+        result = await emailSignUp(email.trim(), password, name.trim());
+        trackEvent('sign_up', { method: 'email' });
+      } else {
+        result = await emailSignIn(email.trim(), password);
+        trackEvent('login', { method: 'email' });
+      }
+      await handlePostAuth(result.user, 'email');
+    } catch (err) {
+      console.error('Email auth error:', err);
+
+      const errorMap = {
+        'auth/user-not-found': 'এই ইমেইলে কোনো অ্যাকাউন্ট নেই',
+        'auth/wrong-password': 'পাসওয়ার্ড ভুল',
+        'auth/invalid-credential': 'ইমেইল বা পাসওয়ার্ড ভুল',
+        'auth/email-already-in-use': 'এই ইমেইল আগে থেকেই ব্যবহৃত',
+        'auth/weak-password': 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে',
+        'auth/invalid-email': 'ইমেইল সঠিক নয়',
+        'auth/too-many-requests':
+          'অনেকবার চেষ্টা — কিছুক্ষণ পর আবার চেষ্টা করুন',
+        'auth/network-request-failed':
+          'নেটওয়ার্ক সমস্যা — ইন্টারনেট চেক করুন',
+        'auth/operation-not-allowed':
+          'Email/Password Firebase Console-এ enable করা হয়নি। Firebase Console → Authentication → Sign-in method → Email/Password enable করুন।',
+      };
+
+      setError(errorMap[err.code] || err.message || 'লগইন ব্যর্থ');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // ==================================================
-  // ✅ Inline styles (Tailwind ছাড়া)
+  // ✅ Styles (inline, no Tailwind)
   // ==================================================
   const overlayStyle = {
     position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    inset: 0,
+    background: 'rgba(15, 23, 42, 0.6)',
+    backdropFilter: 'blur(8px)',
+    WebkitBackdropFilter: 'blur(8px)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 99999,
     padding: '20px',
+    overflowY: 'auto',
   };
 
   const modalStyle = {
     background: '#fff',
-    borderRadius: '16px',
-    maxWidth: '420px',
+    borderRadius: '20px',
+    maxWidth: '440px',
     width: '100%',
-    padding: '28px 24px',
     position: 'relative',
-    boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-    maxHeight: '92vh',
+    boxShadow: '0 25px 60px rgba(0,0,0,0.3)',
+    overflow: 'hidden',
+    fontFamily:
+      "'Hind Siliguri', 'Noto Sans Bengali', system-ui, sans-serif",
+    maxHeight: 'calc(100vh - 40px)',
     overflowY: 'auto',
-    fontFamily: "'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif",
   };
 
-  const closeBtnStyle = {
-    position: 'absolute',
-    top: '12px',
-    right: '16px',
-    background: 'none',
+  const tabStyle = (active) => ({
+    flex: 1,
+    padding: '12px 8px',
+    background: active ? '#fff' : 'transparent',
+    color: active ? '#1c5fa8' : '#64748b',
     border: 'none',
-    fontSize: '24px',
+    borderBottom: active ? '3px solid #1c5fa8' : '3px solid transparent',
+    fontSize: '13px',
+    fontWeight: active ? '700' : '600',
     cursor: 'pointer',
-    color: '#888',
-    lineHeight: 1,
-    padding: '4px 8px',
-    borderRadius: '6px',
     transition: 'all 0.2s',
-  };
+    fontFamily: 'inherit',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '6px',
+  });
 
   const inputStyle = {
     width: '100%',
-    padding: '10px 12px',
-    marginTop: '4px',
-    border: '1.5px solid #cbd5e1',
-    borderRadius: '8px',
-    fontSize: '14px',
+    padding: '12px 14px',
+    border: '1.5px solid #e2e8f0',
+    borderRadius: '10px',
+    fontSize: '14.5px',
     fontFamily: 'inherit',
-    boxSizing: 'border-box',
     outline: 'none',
-    transition: 'border-color 0.2s',
+    boxSizing: 'border-box',
+    transition: 'border-color 0.15s',
+    color: '#1e293b',
+    background: '#fff',
   };
 
   const labelStyle = {
     display: 'block',
-    fontSize: '13.5px',
+    fontSize: '13px',
     fontWeight: '600',
     color: '#475569',
-    marginBottom: '2px',
+    marginBottom: '6px',
   };
 
-  const btnStyle = {
+  const btnPrimary = {
     width: '100%',
-    padding: '12px',
-    background: loading ? '#94a3b8' : '#1c5fa8',
+    padding: '13px',
+    background: loading
+      ? '#94a3b8'
+      : 'linear-gradient(135deg, #1c5fa8, #2b7ec9)',
     color: '#fff',
     border: 'none',
     borderRadius: '10px',
-    fontWeight: '700',
     fontSize: '15px',
+    fontWeight: '700',
     cursor: loading ? 'not-allowed' : 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    fontFamily: 'inherit',
+    boxShadow: loading ? 'none' : '0 4px 14px rgba(28,95,168,0.3)',
     transition: 'all 0.2s',
-    marginTop: '4px',
   };
 
-  const errorStyle = {
-    color: '#991b1b',
-    fontSize: '13.5px',
-    backgroundColor: '#fee2e2',
-    padding: '10px 12px',
-    borderRadius: '8px',
-    marginBottom: '12px',
-    fontWeight: '500',
-    lineHeight: 1.5,
-  };
-
-  const successStyle = {
-    color: '#166534',
-    fontSize: '13.5px',
-    backgroundColor: '#dcfce7',
-    padding: '10px 12px',
-    borderRadius: '8px',
-    marginBottom: '12px',
-    fontWeight: '500',
-    lineHeight: 1.5,
+  const googleBtn = {
+    width: '100%',
+    padding: '13px',
+    background: '#fff',
+    color: '#1e293b',
+    border: '1.5px solid #e2e8f0',
+    borderRadius: '10px',
+    fontSize: '14.5px',
+    fontWeight: '700',
+    cursor: loading ? 'not-allowed' : 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '10px',
+    fontFamily: 'inherit',
+    transition: 'all 0.2s',
+    opacity: loading ? 0.6 : 1,
   };
 
   // ==================================================
-  // ✅ Render
+  // ✅ RENDER
   // ==================================================
   return (
     <div style={overlayStyle} onClick={onClose}>
@@ -304,153 +277,382 @@ export default function AuthPage({ onClose, redirectAfterLogin }) {
         {/* Close button */}
         {onClose && (
           <button
-            type="button"
-            style={closeBtnStyle}
             onClick={onClose}
             aria-label="বন্ধ করুন"
-            onMouseEnter={(e) => (e.target.style.background = '#f1f5f9')}
-            onMouseLeave={(e) => (e.target.style.background = 'transparent')}
+            style={{
+              position: 'absolute',
+              top: '14px',
+              right: '14px',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#94a3b8',
+              zIndex: 2,
+              padding: '6px',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
           >
-            ✕
+            <X size={22} />
           </button>
         )}
 
-        {/* Title */}
-        <h2
+        {/* ============ Header ============ */}
+        <div
           style={{
+            padding: '28px 24px 20px',
             textAlign: 'center',
-            fontSize: '22px',
-            marginBottom: '6px',
-            color: '#1c5fa8',
-            fontWeight: '800',
+            background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
           }}
         >
-          {isLogin ? 'লগইন করুন' : 'রেজিস্ট্রেশন করুন'}
-        </h2>
-        <p
-          style={{
-            textAlign: 'center',
-            fontSize: '13.5px',
-            color: '#64748b',
-            marginBottom: '20px',
-          }}
-        >
-          {isLogin
-            ? 'আপনার অ্যাকাউন্টে প্রবেশ করুন'
-            : 'আল-আফিয়া হাসপাতালে অ্যাকাউন্ট তৈরি করুন'}
-        </p>
-
-        {/* Feedback messages */}
-        {error && <div style={errorStyle}>{error}</div>}
-        {success && <div style={successStyle}>{success}</div>}
-
-        {/* Form */}
-        <form onSubmit={handleSubmit}>
-          {!isLogin && (
-            <>
-              <div style={{ marginBottom: '12px' }}>
-                <label style={labelStyle}>পূর্ণ নাম *</label>
-                <input
-                  style={inputStyle}
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  placeholder="যেমন: ডাঃ মোহাম্মদ নূর"
-                  autoComplete="name"
-                />
-              </div>
-
-              <div style={{ marginBottom: '12px' }}>
-                <label style={labelStyle}>পদবী (ঐচ্ছিক)</label>
-                <input
-                  style={inputStyle}
-                  type="text"
-                  value={designation}
-                  onChange={(e) => setDesignation(e.target.value)}
-                  placeholder="যেমন: এডিটর / মডারেটর"
-                />
-              </div>
-            </>
-          )}
-
-          <div style={{ marginBottom: '12px' }}>
-            <label style={labelStyle}>ইমেইল *</label>
-            <input
-              style={inputStyle}
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              placeholder="your@email.com"
-              autoComplete="email"
-            />
-          </div>
-
-          <div style={{ marginBottom: '16px' }}>
-            <label style={labelStyle}>পাসওয়ার্ড *</label>
-            <input
-              style={inputStyle}
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-              placeholder="••••••••"
-              autoComplete={isLogin ? 'current-password' : 'new-password'}
-            />
-          </div>
-
-          <button type="submit" style={btnStyle} disabled={loading}>
-            {loading
-              ? 'অপেক্ষা করুন...'
-              : isLogin
-              ? 'লগইন করুন'
-              : 'রেজিস্ট্রেশন করুন'}
-          </button>
-        </form>
-
-        {/* Toggle */}
-        <p
-          style={{
-            textAlign: 'center',
-            fontSize: '13.5px',
-            marginTop: '16px',
-            color: '#475569',
-          }}
-        >
-          {isLogin ? 'নতুন ব্যবহারকারী? ' : 'ইতিমধ্যে অ্যাকাউন্ট আছে? '}
-          <button
-            type="button"
-            onClick={handleToggleMode}
+          <div
             style={{
-              color: '#1c5fa8',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              fontWeight: '700',
-              padding: 0,
-              fontFamily: 'inherit',
-              fontSize: 'inherit',
+              width: '64px',
+              height: '64px',
+              borderRadius: '50%',
+              background: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 14px',
+              boxShadow: '0 6px 20px rgba(28,95,168,0.15)',
             }}
           >
-            {isLogin ? 'রেজিস্ট্রেশন করুন' : 'লগইন করুন'}
-          </button>
-        </p>
+            <Shield size={30} color="#1c5fa8" />
+          </div>
+          <h2
+            style={{
+              margin: '0 0 6px',
+              fontSize: '22px',
+              fontWeight: '800',
+              color: '#1e293b',
+            }}
+          >
+            স্বাগতম
+          </h2>
+          <p
+            style={{
+              margin: 0,
+              fontSize: '13.5px',
+              color: '#64748b',
+            }}
+          >
+            আপনার সিরিয়াল দেখতে লগইন করুন
+          </p>
+        </div>
 
-        {/* Footer note */}
-        <p
+        {/* ============ Tabs ============ */}
+        <div
           style={{
-            textAlign: 'center',
-            fontSize: '12px',
-            color: '#94a3b8',
-            marginTop: '16px',
-            lineHeight: 1.6,
+            display: 'flex',
+            borderBottom: '1px solid #e2e8f0',
+            background: '#f8fafc',
           }}
         >
-          নতুন অ্যাকাউন্ট অ্যাডমিন এপ্রুভ করার পর সক্রিয় হবে।
-        </p>
+          <button
+            type="button"
+            style={tabStyle(tab === 'google')}
+            onClick={() => {
+              setTab('google');
+              setError('');
+              setSuccess('');
+            }}
+          >
+            <svg width="15" height="15" viewBox="0 0 48 48">
+              <path
+                fill="#FFC107"
+                d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.6-6 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.3-.4-3.5z"
+              />
+              <path
+                fill="#FF3D00"
+                d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"
+              />
+              <path
+                fill="#4CAF50"
+                d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"
+              />
+              <path
+                fill="#1976D2"
+                d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4.1 5.5l6.2 5.2C41 35.1 44 30 44 24c0-1.3-.1-2.3-.4-3.5z"
+              />
+            </svg>
+            Google
+          </button>
+
+          <button
+            type="button"
+            style={tabStyle(tab === 'email')}
+            onClick={() => {
+              setTab('email');
+              setError('');
+              setSuccess('');
+            }}
+          >
+            <Mail size={15} /> ইমেইল
+          </button>
+        </div>
+
+        {/* ============ Body ============ */}
+        <div style={{ padding: '24px' }}>
+          {/* Error */}
+          {error && (
+            <div
+              style={{
+                padding: '12px 14px',
+                background: '#fee2e2',
+                color: '#991b1b',
+                borderRadius: '10px',
+                marginBottom: '16px',
+                fontSize: '13.5px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '8px',
+                lineHeight: 1.5,
+              }}
+            >
+              <AlertCircle
+                size={16}
+                style={{ flexShrink: 0, marginTop: '2px' }}
+              />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Success */}
+          {success && (
+            <div
+              style={{
+                padding: '12px 14px',
+                background: '#dcfce7',
+                color: '#166534',
+                borderRadius: '10px',
+                marginBottom: '16px',
+                fontSize: '13.5px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                lineHeight: 1.5,
+              }}
+            >
+              <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
+              <span>{success}</span>
+            </div>
+          )}
+
+          {/* ============ GOOGLE TAB ============ */}
+          {tab === 'google' && (
+            <div>
+              <p
+                style={{
+                  fontSize: '14px',
+                  color: '#475569',
+                  margin: '0 0 20px',
+                  textAlign: 'center',
+                  lineHeight: 1.6,
+                }}
+              >
+                Google account দিয়ে দ্রুত ও নিরাপদে লগইন করুন।
+              </p>
+
+              <button
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={loading}
+                style={googleBtn}
+                onMouseEnter={(e) => {
+                  if (!loading) {
+                    e.currentTarget.style.borderColor = '#1c5fa8';
+                    e.currentTarget.style.background = '#f8fafc';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = '#e2e8f0';
+                  e.currentTarget.style.background = '#fff';
+                }}
+              >
+                {loading ? (
+                  <Loader2 size={18} className="spin" />
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 48 48">
+                    <path
+                      fill="#FFC107"
+                      d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.6-6 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.3-.4-3.5z"
+                    />
+                    <path
+                      fill="#FF3D00"
+                      d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"
+                    />
+                    <path
+                      fill="#4CAF50"
+                      d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"
+                    />
+                    <path
+                      fill="#1976D2"
+                      d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4.1 5.5l6.2 5.2C41 35.1 44 30 44 24c0-1.3-.1-2.3-.4-3.5z"
+                    />
+                  </svg>
+                )}
+                {loading ? 'অপেক্ষা করুন...' : 'Google দিয়ে চালিয়ে যান'}
+              </button>
+            </div>
+          )}
+
+          {/* ============ EMAIL TAB ============ */}
+          {tab === 'email' && (
+            <form onSubmit={handleEmailSubmit}>
+              {isRegister && (
+                <div style={{ marginBottom: '14px' }}>
+                  <label style={labelStyle}>আপনার নাম</label>
+                  <div style={{ position: 'relative' }}>
+                    <UserIcon
+                      size={16}
+                      color="#94a3b8"
+                      style={{
+                        position: 'absolute',
+                        left: '14px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        pointerEvents: 'none',
+                      }}
+                    />
+                    <input
+                      type="text"
+                      placeholder="যেমন: আব্দুল্লাহ"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      required
+                      style={{ ...inputStyle, paddingLeft: '40px' }}
+                      onFocus={(e) =>
+                        (e.target.style.borderColor = '#1c5fa8')
+                      }
+                      onBlur={(e) =>
+                        (e.target.style.borderColor = '#e2e8f0')
+                      }
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div style={{ marginBottom: '14px' }}>
+                <label style={labelStyle}>ইমেইল</label>
+                <div style={{ position: 'relative' }}>
+                  <Mail
+                    size={16}
+                    color="#94a3b8"
+                    style={{
+                      position: 'absolute',
+                      left: '14px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      pointerEvents: 'none',
+                    }}
+                  />
+                  <input
+                    type="email"
+                    placeholder="your@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    style={{ ...inputStyle, paddingLeft: '40px' }}
+                    onFocus={(e) =>
+                      (e.target.style.borderColor = '#1c5fa8')
+                    }
+                    onBlur={(e) =>
+                      (e.target.style.borderColor = '#e2e8f0')
+                    }
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label style={labelStyle}>পাসওয়ার্ড</label>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  style={inputStyle}
+                  onFocus={(e) => (e.target.style.borderColor = '#1c5fa8')}
+                  onBlur={(e) => (e.target.style.borderColor = '#e2e8f0')}
+                />
+              </div>
+
+              <button type="submit" disabled={loading} style={btnPrimary}>
+                {loading && <Loader2 size={18} className="spin" />}
+                {loading
+                  ? 'অপেক্ষা করুন...'
+                  : isRegister
+                  ? 'রেজিস্ট্রেশন করুন'
+                  : 'লগইন করুন'}
+              </button>
+
+              <p
+                style={{
+                  textAlign: 'center',
+                  fontSize: '13.5px',
+                  marginTop: '16px',
+                  color: '#475569',
+                }}
+              >
+                {isRegister ? 'অ্যাকাউন্ট আছে? ' : 'নতুন ব্যবহারকারী? '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsRegister(!isRegister);
+                    setError('');
+                    setSuccess('');
+                  }}
+                  style={{
+                    color: '#1c5fa8',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontWeight: '700',
+                    padding: 0,
+                    fontFamily: 'inherit',
+                    fontSize: 'inherit',
+                  }}
+                >
+                  {isRegister ? 'লগইন করুন' : 'রেজিস্ট্রেশন করুন'}
+                </button>
+              </p>
+            </form>
+          )}
+        </div>
+
+        {/* ============ Footer ============ */}
+        <div
+          style={{
+            padding: '14px 24px',
+            borderTop: '1px solid #f1f5f9',
+            textAlign: 'center',
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              fontSize: '11.5px',
+              color: '#94a3b8',
+              lineHeight: 1.6,
+            }}
+          >
+            লগইন করার মাধ্যমে আপনি আমাদের শর্তাবলি ও গোপনীয়তা নীতি মেনে
+            নিচ্ছেন।
+          </p>
+        </div>
       </div>
+
+      {/* Global spin animation */}
+      <style>{`
+        @keyframes authSpin {
+          to { transform: rotate(360deg); }
+        }
+        .spin { animation: authSpin 1s linear infinite; }
+      `}</style>
     </div>
   );
 }

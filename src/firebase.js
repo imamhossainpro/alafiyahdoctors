@@ -3,10 +3,15 @@
 // 🔥 Firebase Configuration — Full File
 // ==================================================
 // ✅ Firestore, Auth, Storage, Analytics
+// ✅ Google Sign-In
+// ✅ Phone (OTP) Sign-In
+// ✅ Email/Password Sign-In
 // ✅ ESM exports for all services
 // ✅ GA4 tracking helper
 // ==================================================
 import { initializeApp } from 'firebase/app';
+
+// ---------- Firestore ----------
 import {
   getFirestore,
   collection,
@@ -30,6 +35,8 @@ import {
   arrayRemove,
   runTransaction,
 } from 'firebase/firestore';
+
+// ---------- Auth ----------
 import {
   getAuth,
   setPersistence,
@@ -39,7 +46,21 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   updateProfile,
+  // ✅ Google
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  // ✅ Phone
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
+  PhoneAuthProvider,
+  // ✅ Link phone to existing account
+  linkWithCredential,
+  linkWithPhoneNumber,
 } from 'firebase/auth';
+
+// ---------- Storage ----------
 import {
   getStorage,
   ref,
@@ -49,6 +70,8 @@ import {
   deleteObject,
   listAll,
 } from 'firebase/storage';
+
+// ---------- Analytics ----------
 import { getAnalytics, logEvent, isSupported } from 'firebase/analytics';
 
 // ==================================================
@@ -75,7 +98,7 @@ export const storage = getStorage(app);
 const auth = getAuth(app);
 
 // ==================================================
-// ✅ Auth persistence (session-only)
+// ✅ Auth Persistence (session-only)
 // ==================================================
 setPersistence(auth, browserSessionPersistence).catch((error) =>
   console.error('Auth persistence error:', error)
@@ -134,6 +157,18 @@ export {
   createUserWithEmailAndPassword,
   signOut,
   updateProfile,
+  // ✅ Google
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  // ✅ Phone
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
+  PhoneAuthProvider,
+  // ✅ Link phone
+  linkWithCredential,
+  linkWithPhoneNumber,
 };
 
 // ==================================================

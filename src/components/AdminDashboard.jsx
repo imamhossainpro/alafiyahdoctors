@@ -595,27 +595,6 @@ export default function AdminDashboard({ user: propUser }) {
             </button>
           )}
 
-          {/* ✅ MoU Clients shortcut */}
-          {can('mou.view') && (
-            <button
-              onClick={() => navigate('/mou')}
-              style={{
-                padding: '8px 16px',
-                background: '#ffffff',
-                color: '#1c5fa8',
-                border: '1.5px solid #1c5fa8',
-                borderRadius: '5px',
-                cursor: 'pointer',
-                fontWeight: '600',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-              }}
-            >
-              <FileText size={14} /> 📄 MoU ক্লায়েন্ট
-            </button>
-          )}
-
           {can('archive.view') && (
             <button
               onClick={() => { setShowArchived(!showArchived); setTab('appointments'); }}
