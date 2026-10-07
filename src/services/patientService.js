@@ -1,4 +1,13 @@
 // src/services/patientService.js
+// ==================================================
+// 👤 Patient Service — Full Fixed Version
+// ==================================================
+// ✅ Fix 1: addPatientVisit এখন patient doc-এর visits array-তে append করে
+// ✅ Fix 2: Cache-aware fetch (1 min TTL)
+// ✅ Fix 3: সব CRUD-এ cache invalidate
+// ✅ Fix 4: subscribeToPatients real-time-এ cache sync করে
+// ✅ Fix 5: Proper error handling + input validation
+// ==================================================
 import {
   collection,
   query,
@@ -11,6 +20,7 @@ import {
   onSnapshot,
   orderBy,
   where,
+  arrayUnion,
   Timestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -33,9 +43,8 @@ export const invalidatePatientsCache = () => {
 };
 
 // ==========================================
-// ১. রেফারেন্স হেল্পার (নিরাপদ)
+// ✅ Reference helper (safe)
 // ==========================================
-
 const getPatientsRef = (hospitalId) => {
   if (!hospitalId || typeof hospitalId !== 'string') {
     throw new Error('getPatientsRef: hospitalId অবশ্যই একটি স্ট্রিং হতে হবে।');
@@ -44,7 +53,7 @@ const getPatientsRef = (hospitalId) => {
 };
 
 // ==========================================
-// ২. পেশেন্ট ক্রিয়েট / আপডেট / ডিলিট
+// ✅ Patient CRUD
 // ==========================================
 
 /**
@@ -55,18 +64,24 @@ export const createPatient = async (hospitalId, patientData) => {
     if (!hospitalId || typeof hospitalId !== 'string') {
       throw new Error('createPatient: hospitalId অবশ্যই একটি স্ট্রিং হতে হবে।');
     }
+
     const ref = getPatientsRef(hospitalId);
-    const docRef = await addDoc(ref, {
+
+    // ✅ নতুন patient এর জন্য visits array ensure করুন
+    const newPatient = {
       ...patientData,
+      visits: Array.isArray(patientData.visits) ? patientData.visits : [],
+      totalVisits: 0,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
       hospitalId,
-    });
+    };
 
-    // ✅ Cache invalidate
+    const docRef = await addDoc(ref, newPatient);
+
     invalidatePatientsCache();
 
-    return { id: docRef.id, ...patientData };
+    return { id: docRef.id, ...newPatient };
   } catch (error) {
     console.error('❌ createPatient error:', error);
     throw error;
@@ -74,27 +89,52 @@ export const createPatient = async (hospitalId, patientData) => {
 };
 
 /**
- * পেশেন্ট ভিজিট যোগ করুন
+ * ✅ FIXED: পেশেন্ট ভিজিট যোগ করুন
+ * এখন arrayUnion দিয়ে patient doc-এর visits array-তে append করে
+ * (আগে এটি নতুন patient doc বানাত — যা ছিল বড় bug)
  */
 export const addPatientVisit = async (hospitalId, visitData) => {
   try {
     if (!hospitalId || typeof hospitalId !== 'string') {
       throw new Error('addPatientVisit: hospitalId অবশ্যই একটি স্ট্রিং হতে হবে।');
     }
-    const ref = getPatientsRef(hospitalId);
-    const docRef = await addDoc(ref, {
-      ...visitData,
-      visitDate: visitData.visitDate || Timestamp.now(),
-      createdAt: Timestamp.now(),
+
+    const { patientId, doctorName, visitDate, appointmentId } = visitData || {};
+
+    if (!patientId) {
+      console.warn('⚠️ addPatientVisit: patientId নেই, visit skip করা হলো');
+      return null;
+    }
+
+    const ref = doc(db, 'hospitals', hospitalId, 'patients', patientId);
+
+    // ✅ Patient doc exist করে কি না verify
+    const snap = await getDoc(ref);
+    if (!snap.exists()) {
+      console.warn(`⚠️ addPatientVisit: patient ${patientId} পাওয়া যায়নি`);
+      return null;
+    }
+
+    const existingData = snap.data();
+    const currentVisits = Array.isArray(existingData.visits) ? existingData.visits : [];
+
+    const newVisit = {
+      doctorName: doctorName || '',
+      date: visitDate || new Date().toISOString().split('T')[0],
+      appointmentId: appointmentId || null,
+      createdAt: new Date().toISOString(),
+    };
+
+    await updateDoc(ref, {
+      visits: arrayUnion(newVisit),
+      totalVisits: currentVisits.length + 1,
+      lastVisitDate: newVisit.date,
       updatedAt: Timestamp.now(),
-      hospitalId,
-      type: 'visit',
     });
 
-    // ✅ Cache invalidate
     invalidatePatientsCache();
 
-    return { id: docRef.id, ...visitData };
+    return { id: patientId, visit: newVisit };
   } catch (error) {
     console.error('❌ addPatientVisit error:', error);
     throw error;
@@ -102,7 +142,7 @@ export const addPatientVisit = async (hospitalId, visitData) => {
 };
 
 /**
- * মোবাইল নম্বর দিয়ে পেশেন্ট খুঁজুন
+ * মোবাইল নম্বর দিয়ে পেশেন্ট খুঁজুন
  */
 export const findPatientByMobile = async (hospitalId, mobileNumber) => {
   try {
@@ -110,10 +150,13 @@ export const findPatientByMobile = async (hospitalId, mobileNumber) => {
       throw new Error('findPatientByMobile: hospitalId অবশ্যই একটি স্ট্রিং হতে হবে।');
     }
     if (!mobileNumber) return null;
+
     const ref = getPatientsRef(hospitalId);
     const q = query(ref, where('mobile', '==', mobileNumber));
     const snapshot = await getDocs(q);
+
     if (snapshot.empty) return null;
+
     const docSnap = snapshot.docs[0];
     return { id: docSnap.id, ...docSnap.data() };
   } catch (error) {
@@ -131,13 +174,14 @@ export const updatePatient = async (hospitalId, patientId, data) => {
       throw new Error('updatePatient: hospitalId অবশ্যই একটি স্ট্রিং হতে হবে।');
     }
     if (!patientId) throw new Error('Patient ID required');
+
     const ref = doc(db, 'hospitals', hospitalId, 'patients', patientId);
+
     await updateDoc(ref, {
       ...data,
       updatedAt: Timestamp.now(),
     });
 
-    // ✅ Cache invalidate
     invalidatePatientsCache();
 
     return { id: patientId, ...data };
@@ -155,10 +199,10 @@ export const deletePatient = async (hospitalId, patientId) => {
     if (!hospitalId || typeof hospitalId !== 'string') {
       throw new Error('deletePatient: hospitalId অবশ্যই একটি স্ট্রিং হতে হবে।');
     }
+
     const ref = doc(db, 'hospitals', hospitalId, 'patients', patientId);
     await deleteDoc(ref);
 
-    // ✅ Cache invalidate
     invalidatePatientsCache();
 
     return { success: true };
@@ -169,7 +213,7 @@ export const deletePatient = async (hospitalId, patientId) => {
 };
 
 // ==========================================
-// ৩. ডেটা ফেচ (Cache সহ)
+// ✅ Data Fetch (with Cache)
 // ==========================================
 
 /**
@@ -190,7 +234,7 @@ export const fetchAllPatients = async (hospitalId, forceRefresh = false) => {
       !forceRefresh &&
       patientsCache &&
       patientsCacheHospitalId === hospitalId &&
-      (now - patientsCacheTimestamp) < CACHE_TTL
+      now - patientsCacheTimestamp < CACHE_TTL
     ) {
       return patientsCache;
     }
@@ -225,8 +269,10 @@ export const getPatientById = async (hospitalId, patientId) => {
     if (!hospitalId || typeof hospitalId !== 'string') {
       throw new Error('getPatientById: hospitalId অবশ্যই একটি স্ট্রিং হতে হবে।');
     }
+
     const ref = doc(db, 'hospitals', hospitalId, 'patients', patientId);
     const snapshot = await getDoc(ref);
+
     if (snapshot.exists()) return { id: snapshot.id, ...snapshot.data() };
     return null;
   } catch (error) {
@@ -236,7 +282,7 @@ export const getPatientById = async (hospitalId, patientId) => {
 };
 
 // ==========================================
-// ৪. রিয়েল-টাইম লিসেনার
+// ✅ Real-time Listener
 // ==========================================
 
 /**
@@ -247,9 +293,11 @@ export const subscribeToPatients = (hospitalId, callback, errorCallback) => {
     console.warn('⚠️ subscribeToPatients: invalid hospitalId');
     return () => {};
   }
+
   try {
     const ref = getPatientsRef(hospitalId);
     const q = query(ref, orderBy('createdAt', 'desc'));
+
     return onSnapshot(
       q,
       (snapshot) => {
@@ -275,7 +323,7 @@ export const subscribeToPatients = (hospitalId, callback, errorCallback) => {
 };
 
 // ==========================================
-// ৫. ইউটিলিটি
+// ✅ Utilities
 // ==========================================
 
 /**
@@ -286,6 +334,7 @@ export const getPatientCount = async (hospitalId) => {
     if (!hospitalId || typeof hospitalId !== 'string') {
       throw new Error('getPatientCount: hospitalId অবশ্যই একটি স্ট্রিং হতে হবে।');
     }
+
     const ref = getPatientsRef(hospitalId);
     const snapshot = await getDocs(ref);
     return snapshot.size;
@@ -295,8 +344,16 @@ export const getPatientCount = async (hospitalId) => {
   }
 };
 
+/**
+ * ✅ নতুন helper: নির্দিষ্ট ডাক্তারের সাথে patient-এর visit count
+ */
+export const getPatientVisitsByDoctor = (patient, doctorName) => {
+  if (!patient || !Array.isArray(patient.visits) || !doctorName) return [];
+  return patient.visits.filter((v) => v.doctorName === doctorName);
+};
+
 // ==========================================
-// ডিফল্ট এক্সপোর্ট
+// ✅ Default Export
 // ==========================================
 
 export default {
@@ -310,5 +367,6 @@ export default {
   getPatientById,
   subscribeToPatients,
   getPatientCount,
+  getPatientVisitsByDoctor,
   invalidatePatientsCache,
 };

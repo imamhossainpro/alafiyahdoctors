@@ -1,4 +1,11 @@
 // src/firebase.js
+// ==================================================
+// 🔥 Firebase Configuration — Full File
+// ==================================================
+// ✅ Firestore, Auth, Storage, Analytics
+// ✅ ESM exports for all services
+// ✅ GA4 tracking helper
+// ==================================================
 import { initializeApp } from 'firebase/app';
 import {
   getFirestore,
@@ -44,6 +51,9 @@ import {
 } from 'firebase/storage';
 import { getAnalytics, logEvent, isSupported } from 'firebase/analytics';
 
+// ==================================================
+// ✅ Firebase Config
+// ==================================================
 const firebaseConfig = {
   apiKey: 'AIzaSyAhAGpQ4ACx-EDePKTxqjKXoS_qN2UoC2M',
   authDomain: 'alafiyahdoctors.firebaseapp.com',
@@ -54,6 +64,9 @@ const firebaseConfig = {
   measurementId: 'G-4JVEEPLLS1',
 };
 
+// ==================================================
+// ✅ Initialize Firebase
+// ==================================================
 const app = initializeApp(firebaseConfig);
 
 export const db = getFirestore(app);
@@ -61,14 +74,16 @@ export const storage = getStorage(app);
 
 const auth = getAuth(app);
 
+// ==================================================
+// ✅ Auth persistence (session-only)
+// ==================================================
 setPersistence(auth, browserSessionPersistence).catch((error) =>
   console.error('Auth persistence error:', error)
 );
 
 // ==================================================
-// ✅ Google Analytics 4 (GA4)
+// ✅ Google Analytics 4
 // ==================================================
-// GA4 শুধু browser-এ কাজ করে, SSR/Node-এ নয়
 let analytics = null;
 
 if (typeof window !== 'undefined') {
@@ -89,7 +104,7 @@ if (typeof window !== 'undefined') {
 export { analytics };
 
 // ==================================================
-// ✅ Analytics Helper — নিরাপদ event tracking
+// ✅ Analytics Helper — safe event tracking
 // ==================================================
 /**
  * GA4-তে কাস্টম ইভেন্ট পাঠান (safe wrapper)

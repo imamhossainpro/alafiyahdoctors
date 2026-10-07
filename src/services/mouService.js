@@ -1,6 +1,8 @@
 // src/services/mouService.js
 // ==================================================
-// 📄 MoU Client Service — Firestore CRUD
+// 📄 MOU Service — Firestore CRUD
+// ==================================================
+// Path: hospitals/{hospitalId}/mous/{mouId}
 // ==================================================
 import {
   db,
@@ -8,49 +10,61 @@ import {
   doc,
   getDoc,
   getDocs,
-  addDoc,
   setDoc,
   updateDoc,
   deleteDoc,
-  onSnapshot,
   query,
-  where,
   orderBy,
+  onSnapshot,
   serverTimestamp,
 } from '../firebase';
 
 // ==================================================
-// ✅ Collection ref
+// ✅ Reference helpers
 // ==================================================
-const getMouRef = (hospitalId) =>
-  collection(db, 'hospitals', hospitalId, 'mouClients');
+const getMousRef = (hospitalId) => {
+  if (!hospitalId || typeof hospitalId !== 'string') {
+    throw new Error('mouService: hospitalId অবশ্যই একটি স্ট্রিং হতে হবে।');
+  }
+  return collection(db, 'hospitals', hospitalId, 'mous');
+};
 
-const getMouDocRef = (hospitalId, clientId) =>
-  doc(db, 'hospitals', hospitalId, 'mouClients', clientId);
+const getMouDocRef = (hospitalId, mouId) =>
+  doc(db, 'hospitals', hospitalId, 'mous', mouId);
+
+// ==================================================
+// ✅ Auto-generate MOU id
+// ==================================================
+const makeMouId = () =>
+  'mou_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
 // ==================================================
 // ✅ CREATE
 // ==================================================
-export const createMouClient = async (hospitalId, data, user) => {
+export const createMou = async (hospitalId, data, user) => {
   try {
-    if (!hospitalId) throw new Error('Hospital ID required');
-    if (!data?.org2_name?.trim()) throw new Error('Client name required');
+    if (!hospitalId) throw new Error('hospitalId is required');
+    if (!data) throw new Error('data is required');
 
-    const payload = {
+    const mouId = makeMouId();
+    const ref = getMouDocRef(hospitalId, mouId);
+
+    // Title: Institution 2-এর নাম (fallback: "Untitled MOU")
+    const title = (data.org2_name || '').trim() || 'Untitled MOU';
+
+    await setDoc(ref, {
       ...data,
-      hospitalId,
-      isArchived: false,
+      title,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      createdBy: user?.uid || user?.id || null,
+      createdBy: user?.uid || null,
       createdByName: user?.name || user?.displayName || null,
-    };
+      hospitalId,
+    });
 
-    const docRef = await addDoc(getMouRef(hospitalId), payload);
-    console.log('✅ [mouService] Created:', docRef.id);
-    return { id: docRef.id, ...payload };
+    return { id: mouId, ...data, title };
   } catch (error) {
-    console.error('❌ createMouClient error:', error);
+    console.error('❌ createMou error:', error);
     throw error;
   }
 };
@@ -58,86 +72,53 @@ export const createMouClient = async (hospitalId, data, user) => {
 // ==================================================
 // ✅ UPDATE
 // ==================================================
-export const updateMouClient = async (hospitalId, clientId, data, user) => {
+export const updateMou = async (hospitalId, mouId, data, user) => {
   try {
-    if (!hospitalId || !clientId) throw new Error('Missing IDs');
-    const ref = getMouDocRef(hospitalId, clientId);
+    if (!hospitalId || !mouId) throw new Error('hospitalId & mouId required');
+    const ref = getMouDocRef(hospitalId, mouId);
+
+    const title = (data.org2_name || '').trim() || 'Untitled MOU';
+
     await updateDoc(ref, {
       ...data,
+      title,
       updatedAt: serverTimestamp(),
-      updatedBy: user?.uid || user?.id || null,
+      updatedBy: user?.uid || null,
       updatedByName: user?.name || user?.displayName || null,
     });
-    console.log('✅ [mouService] Updated:', clientId);
-    return { id: clientId, ...data };
+
+    return { id: mouId, ...data, title };
   } catch (error) {
-    console.error('❌ updateMouClient error:', error);
+    console.error('❌ updateMou error:', error);
     throw error;
   }
 };
 
 // ==================================================
-// ✅ SOFT DELETE (archive)
+// ✅ DELETE
 // ==================================================
-export const archiveMouClient = async (hospitalId, clientId, user) => {
+export const deleteMou = async (hospitalId, mouId) => {
   try {
-    const ref = getMouDocRef(hospitalId, clientId);
-    await updateDoc(ref, {
-      isArchived: true,
-      archivedAt: serverTimestamp(),
-      archivedBy: user?.uid || user?.id || null,
-    });
+    if (!hospitalId || !mouId) throw new Error('hospitalId & mouId required');
+    await deleteDoc(getMouDocRef(hospitalId, mouId));
     return { success: true };
   } catch (error) {
-    console.error('❌ archiveMouClient error:', error);
+    console.error('❌ deleteMou error:', error);
     throw error;
   }
 };
 
 // ==================================================
-// ✅ RESTORE
+// ✅ GET one
 // ==================================================
-export const restoreMouClient = async (hospitalId, clientId) => {
+export const getMou = async (hospitalId, mouId) => {
   try {
-    const ref = getMouDocRef(hospitalId, clientId);
-    await updateDoc(ref, {
-      isArchived: false,
-      archivedAt: null,
-      archivedBy: null,
-    });
-    return { success: true };
-  } catch (error) {
-    console.error('❌ restoreMouClient error:', error);
-    throw error;
-  }
-};
-
-// ==================================================
-// ✅ PERMANENT DELETE
-// ==================================================
-export const permanentlyDeleteMouClient = async (hospitalId, clientId) => {
-  try {
-    if (!hospitalId || !clientId) throw new Error('Missing IDs');
-    await deleteDoc(getMouDocRef(hospitalId, clientId));
-    console.log('🗑️ [mouService] Permanently deleted:', clientId);
-    return { success: true };
-  } catch (error) {
-    console.error('❌ permanentlyDeleteMouClient error:', error);
-    throw error;
-  }
-};
-
-// ==================================================
-// ✅ GET single
-// ==================================================
-export const getMouClient = async (hospitalId, clientId) => {
-  try {
-    const ref = getMouDocRef(hospitalId, clientId);
-    const snap = await getDoc(ref);
+    if (!hospitalId || !mouId) return null;
+    const snap = await getDoc(getMouDocRef(hospitalId, mouId));
     if (!snap.exists()) return null;
     return { id: snap.id, ...snap.data() };
   } catch (error) {
-    console.error('❌ getMouClient error:', error);
+    console.error('❌ getMou error:', error);
     return null;
   }
 };
@@ -145,77 +126,69 @@ export const getMouClient = async (hospitalId, clientId) => {
 // ==================================================
 // ✅ GET all (one-time)
 // ==================================================
-export const getAllMouClients = async (hospitalId) => {
+export const getAllMous = async (hospitalId) => {
   try {
     if (!hospitalId) return [];
-    const q = query(getMouRef(hospitalId), orderBy('createdAt', 'desc'));
+    const q = query(getMousRef(hospitalId), orderBy('updatedAt', 'desc'));
     const snap = await getDocs(q);
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch (error) {
-    console.error('❌ getAllMouClients error:', error);
+    console.error('❌ getAllMous error:', error);
     return [];
   }
 };
 
 // ==================================================
-// ✅ Real-time subscription
+// ✅ SUBSCRIBE (real-time)
 // ==================================================
-export const subscribeToMouClients = (
-  hospitalId,
-  callback,
-  errorCallback
-) => {
-  if (!hospitalId) return () => {};
+export const subscribeToMous = (hospitalId, callback, errorCallback) => {
+  if (!hospitalId) {
+    console.warn('⚠️ subscribeToMous: hospitalId নেই');
+    return () => {};
+  }
   try {
-    const q = query(getMouRef(hospitalId), orderBy('createdAt', 'desc'));
+    const q = query(getMousRef(hospitalId), orderBy('updatedAt', 'desc'));
     return onSnapshot(
       q,
-      (snapshot) => {
-        const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-        if (callback) callback(list);
+      (snap) => {
+        const mous = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        if (callback) callback(mous);
       },
-      (err) => {
-        console.error('❌ subscribeToMouClients error:', err);
-        if (errorCallback) errorCallback(err);
+      (error) => {
+        console.error('❌ subscribeToMous error:', error);
+        if (errorCallback) errorCallback(error);
       }
     );
   } catch (error) {
-    console.error('❌ subscribeToMouClients setup error:', error);
+    console.error('❌ subscribeToMous setup error:', error);
     if (errorCallback) errorCallback(error);
     return () => {};
   }
 };
 
 // ==================================================
-// ✅ Duplicate (client copy helper)
+// ✅ DUPLICATE
 // ==================================================
-export const duplicateMouClient = async (hospitalId, clientId, user) => {
+export const duplicateMou = async (hospitalId, mouId, user) => {
   try {
-    const original = await getMouClient(hospitalId, clientId);
-    if (!original) throw new Error('Client not found');
+    const original = await getMou(hospitalId, mouId);
+    if (!original) throw new Error('Original MOU not found');
 
-    const { id, createdAt, updatedAt, ...rest } = original;
-    const copy = {
-      ...rest,
-      org2_name: `${rest.org2_name} (Copy)`,
-      status: 'draft',
-    };
+    const { id, createdAt, updatedAt, createdBy, createdByName, updatedBy, updatedByName, ...data } = original;
 
-    return await createMouClient(hospitalId, copy, user);
+    return await createMou(hospitalId, data, user);
   } catch (error) {
-    console.error('❌ duplicateMouClient error:', error);
+    console.error('❌ duplicateMou error:', error);
     throw error;
   }
 };
 
 export default {
-  createMouClient,
-  updateMouClient,
-  archiveMouClient,
-  restoreMouClient,
-  permanentlyDeleteMouClient,
-  getMouClient,
-  getAllMouClients,
-  subscribeToMouClients,
-  duplicateMouClient,
+  createMou,
+  updateMou,
+  deleteMou,
+  getMou,
+  getAllMous,
+  subscribeToMous,
+  duplicateMou,
 };
