@@ -12,11 +12,11 @@ export const TABS = {
   LOGS: 'logs',
   ARCHIVED: 'archived',
   USER_ACCESS: 'user_access',
-  MOU: 'mou',
 };
 
 // ==================================================
-// ✅ PERMISSION REGISTRY
+// ✅ PERMISSION REGISTRY – সব permission এখানে
+// নতুন feature যোগ করলে শুধু এখানে add করুন
 // ==================================================
 export const PERMISSION_REGISTRY = [
   {
@@ -124,29 +124,29 @@ export const PERMISSION_REGISTRY = [
       { key: 'user.permission_manage', label: 'Permission' },
     ],
   },
-  {
-    module: 'MoU Clients',
-    icon: '📄',
-    permissions: [
-      { key: 'mou.view', label: 'MoU ক্লায়েন্ট দেখুন' },
-      { key: 'mou.create', label: 'নতুন MoU তৈরি' },
-      { key: 'mou.edit', label: 'MoU এডিট' },
-      { key: 'mou.delete', label: 'MoU ডিলিট' },
-      { key: 'mou.print', label: 'MoU প্রিন্ট' },
-      { key: 'mou.export_pdf', label: 'MoU PDF ডাউনলোড' },
-    ],
-  },
 ];
 
+// ==================================================
+// ✅ Flat list of all permission keys
+// ==================================================
 export const ALL_PERMISSIONS = PERMISSION_REGISTRY.flatMap((m) =>
   m.permissions.map((p) => p.key)
 );
 
+// ==================================================
+// ✅ Default Role Templates
+// ==================================================
 export const ROLE_TEMPLATES = {
+  // ---------- ADMIN — সব permission ----------
   admin: {
     label: 'Admin',
-    permissions: ALL_PERMISSIONS.reduce((acc, k) => ({ ...acc, [k]: true }), {}),
+    permissions: ALL_PERMISSIONS.reduce(
+      (acc, k) => ({ ...acc, [k]: true }),
+      {}
+    ),
   },
+
+  // ---------- SUB-ADMIN — প্রায় সব, তবে কিছু নিষিদ্ধ ----------
   'sub-admin': {
     label: 'Sub-Admin',
     permissions: ALL_PERMISSIONS.reduce((acc, k) => {
@@ -154,11 +154,12 @@ export const ROLE_TEMPLATES = {
         'user.permission_manage',
         'user.delete',
         'booking.delete',
-        'mou.delete',
       ].includes(k);
       return acc;
     }, {}),
   },
+
+  // ---------- EDITOR — ডেটা এন্ট্রি ও বুকিং ----------
   editor: {
     label: 'Editor',
     permissions: {
@@ -173,25 +174,13 @@ export const ROLE_TEMPLATES = {
       'booking.referral_edit': true,
       'booking.print': true,
       'booking.qr_view': true,
+      'booking.archive': true,
       'marketing_report.view': true,
       'marketing_report.filter': true,
-      'booking.archive': true,
-      'mou.view': true,
-      'mou.create': true,
-      'mou.edit': true,
-      'mou.print': true,
-      'mou.export_pdf': true,
     },
   },
-  viewer: {
-    label: 'Viewer',
-    permissions: {
-      'dashboard.view': true,
-      'statistics.view': true,
-      'booking.view': true,
-      'mou.view': true,
-    },
-  },
+
+  // ---------- MODERATOR — সীমিত দেখার অনুমতি ----------
   moderator: {
     label: 'Moderator',
     permissions: {
@@ -200,28 +189,59 @@ export const ROLE_TEMPLATES = {
       'booking.view': true,
       'booking.status_change': true,
       'activity_log.view': true,
-      'mou.view': true,
     },
   },
+
+  // ---------- VIEWER — শুধু দেখার অনুমতি ----------
+  viewer: {
+    label: 'Viewer',
+    permissions: {
+      'dashboard.view': true,
+      'statistics.view': true,
+      'booking.view': true,
+    },
+  },
+
+  // ---------- PATIENT — রোগী (নিজের বুকিং) ----------
+  // ✅ নতুন role — Google/Email দিয়ে signup করলে এটাই পাবে
+  patient: {
+    label: 'রোগী',
+    permissions: {
+      'dashboard.view': true,
+      'booking.view': true,
+      'booking.create': true,
+      'booking.edit': true,
+      'booking.qr_view': true,
+    },
+  },
+
+  // ---------- PENDING — কোনো অনুমতি নেই ----------
   pending: {
     label: 'Pending',
     permissions: {},
   },
 };
 
+// ==================================================
+// ✅ Effective Permissions Calculator
+// Priority: user.overrides > role.permissions
+// ==================================================
 export const calculateEffectivePermissions = (userData) => {
   if (!userData) return {};
 
+  // Admin সব সময় সব permission পাবে
   if (userData.role === 'admin') {
     return ALL_PERMISSIONS.reduce((acc, k) => ({ ...acc, [k]: true }), {});
   }
 
-  const roleTemplate = ROLE_TEMPLATES[userData.role] || ROLE_TEMPLATES.pending;
+  const roleTemplate =
+    ROLE_TEMPLATES[userData.role] || ROLE_TEMPLATES.pending;
   const rolePerms = roleTemplate.permissions || {};
   const overrides = userData.permissionOverrides || {};
 
   const effective = {};
   ALL_PERMISSIONS.forEach((key) => {
+    // User-specific override আগে
     if (Object.prototype.hasOwnProperty.call(overrides, key)) {
       effective[key] = overrides[key] === true;
     } else {
@@ -232,15 +252,24 @@ export const calculateEffectivePermissions = (userData) => {
   return effective;
 };
 
+// ==================================================
+// ✅ hasPermission helper
+// ==================================================
 export const hasPermission = (effectivePermissions, key) => {
   if (!effectivePermissions) return false;
   return effectivePermissions[key] === true;
 };
 
+// ==================================================
+// ✅ Role label helper
+// ==================================================
 export const getRoleLabel = (role) => {
   return ROLE_TEMPLATES[role]?.label || role || 'Unknown';
 };
 
+// ==================================================
+// ✅ Permission dependency (view required for others)
+// ==================================================
 export const PERMISSION_DEPENDENCIES = {
   'booking.create': 'booking.view',
   'booking.edit': 'booking.view',
@@ -283,14 +312,11 @@ export const PERMISSION_DEPENDENCIES = {
   'user.delete': 'user.view',
   'user.role_change': 'user.view',
   'user.permission_manage': 'user.view',
-
-  'mou.create': 'mou.view',
-  'mou.edit': 'mou.view',
-  'mou.delete': 'mou.view',
-  'mou.print': 'mou.view',
-  'mou.export_pdf': 'mou.view',
 };
 
+// ==================================================
+// ✅ Auto-enable dependent permission
+// ==================================================
 export const applyDependencies = (perms) => {
   const result = { ...perms };
   Object.entries(PERMISSION_DEPENDENCIES).forEach(([child, parent]) => {

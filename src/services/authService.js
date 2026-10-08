@@ -1,120 +1,61 @@
 // src/services/authService.js
 // ==================================================
-// 🔐 Auth Service — Email, Google, Phone sign-in
+// 🔐 Auth Service — Email / Google sign-in
 // ==================================================
+import { auth, db } from '../firebase';
 import {
-  auth,
-  db,
-  doc,
-  getDoc,
-  setDoc,
-  serverTimestamp,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
   updateProfile,
   signOut,
-} from '../firebase';
-import {
-  GoogleAuthProvider,
-  signInWithPopup,
-  RecaptchaVerifier,
-  signInWithPhoneNumber,
 } from 'firebase/auth';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
 // ==================================================
-// ✅ Email sign-in / sign-up
+// ✅ Email Sign-In
 // ==================================================
 export const emailSignIn = async (email, password) => {
-  return await signInWithEmailAndPassword(auth, email, password);
+  return await signInWithEmailAndPassword(auth, email.trim(), password);
 };
 
+// ==================================================
+// ✅ Email Sign-Up
+// ==================================================
 export const emailSignUp = async (email, password, name) => {
-  const cred = await createUserWithEmailAndPassword(auth, email, password);
-  if (name) {
-    await updateProfile(cred.user, { displayName: name });
+  const cred = await createUserWithEmailAndPassword(
+    auth,
+    email.trim(),
+    password
+  );
+  if (name && name.trim()) {
+    await updateProfile(cred.user, { displayName: name.trim() });
   }
   return cred;
 };
 
 // ==================================================
-// ✅ Google sign-in
+// ✅ Google Sign-In (popup)
 // ==================================================
-const googleProvider = new GoogleAuthProvider();
-googleProvider.setCustomParameters({ prompt: 'select_account' });
-
 export const googleSignIn = async () => {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
-  const result = await signInWithPopup(auth, provider);
-  return result;
+  return await signInWithPopup(auth, provider);
 };
 
 // ==================================================
-// ✅ Phone sign-in (reCAPTCHA + OTP)
-// ==================================================
-
-/**
- * Setup recaptcha container
- * @param {string} containerId - DOM element id where recaptcha renders
- */
-export const setupRecaptcha = (containerId) => {
-  if (window.recaptchaVerifier) {
-    try {
-      window.recaptchaVerifier.clear();
-    } catch (e) {
-      // ignore
-    }
-    window.recaptchaVerifier = null;
-  }
-
-  window.recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
-    size: 'invisible',
-    callback: () => {
-      // reCAPTCHA solved
-    },
-    'expired-callback': () => {
-      // Response expired
-    },
-  });
-
-  return window.recaptchaVerifier;
-};
-
-/**
- * Send OTP to phone number
- * @param {string} phoneNumber - E.164 format (e.g., +8801700000000)
- * @param {string} containerId - reCAPTCHA container id
- * @returns {Object} confirmationResult — save this to verify OTP
- */
-export const sendPhoneOTP = async (phoneNumber, containerId) => {
-  const verifier = setupRecaptcha(containerId);
-  const confirmationResult = await signInWithPhoneNumber(
-    auth,
-    phoneNumber,
-    verifier
-  );
-  return confirmationResult;
-};
-
-/**
- * Verify OTP
- * @param {Object} confirmationResult - returned from sendPhoneOTP
- * @param {string} otp - 6-digit code
- */
-export const verifyPhoneOTP = async (confirmationResult, otp) => {
-  const result = await confirmationResult.confirm(otp);
-  return result;
-};
-
-// ==================================================
-// ✅ Logout
+// ✅ Sign Out
 // ==================================================
 export const logOut = async () => {
   await signOut(auth);
 };
 
 // ==================================================
-// ✅ Ensure user doc exists in Firestore
+// ✅ Ensure User Doc Exists in Firestore
+// --------------------------------------------------
+// ✅ নতুন user → role: 'patient', approved: true
+// ✅ পুরনো user → merge করে ফেরত দেয়
 // ==================================================
 export const ensureUserDoc = async (hospitalId, firebaseUser, extra = {}) => {
   if (!hospitalId || !firebaseUser) return null;
@@ -122,44 +63,64 @@ export const ensureUserDoc = async (hospitalId, firebaseUser, extra = {}) => {
   const userRef = doc(db, 'hospitals', hospitalId, 'users', firebaseUser.uid);
   const snap = await getDoc(userRef);
 
-  if (!snap.exists()) {
-    const userData = {
-      uid: firebaseUser.uid,
-      name: firebaseUser.displayName || extra.name || '',
-      email: firebaseUser.email || '',
-      mobile: extra.mobile || firebaseUser.phoneNumber || '',
-      mobileVerified: !!firebaseUser.phoneNumber,
-      role: extra.role || 'patient',       // ✅ নতুন Google/Phone user → patient
-      approved: true,                       // ✅ patients auto-approved
-      isActive: true,
-      photoURL: firebaseUser.photoURL || '',
-      authProvider: extra.authProvider || 'email',
-      hospitalId,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    };
-    await setDoc(userRef, userData);
-    return userData;
+  // ---------- Existing user ----------
+  if (snap.exists()) {
+    const existing = snap.data();
+    const updates = {};
+
+    // Mobile না থাকলে যোগ করুন
+    if (!existing.mobile && extra.mobile) {
+      updates.mobile = extra.mobile;
+      updates.mobileVerified = true;
+    }
+
+    // photoURL যোগ করুন (Google avatar)
+    if (!existing.photoURL && firebaseUser.photoURL) {
+      updates.photoURL = firebaseUser.photoURL;
+    }
+
+    // name খালি থাকলে Firebase থেকে নিন
+    if (!existing.name && firebaseUser.displayName) {
+      updates.name = firebaseUser.displayName;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      updates.updatedAt = new Date().toISOString();
+      await updateDoc(userRef, updates);
+      return { ...existing, ...updates };
+    }
+
+    return existing;
   }
 
-  // Update existing (merge mobile if new)
-  const existing = snap.data();
-  const updates = { updatedAt: serverTimestamp() };
+  // ---------- New user ----------
+  // ✅ role: 'patient' — auto approved
+  const newUser = {
+    uid: firebaseUser.uid,
+    name:
+      firebaseUser.displayName ||
+      extra.name ||
+      (firebaseUser.email ? firebaseUser.email.split('@')[0] : ''),
+    email: firebaseUser.email || '',
+    mobile: extra.mobile || firebaseUser.phoneNumber || '',
+    mobileVerified: !!firebaseUser.phoneNumber,
+    role: 'patient',                    // ✅ রোগী role
+    approved: true,                      // ✅ auto-approved
+    isActive: true,
+    photoURL: firebaseUser.photoURL || '',
+    authProvider: extra.authProvider || 'email',
+    hospitalId,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
 
-  if (!existing.mobile && extra.mobile) {
-    updates.mobile = extra.mobile;
-    updates.mobileVerified = true;
-  }
-
-  if (Object.keys(updates).length > 1) {
-    await setDoc(userRef, updates, { merge: true });
-  }
-
-  return { ...existing, ...updates };
+  await setDoc(userRef, newUser);
+  console.log('✅ New patient user created:', firebaseUser.uid);
+  return newUser;
 };
 
 // ==================================================
-// ✅ Check if user has mobile (for gating patient dashboard)
+// ✅ Check if user has mobile
 // ==================================================
 export const userHasMobile = async (hospitalId, userId) => {
   if (!hospitalId || !userId) return false;
@@ -177,33 +138,34 @@ export const userHasMobile = async (hospitalId, userId) => {
 };
 
 // ==================================================
-// ✅ Save mobile number to user doc
+// ✅ Save mobile number
 // ==================================================
-export const saveMobileToUser = async (hospitalId, userId, mobile, verified = false) => {
+export const saveMobileToUser = async (
+  hospitalId,
+  userId,
+  mobile,
+  verified = false
+) => {
   if (!hospitalId || !userId || !mobile) {
     throw new Error('hospitalId, userId, mobile required');
   }
 
-  // Normalize mobile (11 digits → 880XXXXXXXXXX)
   const cleanMobile = mobile.replace(/[^0-9]/g, '');
   let normalized = cleanMobile;
   if (cleanMobile.startsWith('0')) {
     normalized = '88' + cleanMobile;
-  } else if (cleanMobile.startsWith('88')) {
-    normalized = cleanMobile;
-  } else {
+  } else if (!cleanMobile.startsWith('88')) {
     normalized = '88' + cleanMobile;
   }
 
-  await setDoc(
+  await updateDoc(
     doc(db, 'hospitals', hospitalId, 'users', userId),
     {
       mobile: normalized,
       mobileVerified: verified,
-      mobileAddedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true }
+      mobileAddedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
   );
 
   return { mobile: normalized };
@@ -213,9 +175,6 @@ export default {
   emailSignIn,
   emailSignUp,
   googleSignIn,
-  setupRecaptcha,
-  sendPhoneOTP,
-  verifyPhoneOTP,
   logOut,
   ensureUserDoc,
   userHasMobile,

@@ -134,9 +134,14 @@ export { analytics };
  * @param {string} eventName - GA4-এর allowed event name (snake_case)
  * @param {object} params - event parameters
  */
+// ✅ Pending events queue – analytics ready হওয়ার আগে events জমা রাখে
+const pendingEvents = [];
+
 export const trackEvent = (eventName, params = {}) => {
   if (!analytics) {
-    console.warn(`⚠️ Analytics not ready — skipped event: ${eventName}`);
+    // Analytics এখনো ready নয় – queue-এ রাখুন
+    pendingEvents.push({ eventName, params });
+    console.log(`⏳ GA4 event queued: ${eventName}`);
     return;
   }
   try {
@@ -146,6 +151,35 @@ export const trackEvent = (eventName, params = {}) => {
     console.error(`❌ GA4 logEvent error [${eventName}]:`, err);
   }
 };
+
+// ✅ Analytics ready হলে queue flush করুন
+if (typeof window !== 'undefined') {
+  isSupported()
+    .then((supported) => {
+      if (supported) {
+        analytics = getAnalytics(app);
+        console.log('✅ GA4 Analytics initialized');
+
+        // Queue-এ জমা events পাঠান
+        if (pendingEvents.length > 0) {
+          console.log(`📤 Flushing ${pendingEvents.length} queued GA4 events`);
+          pendingEvents.forEach(({ eventName, params }) => {
+            try {
+              logEvent(analytics, eventName, params);
+            } catch (err) {
+              console.error(`❌ Failed to send queued event ${eventName}:`, err);
+            }
+          });
+          pendingEvents.length = 0;
+        }
+      } else {
+        console.warn('⚠️ GA4 not supported in this environment');
+      }
+    })
+    .catch((err) => {
+      console.error('❌ GA4 initialization error:', err);
+    });
+}
 
 // ==================================================
 // ✅ Exports — Auth
