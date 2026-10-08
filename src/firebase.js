@@ -1,13 +1,13 @@
 // src/firebase.js
 // ==================================================
-// 🔥 Firebase Configuration — Full File
+// 🔥 Firebase Configuration — Full File (Fixed)
 // ==================================================
 // ✅ Firestore, Auth, Storage, Analytics
 // ✅ Google Sign-In
 // ✅ Phone (OTP) Sign-In
 // ✅ Email/Password Sign-In
 // ✅ ESM exports for all services
-// ✅ GA4 tracking helper
+// ✅ GA4 tracking helper with pending queue
 // ==================================================
 import { initializeApp } from 'firebase/app';
 
@@ -105,41 +105,15 @@ setPersistence(auth, browserSessionPersistence).catch((error) =>
 );
 
 // ==================================================
-// ✅ Google Analytics 4
+// ✅ Google Analytics 4 — single initialization with queue
 // ==================================================
 let analytics = null;
+const pendingEvents = []; // ✅ আগে declare করা হয়েছে
 
-if (typeof window !== 'undefined') {
-  isSupported()
-    .then((supported) => {
-      if (supported) {
-        analytics = getAnalytics(app);
-        console.log('✅ GA4 Analytics initialized');
-      } else {
-        console.warn('⚠️ GA4 not supported in this environment');
-      }
-    })
-    .catch((err) => {
-      console.error('❌ GA4 initialization error:', err);
-    });
-}
-
-export { analytics };
-
-// ==================================================
-// ✅ Analytics Helper — safe event tracking
-// ==================================================
-/**
- * GA4-তে কাস্টম ইভেন্ট পাঠান (safe wrapper)
- * @param {string} eventName - GA4-এর allowed event name (snake_case)
- * @param {object} params - event parameters
- */
-// ✅ Pending events queue – analytics ready হওয়ার আগে events জমা রাখে
-const pendingEvents = [];
-
+// ✅ Analytics helper — safe event tracking
 export const trackEvent = (eventName, params = {}) => {
   if (!analytics) {
-    // Analytics এখনো ready নয় – queue-এ রাখুন
+    // Analytics এখনো ready নয় → queue-এ রাখুন
     pendingEvents.push({ eventName, params });
     console.log(`⏳ GA4 event queued: ${eventName}`);
     return;
@@ -152,7 +126,7 @@ export const trackEvent = (eventName, params = {}) => {
   }
 };
 
-// ✅ Analytics ready হলে queue flush করুন
+// ✅ একবারই initialization
 if (typeof window !== 'undefined') {
   isSupported()
     .then((supported) => {
@@ -160,7 +134,7 @@ if (typeof window !== 'undefined') {
         analytics = getAnalytics(app);
         console.log('✅ GA4 Analytics initialized');
 
-        // Queue-এ জমা events পাঠান
+        // Queue-এ জমা events flush করুন
         if (pendingEvents.length > 0) {
           console.log(`📤 Flushing ${pendingEvents.length} queued GA4 events`);
           pendingEvents.forEach(({ eventName, params }) => {
@@ -180,6 +154,8 @@ if (typeof window !== 'undefined') {
       console.error('❌ GA4 initialization error:', err);
     });
 }
+
+export { analytics };
 
 // ==================================================
 // ✅ Exports — Auth
