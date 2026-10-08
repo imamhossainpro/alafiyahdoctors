@@ -2,9 +2,9 @@
 // ==================================================
 // 🔐 AuthPage — Google / Email Login
 // ==================================================
-// ✅ Google Sign-In (popup)
+// ✅ Google Sign-In (popup) — DEFAULT TAB
 // ✅ Email/Password Sign-In + Register
-// ❌ Phone tab সম্পূর্ণ বাদ (Firebase free plan-এ কাজ করে না)
+// ✅ Clear message when user tries wrong method
 // ✅ Bengali error messages
 // ✅ GA4 tracking
 // ✅ Post-auth: সরাসরি home (/) এ redirect
@@ -38,7 +38,8 @@ const DEFAULT_HOSPITAL_ID = 'alafiyah_main';
 export default function AuthPage({ onClose, redirectAfterLogin }) {
   const navigate = useNavigate();
 
-  const [tab, setTab] = useState('google'); // 'google' | 'email'
+  // ✅ DEFAULT TAB = Google (since most users registered via Google)
+  const [tab, setTab] = useState('google');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -136,22 +137,35 @@ export default function AuthPage({ onClose, redirectAfterLogin }) {
     } catch (err) {
       console.error('Email auth error:', err);
 
-      const errorMap = {
-        'auth/user-not-found': 'এই ইমেইলে কোনো অ্যাকাউন্ট নেই',
-        'auth/wrong-password': 'পাসওয়ার্ড ভুল',
-        'auth/invalid-credential': 'ইমেইল বা পাসওয়ার্ড ভুল',
-        'auth/email-already-in-use': 'এই ইমেইল আগে থেকেই ব্যবহৃত',
-        'auth/weak-password': 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে',
-        'auth/invalid-email': 'ইমেইল সঠিক নয়',
-        'auth/too-many-requests':
-          'অনেকবার চেষ্টা — কিছুক্ষণ পর আবার চেষ্টা করুন',
-        'auth/network-request-failed':
-          'নেটওয়ার্ক সমস্যা — ইন্টারনেট চেক করুন',
-        'auth/operation-not-allowed':
-          'Email/Password Firebase Console-এ enable করা হয়নি। Firebase Console → Authentication → Sign-in method → Email/Password enable করুন।',
-      };
+      // ✅ Smart error messages — especially for wrong-method attempts
+      let msg = err.message || 'লগইন ব্যর্থ হয়েছে';
 
-      setError(errorMap[err.code] || err.message || 'লগইন ব্যর্থ');
+      if (err.code === 'auth/user-not-found') {
+        msg =
+          '❌ এই ইমেইলে কোনো অ্যাকাউন্ট নেই। নতুন অ্যাকাউন্ট তৈরি করতে "রেজিস্ট্রেশন করুন" ক্লিক করুন, অথবা Google দিয়ে লগইন করুন।';
+      } else if (err.code === 'auth/wrong-password') {
+        msg = '❌ পাসওয়ার্ড ভুল। আবার চেষ্টা করুন।';
+      } else if (err.code === 'auth/invalid-credential') {
+        // ✅ Most common case — user registered with Google but trying Email
+        msg =
+          '❌ ইমেইল/পাসওয়ার্ড ভুল। আপনি যদি Google দিয়ে অ্যাকাউন্ট খুলে থাকেন, তাহলে উপরের "Google" tab-এ ক্লিক করুন অথবা Google দিয়ে লগইন করুন।';
+      } else if (err.code === 'auth/email-already-in-use') {
+        msg =
+          '❌ এই ইমেইল আগে থেকেই ব্যবহৃত। Google দিয়ে লগইন করুন অথবা অন্য ইমেইল দিয়ে রেজিস্ট্রেশন করুন।';
+      } else if (err.code === 'auth/weak-password') {
+        msg = '❌ পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।';
+      } else if (err.code === 'auth/invalid-email') {
+        msg = '❌ ইমেইল সঠিক নয়।';
+      } else if (err.code === 'auth/too-many-requests') {
+        msg = '❌ অনেকবার চেষ্টা করেছেন — কিছুক্ষণ পর আবার চেষ্টা করুন।';
+      } else if (err.code === 'auth/network-request-failed') {
+        msg = '❌ নেটওয়ার্ক সমস্যা — ইন্টারনেট চেক করুন।';
+      } else if (err.code === 'auth/operation-not-allowed') {
+        msg =
+          '❌ Email/Password Firebase Console-এ enable করা হয়নি। Firebase Console → Authentication → Sign-in method → Email/Password enable করুন।';
+      }
+
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -620,6 +634,24 @@ export default function AuthPage({ onClose, redirectAfterLogin }) {
                   {isRegister ? 'লগইন করুন' : 'রেজিস্ট্রেশন করুন'}
                 </button>
               </p>
+
+              {/* ✅ Google hint for Email tab users */}
+              <div
+                style={{
+                  marginTop: '18px',
+                  padding: '12px 14px',
+                  background: '#eff6ff',
+                  borderRadius: '10px',
+                  fontSize: '12.5px',
+                  color: '#1e40af',
+                  lineHeight: 1.6,
+                  border: '1px solid #bfdbfe',
+                }}
+              >
+                💡 <strong>টিপস:</strong> আপনি যদি Google দিয়ে অ্যাকাউন্ট
+                খুলে থাকেন, তাহলে ইমেইল/পাসওয়ার্ড কাজ করবে না। উপরের{' '}
+                <strong>"Google"</strong> tab-এ ক্লিক করে সাইন-ইন করুন।
+              </div>
             </form>
           )}
         </div>
