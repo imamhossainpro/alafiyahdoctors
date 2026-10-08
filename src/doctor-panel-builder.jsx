@@ -55,6 +55,12 @@ const COLOR_THEMES = [
 ];
 
 // ==================================================
+// ✅ RESTRICTED ROLES — panel manage hide হবে
+// ==================================================
+// ✅ যেসব role-এ "এডিট / × / + নতুন দিন" দেখা যাবে না
+const RESTRICTED_ROLES = ['viewer', 'patient', 'user'];
+
+// ==================================================
 // ✅ GA4 — Booking link builder
 // ==================================================
 const BOOKING_BASE_URL = 'https://doctors.alafiyahhospital.com';
@@ -178,8 +184,9 @@ const DEFAULT_FOOTER = {
   hospitalName: 'আল-আফিয়া হাসপাতাল',
   hospitalSubtitle: 'স্বাস্থ্যসেবায় বিশ্বাস',
 };
+
 // ==================================================
-// ✅ CSS — Global styles for the panel builder
+// ✅ CSS
 // ==================================================
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700;800&display=swap');
@@ -551,7 +558,7 @@ function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
 function DoctorLinkModal({ doctor, onClose }) {
   const [copied, setCopied] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState('');
-  const [linkMode, setLinkMode] = useState('qr'); // 'qr' | 'direct'
+  const [linkMode, setLinkMode] = useState('qr');
 
   const linkUrl = buildBookingUrl(
     doctor.id,
@@ -1615,8 +1622,18 @@ function PanelModal({ mode, initial, activeDeptCount, departments, onSave, onClo
 
 // ==================================================
 // ✅ PanelSwitcher — panel tabs
+// ✅ Viewer / Patient / User role-এ এডিট × / + নতুন দিন hide
 // ==================================================
-function PanelSwitcher({ panels, activePanelId, onSwitch, onAdd, onRename, onDelete, isReadOnly = false }) {
+function PanelSwitcher({
+  panels,
+  activePanelId,
+  onSwitch,
+  onAdd,
+  onRename,
+  onDelete,
+  isReadOnly = false,
+  canManagePanels = true,
+}) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   useEffect(() => {
@@ -1636,7 +1653,8 @@ function PanelSwitcher({ panels, activePanelId, onSwitch, onAdd, onRename, onDel
                 {p.name || 'নামহীন'}
               </button>
 
-              {!isReadOnly && (
+              {/* ✅ Edit button — শুধু canManagePanels হলে দেখাবে */}
+              {!isReadOnly && canManagePanels && (
                 <button
                   className="panel-pill-icon"
                   onClick={() => onRename(p)}
@@ -1647,7 +1665,8 @@ function PanelSwitcher({ panels, activePanelId, onSwitch, onAdd, onRename, onDel
                 </button>
               )}
 
-              {!isReadOnly && panels.length > 1 ? (
+              {/* ✅ Delete (×) button — শুধু canManagePanels হলে দেখাবে */}
+              {!isReadOnly && canManagePanels && panels.length > 1 ? (
                 <button
                   className={
                     confirmDeleteId === p.id ? 'panel-pill-icon danger-confirm' : 'panel-pill-icon'
@@ -1665,7 +1684,8 @@ function PanelSwitcher({ panels, activePanelId, onSwitch, onAdd, onRename, onDel
         })}
       </div>
 
-      {!isReadOnly && (
+      {/* ✅ "+ নতুন দিন" button — শুধু canManagePanels হলে দেখাবে */}
+      {!isReadOnly && canManagePanels && (
         <button className="btn btn-secondary panel-add-btn" onClick={onAdd}>
           <Plus size={14} /> নতুন দিন
         </button>
@@ -2163,6 +2183,17 @@ export default function DoctorPanelBuilder() {
   const isModerator = user?.role === 'moderator';
   const isViewer = user?.role === 'viewer';
   const isGuest = !user;
+
+  // ==================================================
+  // ✅ RESTRICTED ROLE — viewer / patient / user
+  // ==================================================
+  const isRestrictedRole = !!user && RESTRICTED_ROLES.includes(user.role);
+  const canManagePanels = !isGuest && !isRestrictedRole;
+
+  // 🔍 DEBUG — browser Console-এ দেখুন
+  console.log('🔍 [DPB] user.role =', user?.role);
+  console.log('🔍 [DPB] isRestrictedRole =', isRestrictedRole);
+  console.log('🔍 [DPB] canManagePanels =', canManagePanels);
 
   const path = location.pathname;
 
@@ -2928,8 +2959,7 @@ if (path === '/mou') {
 
             {!isGuest && (
               <button className="logout-btn" onClick={handleLogout}>
-                <LogOut size={14} /> লগআউট
-              </button>
+                <LogOut size={14} /> লগআউট              </button>
             )}
 
             {isGuest && (
@@ -2942,23 +2972,25 @@ if (path === '/mou') {
       )}
 
       {/* ========== Panel Switcher ========== */}
+      {/* ✅ canManagePanels prop পাঠানো হচ্ছে — viewer/patient/user role-এ hide হবে */}
       {!isDirectBookingView && (activeView === 'preview' || activeView === 'edit') && (
         <PanelSwitcher
           panels={panels}
           activePanelId={activePanelId}
           onSwitch={handleSwitchPanel}
           onAdd={
-            !isGuest && (isEditor || isModerator || isSubAdmin || isAdmin)
+            canManagePanels
               ? () => setPanelModal({ mode: 'add', departments })
               : () => {}
           }
           onRename={
-            !isGuest && (isEditor || isModerator || isSubAdmin || isAdmin)
+            canManagePanels
               ? (panel) => setPanelModal({ mode: 'rename', panel })
               : () => {}
           }
           onDelete={isAdmin ? handleDeletePanel : () => {}}
-          isReadOnly={isGuest || isViewer}
+          isReadOnly={isGuest}
+          canManagePanels={canManagePanels}
         />
       )}
 

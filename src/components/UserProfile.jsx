@@ -2,6 +2,10 @@
 // ==================================================
 // 👤 UserProfile — নাম, mobile পরিবর্তন করার page
 // ==================================================
+// ✅ Fixed "+88" prefix (display)
+// ✅ User 11 digit input (0 সহ)
+// ✅ Backend save: 88 + 11 digit = 13 digit
+// ==================================================
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -31,34 +35,50 @@ import {
 // ✅ Helpers
 // ==================================================
 
-// E.164 → local display (01712345678)
+// E.164 → local display (01889885094)
+// Input:  '8801889885094' → Output: '01889885094'
 const toDisplayMobile = (mobile) => {
   if (!mobile) return '';
   const clean = String(mobile).replace(/[^0-9]/g, '');
 
   if (clean.startsWith('880')) {
-    // 8801712345678 → 01712345678
+    // 8801889885094 → 01889885094
     return '0' + clean.slice(3);
   }
   if (clean.startsWith('88')) {
-    // 881712345678 → 01712345678
+    // 881889885094 → 01889885094
     return '0' + clean.slice(2);
   }
   if (clean.startsWith('0')) {
     return clean;
   }
-  // 1712345678 → 01712345678
+  // 1889885094 → 01889885094
   return '0' + clean;
 };
 
-// Local → E.164 (8801712345678)
+// Local (11 digit) → E.164 (13 digit with 88 prefix)
+// Input:  '01889885094' → Output: '8801889885094'
 const toE164Mobile = (input) => {
   const clean = String(input).replace(/[^0-9]/g, '');
   if (!clean) return '';
+
+  // Already E.164 (starts with 880)
   if (clean.startsWith('880')) return clean;
+
+  // Starts with 88 (missing trailing 0 prefix)
   if (clean.startsWith('88')) return '880' + clean.slice(2);
-  if (clean.startsWith('0')) return '880' + clean.slice(1);
-  return '880' + clean;
+
+  // Starts with 0 (local format) → prepend 88
+  if (clean.startsWith('0')) return '88' + clean;
+
+  // No prefix → prepend 88 (fallback)
+  return '88' + clean;
+};
+
+// Validation: 01[3-9]XXXXXXXX (11 digit)
+const isValidBDMobile = (mobile) => {
+  const clean = String(mobile).replace(/[^0-9]/g, '');
+  return /^01[3-9]\d{8}$/.test(clean);
 };
 
 // ==================================================
@@ -119,6 +139,29 @@ export default function UserProfile() {
   }, [user, hospitalId]);
 
   // ==================================================
+  // ✅ Handle mobile input change
+  // ==================================================
+  // ✅ User types 11 digit (0 সহ): 01889885094
+  // ✅ No auto-strip of leading 0
+  // ✅ Max 11 digit
+  // ==================================================
+  const handleMobileChange = (e) => {
+    let val = e.target.value.replace(/[^0-9]/g, '');
+
+    // Strip full E.164 prefix if pasted (880 or 88)
+    if (val.startsWith('880')) val = val.slice(3);
+    else if (val.startsWith('88')) val = val.slice(2);
+
+    // ✅ Keep leading 0 (do NOT strip)
+    // Ensure it starts with 0 (if not, prepend)
+    if (val && !val.startsWith('0')) {
+      val = '0' + val;
+    }
+
+    setMobile(val.slice(0, 11));
+  };
+
+  // ==================================================
   // ✅ Save changes
   // ==================================================
   const handleSave = async (e) => {
@@ -126,16 +169,27 @@ export default function UserProfile() {
     setError('');
     setSuccess('');
 
-    // Validation
+    // Validation: name
     if (!name.trim()) {
       setError('নাম লিখুন');
       return;
     }
 
+    // Validation: mobile
     const cleanMobile = mobile.replace(/[^0-9]/g, '');
-    if (cleanMobile && cleanMobile.length < 11) {
-      setError('সঠিক ১১ ডিজিটের মোবাইল নাম্বার দিন (যেমন: 01712345678)');
-      return;
+
+    if (cleanMobile) {
+      // Must be exactly 11 digit AND valid BD prefix
+      if (cleanMobile.length !== 11) {
+        setError('সঠিক ১১ ডিজিটের মোবাইল নাম্বার দিন (যেমন: 01712345678)');
+        return;
+      }
+      if (!isValidBDMobile(cleanMobile)) {
+        setError(
+          'সঠিক বাংলাদেশি মোবাইল নাম্বার দিন (013–019 দিয়ে শুরু হবে)'
+        );
+        return;
+      }
     }
 
     setSaving(true);
@@ -148,7 +202,7 @@ export default function UserProfile() {
       };
 
       if (cleanMobile) {
-        updates.mobile = toE164Mobile(cleanMobile);
+        updates.mobile = toE164Mobile(cleanMobile); // → 8801889885094
         updates.mobileVerified = true;
       }
 
@@ -519,7 +573,7 @@ export default function UserProfile() {
                 (e.currentTarget.style.borderColor = '#e2e8f0')
               }
             >
-              {/* Country code (fixed) */}
+              {/* ✅ Country code (FIXED +88) */}
               <div
                 style={{
                   display: 'flex',
@@ -534,24 +588,16 @@ export default function UserProfile() {
                   whiteSpace: 'nowrap',
                 }}
               >
-                🇧🇩 +880
+                🇧🇩 +88
               </div>
 
-              {/* Input (no border — outer wrapper handles it) */}
+              {/* ✅ Input: 11 digit with leading 0 */}
               <input
                 type="tel"
                 inputMode="numeric"
-                placeholder="1712345678"
-                value={mobile.replace(/^0/, '')}
-                onChange={(e) => {
-                  let val = e.target.value.replace(/[^0-9]/g, '');
-                  // strip leading 88 or 880 if user pastes full number
-                  if (val.startsWith('880')) val = val.slice(3);
-                  else if (val.startsWith('88')) val = val.slice(2);
-                  // strip leading 0
-                  if (val.startsWith('0')) val = val.slice(1);
-                  setMobile(val.slice(0, 10));
-                }}
+                placeholder="01712345678"
+                value={mobile}
+                onChange={handleMobileChange}
                 style={{
                   flex: 1,
                   padding: '14px 16px',
@@ -564,7 +610,7 @@ export default function UserProfile() {
                   boxSizing: 'border-box',
                   minWidth: 0,
                 }}
-                maxLength={10}
+                maxLength={11}
               />
             </div>
 
@@ -576,7 +622,7 @@ export default function UserProfile() {
                 lineHeight: 1.5,
               }}
             >
-              💡 উদাহরণ: <strong>1712345678</strong> (০ ছাড়া ১০ ডিজিট)
+              💡 উদাহরণ: <strong>01712345678</strong> (০ সহ ১১ ডিজিট)
             </p>
           </div>
 
