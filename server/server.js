@@ -8,9 +8,12 @@
 // ✅ FCM Push Notifications
 // ✅ Uses nameEn / doctorNameEn (no transliteration)
 // ✅ Service account from env variable OR file
+// ✅ Railway-friendly: CLEAR_AUTH env var for fresh QR
 // ==================================================
 require('dotenv').config();
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const makeWASocket = require('@whiskeysockets/baileys').default;
 const {
   useMultiFileAuthState,
@@ -100,11 +103,34 @@ app.use(express.json());
 // ---------- কনস্ট্যান্ট ----------
 const HOSPITAL_ID = 'alafiyah_main';
 const HOSPITAL_WHATSAPP = '8801889885094';
+const AUTH_FOLDER = 'auth_info_baileys';
 
 let sock = null;
 let isConnected = false;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 5;
+
+// ==================================================
+// ✅ Railway-friendly: Auto-clear auth folder
+// ==================================================
+// 💡 Railway-তে CLEAR_AUTH=true env var set করলে
+//    server restart-এ auth_info_baileys folder মুছে যাবে
+//    → নতুন QR code generate হবে
+// ==================================================
+if (process.env.CLEAR_AUTH === 'true') {
+  try {
+    console.log('\n🗑️  CLEAR_AUTH=true detected');
+    console.log(`🗑️  Deleting "${AUTH_FOLDER}" folder for fresh QR...`);
+    if (fs.existsSync(AUTH_FOLDER)) {
+      fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
+      console.log('✅ Auth folder cleared successfully!\n');
+    } else {
+      console.log('ℹ️  Auth folder does not exist (already clean)\n');
+    }
+  } catch (err) {
+    console.error('❌ Failed to clear auth folder:', err.message);
+  }
+}
 
 // ---------- ইমেইল ট্রান্সপোর্টার ----------
 const transporter = nodemailer.createTransport({
@@ -284,8 +310,10 @@ async function sendSMS(phoneNumber, message) {
 // ==================================================
 async function connectToWhatsApp() {
   try {
-    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
+    const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
     const { version } = await fetchLatestBaileysVersion();
+
+    console.log(`\n🔧 Baileys version: ${version.join('.')}`);
 
     sock = makeWASocket({
       version,
@@ -293,6 +321,7 @@ async function connectToWhatsApp() {
       logger: pino({ level: 'silent' }),
       connectTimeoutMs: 60000,
       keepAliveIntervalMs: 10000,
+      generateHighQualityLinkPreview: false,
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -301,12 +330,19 @@ async function connectToWhatsApp() {
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
-        console.log('\n====================');
-        console.log('📱 WhatsApp QR Scan করুন:');
-        console.log('👉 Settings → Linked Devices → Link a Device');
-        console.log('====================\n');
+        console.log('\n══════════════════════════════════════════════');
+        console.log('📱 WhatsApp QR Code — SCAN THIS NOW!');
+        console.log('══════════════════════════════════════════════');
+        console.log('👉 Steps:');
+        console.log('   1. Open WhatsApp on hospital phone');
+        console.log('   2. Tap Menu (3 dots) → Linked Devices');
+        console.log('   3. Tap "Link a Device"');
+        console.log('   4. Scan the QR code below');
+        console.log('══════════════════════════════════════════════\n');
         qrcode.generate(qr, { small: true });
-        console.log('\n====================\n');
+        console.log('\n══════════════════════════════════════════════');
+        console.log('⏰ QR expires in ~60 seconds');
+        console.log('══════════════════════════════════════════════\n');
       }
 
       if (connection === 'close') {
@@ -326,14 +362,48 @@ async function connectToWhatsApp() {
             console.error(`❌ Failed after ${MAX_RECONNECT_ATTEMPTS} attempts!`);
           }
         } else {
-          console.log('\n❌ WhatsApp logged out!');
-          console.log('👉 Delete auth_info_baileys folder and restart');
+          // ✅ Logged out — clear instructions
+          console.log('\n══════════════════════════════════════════════');
+          console.log('❌ WhatsApp LOGGED OUT (statusCode 401)');
+          console.log('══════════════════════════════════════════════');
+          console.log('');
+          console.log('🔧 TO RE-LOGIN on Railway:');
+          console.log('');
+          console.log('   Method 1 (Easiest — Recommended):');
+          console.log('   ─────────────────────────────────────');
+          console.log('   1. Railway Dashboard → Your Service');
+          console.log('   2. Go to "Variables" tab');
+          console.log('   3. Add new variable:');
+          console.log('      Key:   CLEAR_AUTH');
+          console.log('      Value: true');
+          console.log('   4. Railway will auto-redeploy');
+          console.log('   5. Watch "Deploy Logs" tab for QR code');
+          console.log('   6. Scan QR from phone (WhatsApp → Linked Devices)');
+          console.log('   7. After successful login, DELETE CLEAR_AUTH variable');
+          console.log('');
+          console.log('   Method 2 (Manual):');
+          console.log('   ─────────────────────────────────────');
+          console.log('   1. Railway Shell → rm -rf auth_info_baileys');
+          console.log('   2. Restart service');
+          console.log('');
+          console.log('══════════════════════════════════════════════\n');
+
+          // Auto-retry after 30 seconds (in case admin does the fix)
+          setTimeout(() => {
+            console.log('\n🔄 Auto-retry: attempting WhatsApp reconnection...');
+            reconnectAttempts = 0;
+            connectToWhatsApp();
+          }, 30000);
         }
       } else if (connection === 'open') {
         isConnected = true;
         reconnectAttempts = 0;
-        console.log('\n✅ WhatsApp connected!');
-        console.log(`📞 Hospital WhatsApp: ${HOSPITAL_WHATSAPP}\n`);
+        console.log('\n══════════════════════════════════════════════');
+        console.log('✅ WhatsApp CONNECTED!');
+        console.log('══════════════════════════════════════════════');
+        console.log(`📞 Hospital WhatsApp: ${HOSPITAL_WHATSAPP}`);
+        console.log('🎉 Server is ready to send notifications!');
+        console.log('══════════════════════════════════════════════\n');
       }
     });
   } catch (error) {
@@ -797,6 +867,55 @@ app.get('/', (req, res) => {
     status: 'ok',
     hospital: HOSPITAL_ID,
     whatsapp: isConnected ? 'connected' : 'disconnected',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// ==================================================
+// 🆕 Admin: Force clear auth (manual trigger)
+// ==================================================
+// GET /api/admin/clear-auth?key=YOUR_SECRET
+// → Auth folder clear + restart instruction
+// ==================================================
+app.get('/api/admin/clear-auth', async (req, res) => {
+  const providedKey = req.query.key;
+  const expectedKey = process.env.ADMIN_SECRET_KEY || 'alafiyah_admin_2024';
+
+  if (providedKey !== expectedKey) {
+    return res.status(403).json({ success: false, error: 'Unauthorized' });
+  }
+
+  try {
+    if (fs.existsSync(AUTH_FOLDER)) {
+      fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
+      return res.json({
+        success: true,
+        message: 'Auth folder cleared. Please RESTART the service to see new QR.',
+        nextStep: 'Railway Dashboard → Restart Service',
+      });
+    } else {
+      return res.json({
+        success: true,
+        message: 'Auth folder was already empty. Restart service to see new QR.',
+      });
+    }
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
+});
+
+// ==================================================
+// 🆕 Admin: WhatsApp connection status
+// ==================================================
+app.get('/api/admin/whatsapp-status', (req, res) => {
+  res.json({
+    success: true,
+    isConnected,
+    hasSock: !!sock,
+    hospitalWhatsapp: HOSPITAL_WHATSAPP,
     timestamp: new Date().toISOString(),
   });
 });
