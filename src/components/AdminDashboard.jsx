@@ -5,9 +5,8 @@ import { OverviewSkeleton } from './ui/SkeletonScreens';
 import { useHospital } from '../context/HospitalContext';
 import { useAuth } from '../context/AuthContext';
 import { usePermission } from '../context/PermissionContext';
-import { db } from '../firebase';
-import { collection, getDocs, getDoc, doc, onSnapshot } from 'firebase/firestore';
-import { RefreshCw, Shield, FileText } from 'lucide-react';
+import { db, updateDoc, doc, collection, getDocs, getDoc, onSnapshot } from '../firebase';
+import { RefreshCw, Shield, FileText, Search } from 'lucide-react';
 import {
   updateAppointmentStatus,
   archiveAppointment,
@@ -59,6 +58,142 @@ class SafeArea extends React.Component {
   }
 }
 
+// ==================================================
+// ✅ AdminPanel — User Management (Email visible)
+// ==================================================
+function AdminPanel({ users = [], onApprove, onSetRole, onDeleteUser }) {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const filteredUsers = useMemo(() => {
+    if (!searchTerm.trim()) return users;
+    const term = searchTerm.toLowerCase().trim();
+    return users.filter(
+      (u) =>
+        (u.name || '').toLowerCase().includes(term) ||
+        (u.email || '').toLowerCase().includes(term) ||
+        (u.designation || '').toLowerCase().includes(term) ||
+        (u.role || '').toLowerCase().includes(term) ||
+        (u.id || '').toLowerCase().includes(term)
+    );
+  }, [users, searchTerm]);
+
+  return (
+    <div style={{ background: '#fff', padding: '20px', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
+        <div>
+          <h3 style={{ margin: 0, color: '#1e293b', fontSize: '17px' }}>ইউজার ম্যানেজমেন্ট</h3>
+          <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' }}>
+            রেজিস্ট্রেশন করা ইউজারদের এপ্রুভ, রোল সেট ও ডিলিট করুন।
+          </p>
+        </div>
+        <span style={{ background: '#eff6ff', color: '#1c5fa8', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>
+          মোট: {users.length} জন
+        </span>
+      </div>
+
+      {/* Search */}
+      <div style={{ display: 'flex', alignItems: 'center', background: '#f1f5f9', borderRadius: '8px', padding: '4px 12px', marginBottom: '16px', maxWidth: '420px' }}>
+        <Search size={16} color="#64748b" />
+        <input
+          type="text"
+          placeholder="নাম / ইমেইল / রোল / ডেসিগনেশন সার্চ..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          style={{ border: 'none', background: 'transparent', outline: 'none', padding: '8px 10px', fontSize: '13.5px', width: '100%', fontFamily: 'inherit' }}
+        />
+      </div>
+
+      {users.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>এখনো কোনো ইউজার রেজিস্ট্রেশন করে নি।</div>
+      ) : filteredUsers.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>"{searchTerm}" এর সাথে মিলে এমন কোনো ইউজার নেই।</div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '900px' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #e2e6ee', textAlign: 'left', background: '#f8fafc', color: '#475569', fontSize: '12.5px' }}>
+                <th style={{ padding: '12px 10px' }}>নাম</th>
+                <th style={{ padding: '12px 10px' }}>ইমেইল</th>
+                <th style={{ padding: '12px 10px' }}>ডেসিগনেশন</th>
+                <th style={{ padding: '12px 10px' }}>রোল</th>
+                <th style={{ padding: '12px 10px' }}>স্ট্যাটাস</th>
+                <th style={{ padding: '12px 10px' }}>অ্যাকশন</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredUsers.map((u) => (
+                <tr key={u.id} style={{ borderBottom: '1px solid #eef1f7', fontSize: '13.5px' }}>
+                  <td style={{ padding: '12px 10px', fontWeight: '600', color: '#1e293b' }}>
+                    {u.name || u.displayName || 'নাম নেই'}
+                  </td>
+
+                  {/* ✅ ইমেইল কলাম */}
+                  <td style={{ padding: '12px 10px', color: '#475569', fontSize: '12.5px' }}>
+                    {u.email ? (
+                      <a href={`mailto:${u.email}`} style={{ color: '#1c5fa8', textDecoration: 'none' }}>
+                        {u.email}
+                      </a>
+                    ) : (
+                      <span style={{ color: '#94a3b8' }}>—</span>
+                    )}
+                  </td>
+
+                  <td style={{ padding: '12px 10px', color: '#64748b', fontSize: '12.5px' }}>
+                    {u.designation || <span style={{ color: '#cbd5e1' }}>—</span>}
+                  </td>
+
+                  <td style={{ padding: '12px 10px' }}>
+                    <select
+                      value={u.role || 'pending'}
+                      onChange={(e) => onSetRole(u.id, e.target.value)}
+                      style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid #e2e6ee', fontSize: '13px', background: '#fff', fontFamily: 'inherit', cursor: 'pointer' }}
+                    >
+                      <option value="pending">পেন্ডিং</option>
+                      <option value="admin">অ্যাডমিন</option>
+                      <option value="sub-admin">সাব-অ্যাডমিন</option>
+                      <option value="editor">এডিটর</option>
+                      <option value="moderator">মডারেটর</option>
+                      <option value="viewer">ভিউয়ার</option>
+                      <option value="patient">রোগী</option>
+                    </select>
+                  </td>
+
+                  <td style={{ padding: '12px 10px' }}>
+                    {u.approved ? (
+                      <span style={{ color: '#166534', fontWeight: '700', background: '#dcfce7', padding: '3px 10px', borderRadius: '20px', fontSize: '11.5px' }}>এপ্রুভড</span>
+                    ) : (
+                      <span style={{ color: '#991b1b', fontWeight: '700', background: '#fee2e2', padding: '3px 10px', borderRadius: '20px', fontSize: '11.5px' }}>পেন্ডিং</span>
+                    )}
+                  </td>
+
+                  <td style={{ padding: '12px 10px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {!u.approved && (
+                      <button
+                        onClick={() => onApprove(u.id)}
+                        style={{ padding: '6px 12px', fontSize: '12px', background: '#1c5fa8', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}
+                      >
+                        ✓ এপ্রুভ
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`"${u.name || 'ইউজার'}"-কে ডিলিট করতে চান?`)) onDeleteUser(u.id);
+                      }}
+                      style={{ padding: '6px 12px', fontSize: '12px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}
+                    >
+                      🗑 ডিলিট
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminDashboard({ user: propUser }) {
   const navigate = useNavigate();
   const { currentHospital } = useHospital();
@@ -69,6 +204,7 @@ export default function AdminDashboard({ user: propUser }) {
   const { can } = usePermission();
 
   const [appointments, setAppointments] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
   const [activityLogs, setActivityLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -153,6 +289,42 @@ export default function AdminDashboard({ user: propUser }) {
       unsubPanel();
     };
   }, [hospitalId]);
+
+  // ✅ Real-time users list (for AdminPanel)
+  useEffect(() => {
+    if (!hospitalId || !can('user.view')) {
+      setAllUsers([]);
+      return;
+    }
+    const usersRef = collection(db, 'hospitals', hospitalId, 'users');
+    const unsub = onSnapshot(
+      usersRef,
+      (snapshot) => {
+        const list = snapshot.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            ...data,
+            name: data.name || data.displayName || 'নাম নেই',
+            designation: data.designation || '',
+            email: data.email || '',
+          };
+        });
+        // sort by created date desc
+        list.sort((a, b) => {
+          const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return tb - ta;
+        });
+        setAllUsers(list);
+      },
+      (err) => {
+        console.error('❌ Users listener error:', err);
+        setAllUsers([]);
+      }
+    );
+    return () => unsub();
+  }, [hospitalId, can]);
 
   const refreshData = async () => {
     if (!hospitalId) return;
@@ -307,6 +479,57 @@ export default function AdminDashboard({ user: propUser }) {
     }
   };
 
+  // ✅ AdminPanel handlers
+  const handleApprove = async (userId) => {
+    if (!hospitalId) return;
+    try {
+      await updateDoc(doc(db, 'hospitals', hospitalId, 'users', userId), {
+        approved: true,
+        approvedAt: new Date().toISOString(),
+      });
+      setAllUsers((users) =>
+        users.map((u) => (u.id === userId ? { ...u, approved: true } : u))
+      );
+    } catch (e) {
+      console.error(e);
+      alert('এপ্রুভ করা যায়নি।');
+    }
+  };
+
+  const handleSetRole = async (userId, role) => {
+    if (!hospitalId) return;
+    try {
+      await updateDoc(doc(db, 'hospitals', hospitalId, 'users', userId), {
+        role,
+        permissionOverrides: {}, // ✅ role পরিবর্তনে পুরনো override মুছে ফেলুন
+        roleUpdatedAt: new Date().toISOString(),
+      });
+      setAllUsers((users) =>
+        users.map((u) =>
+          u.id === userId ? { ...u, role, permissionOverrides: {} } : u
+        )
+      );
+    } catch (e) {
+      console.error(e);
+      alert('রোল পরিবর্তন করা যায়নি।');
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    if (!hospitalId) return;
+    try {
+      await updateDoc(doc(db, 'hospitals', hospitalId, 'users', userId), {
+        isActive: false,
+        deletedAt: new Date().toISOString(),
+      });
+      setAllUsers((users) => users.filter((u) => u.id !== userId));
+      alert('ইউজার নিষ্ক্রিয় করা হয়েছে।');
+    } catch (e) {
+      console.error(e);
+      alert('ডিলিট করা যায়নি।');
+    }
+  };
+
   const applyPreset = (preset) => {
     setFilterPreset(preset);
     const now = new Date();
@@ -347,16 +570,6 @@ export default function AdminDashboard({ user: propUser }) {
         setStartDate('2020-01-01');
         setEndDate('2030-12-31');
     }
-  };
-
-  const handleStartDateChange = (e) => {
-    setStartDate(e.target.value);
-    setFilterPreset('custom');
-  };
-
-  const handleEndDateChange = (e) => {
-    setEndDate(e.target.value);
-    setFilterPreset('custom');
   };
 
   const filteredAppointments = useMemo(() => {
@@ -699,6 +912,15 @@ export default function AdminDashboard({ user: propUser }) {
 
       {tab === 'user_access' && can('user.view') && (
         <SafeArea>
+          {/* ✅ AdminPanel — সহজ role/approve/delete ইমেইল সহ */}
+          <AdminPanel
+            users={allUsers}
+            onApprove={handleApprove}
+            onSetRole={handleSetRole}
+            onDeleteUser={handleDeleteUser}
+          />
+
+          {/* ✅ UserAccessManager — detailed permission matrix */}
           <Suspense fallback={<TabLoader />}>
             <UserAccessManager user={user} />
           </Suspense>
