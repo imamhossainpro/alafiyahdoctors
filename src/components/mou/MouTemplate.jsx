@@ -2,14 +2,6 @@
 // ==================================================
 // 📄 MOU Document Template — 3 A4 Pages
 // ==================================================
-// ✅ Exact A4 size (595.32pt × 841.92pt)
-// ✅ Times New Roman 14pt / 18.5pt line height
-// ✅ 36pt margin
-// ✅ Dynamic placeholders {{key}}, **bold**, @@optional@@
-// ✅ Dynamic logo watermark (from Vercel Blob URL)
-// ✅ Dynamic beneficiary label — FULL BOLD
-// ✅ Footer fixed at page bottom — NO overlap
-// ==================================================
 import React from 'react';
 import { formatDateLong } from '../../utils/mouFields';
 
@@ -31,7 +23,6 @@ const getValue = (data, key) => {
     return formatDateLong(data.agreement_date);
   }
 
-  // ✅ Beneficiary full text — FULL BOLD
   if (key === 'beneficiary_full_text') {
     const custom = (data.beneficiary_full_text || '').trim();
     if (custom) return `**${custom}**`;
@@ -95,7 +86,7 @@ const processTemplate = (templateStr, data) => {
 };
 
 // ==================================================
-// ✅ Template builder — ORIGINAL layout
+// ✅ Template builder
 // ==================================================
 export const buildPages = (data) => {
   const B1 = '**{{org1_name}}**';
@@ -157,7 +148,7 @@ export const buildPages = (data) => {
 <p>This agreement is being executed in 2(two) identical originals, one to be retained by ${B1} Authority and other copy ${B2}.</p>`,
 
     // ==================================================
-    // PAGE 3 — ORIGINAL margins restored
+    // PAGE 3
     // ==================================================
     `<p style="margin-top:17.8pt;text-align:left">**9. Contact Person:**</p>
 <table class="ct">
@@ -204,7 +195,7 @@ export const buildPages = (data) => {
 };
 
 // ==================================================
-// ✅ Print Styles — ORIGINAL + fixed footer
+// ✅ Print Styles
 // ==================================================
 export const MOU_PRINT_CSS = `
   .mou-pages {
@@ -216,9 +207,9 @@ export const MOU_PRINT_CSS = `
   .mou-page {
     position: relative;
     width: 595.32pt;
-    min-height: 841.92pt;
+    height: 841.92pt;
     box-sizing: border-box;
-    padding: 36.5pt 36pt 60pt;   /* ✅ bottom padding for footer */
+    padding: 36.5pt 36pt 36pt;   /* ✅ equal padding, no extra bottom */
     margin: 0 0 14px;
     background: #ffffff;
     color: #000000;
@@ -266,12 +257,12 @@ export const MOU_PRINT_CSS = `
     left: calc(var(--t, 36pt) - 18pt);
   }
 
-  /* ✅ Footer — stays at bottom of each page, above content */
+  /* ✅ Footer — inside page, at absolute bottom, below content */
   .mou-page .foot {
     position: absolute;
     left: 35pt;
     right: 34pt;
-    bottom: 14pt;
+    bottom: 12pt;
     border-top: 1pt solid #d9d9d9;
     padding: 3pt 0 0 1pt;
     font: 11pt Calibri, Carlito, "Segoe UI", sans-serif;
@@ -323,7 +314,7 @@ export const MOU_PRINT_CSS = `
   }
 
   /* ==================================================
-     ✅ PRINT — exact A4 + fixed footer
+     ✅ PRINT — exact A4 with footer at bottom
      ================================================== */
   @page {
     size: A4;
@@ -348,7 +339,7 @@ export const MOU_PRINT_CSS = `
       box-shadow: none;
       width: 210mm;
       height: 297mm;
-      padding: 12.9mm 12.7mm 21mm;
+      padding: 12.9mm 12.7mm 12mm;  /* ✅ bottom padding for footer */
       break-after: page;
       page-break-after: always;
       overflow: hidden;
@@ -360,18 +351,16 @@ export const MOU_PRINT_CSS = `
       page-break-after: auto;
     }
 
-    /* ✅ Footer fixed at physical page bottom */
     .mou-page .foot {
       position: absolute;
       left: 12.3mm;
       right: 12mm;
-      bottom: 8mm;
+      bottom: 6mm;
       padding: 2mm 0 0 0.3mm;
       background: #ffffff;
       z-index: 10;
     }
 
-    /* Hide background highlight in print */
     .mou-page .v,
     .mou-page .v.miss {
       background: none !important;
