@@ -7,7 +7,8 @@
 // ✅ 36pt margin
 // ✅ Dynamic placeholders {{key}}, **bold**, @@optional@@
 // ✅ Dynamic logo watermark (from Firebase Storage URL)
-// ✅ Dynamic beneficiary label — FULL BOLD (NEW)
+// ✅ Dynamic beneficiary label — FULL BOLD
+// ✅ Footer moved 20pt up (no cut-off)
 // ✅ Print CSS with page-break
 // ==================================================
 import React from 'react';
@@ -32,8 +33,7 @@ const getValue = (data, key) => {
     return formatDateLong(data.agreement_date);
   }
   // ==================================================
-  // ✅ NEW: beneficiary_full_text — full bold line
-  // Priority: custom full line → auto-composed from parts
+  // ✅ Beneficiary full text — FULL BOLD
   // ==================================================
   if (key === 'beneficiary_full_text') {
     const custom = (data.beneficiary_full_text || '').trim();
@@ -84,7 +84,7 @@ const processTemplate = (templateStr, data) => {
 };
 
 // ==================================================
-// ✅ Template builder — requires data for inline values
+// ✅ Template builder
 // ==================================================
 export const buildPages = (data) => {
   const B1 = '**{{org1_name}}**';
@@ -113,7 +113,7 @@ export const buildPages = (data) => {
 <div class="it"><span class="no">2.</span>${B1} may include ${B2} in its corporate client list.</div>`,
 
     // ==================================================
-    // PAGE 2  ← ✅ ONLY CHANGE: dynamic beneficiary line
+    // PAGE 2  ← ✅ Dynamic beneficiary line
     // ==================================================
     `<div class="it" style="line-height:16.1pt"><span class="no">3.</span>{{beneficiary_full_text}}</div>
 <ul style="margin:17.2pt -24pt 0 0;line-height:17.1pt">
@@ -189,12 +189,11 @@ export const buildPages = (data) => {
 </div>`,
   ];
 
-  // Process each page through template engine
   return rawPages.map((h) => processTemplate(h, data));
 };
 
 // ==================================================
-// ✅ Print Styles (injected once) — EXACTLY as original
+// ✅ Print Styles — Footer moved 20pt up
 // ==================================================
 export const MOU_PRINT_CSS = `
   .mou-pages {
@@ -256,11 +255,12 @@ export const MOU_PRINT_CSS = `
     left: calc(var(--t, 36pt) - 18pt);
   }
 
+  /* ✅ Footer — 20pt up from previous position */
   .mou-page .foot {
     position: absolute;
     left: 35pt;
     right: 34pt;
-    top: 778pt;
+    top: 758pt;                       /* ✅ was 778pt */
     border-top: 1pt solid #d9d9d9;
     padding: 1.5pt 0 0 1pt;
     font: 11pt Calibri, Carlito, "Segoe UI", sans-serif;
