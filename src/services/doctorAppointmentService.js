@@ -4,7 +4,7 @@
 // ==================================================
 // ✅ Doctor-specific queries (only own appointments)
 // ✅ Whitelist of safe fields — NO mobile, NO referral
-// ✅ Real-time subscription
+// ✅ Real-time subscription (appointments + doctor info)
 // ✅ Summary counts computed client-side
 // ==================================================
 
@@ -13,18 +13,12 @@ import {
   collection,
   query,
   where,
-  orderBy,
   onSnapshot,
   getDocs,
-  getDoc,
-  doc,
 } from '../firebase';
 
 // ==================================================
-// ✅ Safe fields — শুধু এই field গুলো Doctor দেখতে পাবে
-// ==================================================
-// ❌ mobile, address, referralSource, referredDoctorName,
-//    otherReferralNote — Doctor কখনো দেখবে না
+// ✅ Safe fields
 // ==================================================
 const SAFE_FIELDS = [
   'id',
@@ -54,7 +48,7 @@ const SAFE_FIELDS = [
 ];
 
 // ==================================================
-// ✅ Sanitize — শুধু safe fields রাখে
+// ✅ Sanitize
 // ==================================================
 const sanitize = (raw) => {
   if (!raw) return null;
@@ -68,25 +62,10 @@ const sanitize = (raw) => {
 };
 
 // ==================================================
-// ✅ Timestamp helper
-// ==================================================
-const toDate = (val) => {
-  if (!val) return null;
-  if (val.toDate) return val.toDate();
-  if (val.seconds) return new Date(val.seconds * 1000);
-  if (typeof val === 'string' || typeof val === 'number') {
-    const d = new Date(val);
-    return isNaN(d.getTime()) ? null : d;
-  }
-  return null;
-};
-
-// ==================================================
 // ✅ Today's date in YYYY-MM-DD (Bangladesh time)
 // ==================================================
 export const getTodayString = () => {
   const now = new Date();
-  // Bangladesh timezone offset
   const bdOffset = 6 * 60;
   const utc = now.getTime() + now.getTimezoneOffset() * 60000;
   const bd = new Date(utc + bdOffset * 60000);
@@ -112,9 +91,6 @@ export const subscribeToDoctorAppointments = (
 
   try {
     const ref = collection(db, 'hospitals', hospitalId, 'appointments');
-
-    // ⚠️ Firestore-এ multiple where + orderBy-র জন্য composite index লাগে
-    // আপাতত শুধু doctorId দিয়ে filter করছি — client-side-এ date/status filter
     const q = query(ref, where('doctorId', '==', doctorId));
 
     console.log(`🔍 [DoctorService] Subscribing to: doctorId=${doctorId}`);
@@ -129,7 +105,6 @@ export const subscribeToDoctorAppointments = (
           })
           .filter(Boolean);
 
-        // ✅ Sort by date desc + serial asc
         appointments.sort((a, b) => {
           const dateA = a.bookingDate || '';
           const dateB = b.bookingDate || '';
@@ -153,13 +128,53 @@ export const subscribeToDoctorAppointments = (
 };
 
 // ==================================================
+// ✅ Real-time Doctor Info subscription
+// ==================================================
+export const subscribeToDoctorInfo = (
+  hospitalId,
+  doctorId,
+  callback,
+  errorCallback
+) => {
+  if (!hospitalId || !doctorId) return () => {};
+
+  const deptRef = collection(db, 'hospitals', hospitalId, 'departments');
+
+  const unsub = onSnapshot(
+    deptRef,
+    (snapshot) => {
+      let found = null;
+      snapshot.forEach((deptDoc) => {
+        if (found) return;
+        const deptData = deptDoc.data();
+        const doctors = deptData.doctors || [];
+        const me = doctors.find((d) => d.id === doctorId);
+        if (me) {
+          found = {
+            ...me,
+            deptId: deptDoc.id,
+            deptName: deptData.name || '',
+            deptColor: deptData.color,
+            deptIcon: deptData.icon,
+          };
+        }
+      });
+      if (callback) callback(found);
+    },
+    (err) => {
+      console.error('❌ subscribeToDoctorInfo:', err);
+      if (errorCallback) errorCallback(err);
+    }
+  );
+
+  return unsub;
+};
+
+// ==================================================
 // ✅ Compute summary counts
 // ==================================================
 export const computeSummaryCounts = (appointments, dateStr = null) => {
-  // ✅ Only active (non-archived) records
   const active = appointments.filter((a) => a.isArchived !== true);
-
-  // ✅ Filter by date if provided
   const filtered = dateStr
     ? active.filter((a) => a.bookingDate === dateStr)
     : active;
@@ -167,9 +182,9 @@ export const computeSummaryCounts = (appointments, dateStr = null) => {
   const counts = {
     total: filtered.length,
     pending: 0,
-    confirmed: 0,           // Approved
-    checkedIn: 0,           // Attended
-    completed: 0,           // Doctor Seen
+    confirmed: 0,
+    checkedIn: 0,
+    completed: 0,
     cancelled: 0,
     noShow: 0,
     upcoming: 0,
@@ -205,7 +220,7 @@ export const computeSummaryCounts = (appointments, dateStr = null) => {
 };
 
 // ==================================================
-// ✅ Get unique booking dates (for filter dropdown)
+// ✅ Get unique booking dates
 // ==================================================
 export const getUniqueDates = (appointments) => {
   const set = new Set();
@@ -216,7 +231,7 @@ export const getUniqueDates = (appointments) => {
 };
 
 // ==================================================
-// ✅ Get doctor info from departments collection
+// ✅ Get doctor info from departments collection (one-time)
 // ==================================================
 export const getDoctorInfo = async (hospitalId, doctorId) => {
   if (!hospitalId || !doctorId) return null;
@@ -259,7 +274,7 @@ export const getDoctorInfo = async (hospitalId, doctorId) => {
 };
 
 // ==================================================
-// ✅ Get doctor's schedule (panels where doctor is active)
+// ✅ Get doctor's schedule
 // ==================================================
 export const getDoctorSchedule = async (hospitalId, doctorId) => {
   if (!hospitalId || !doctorId) return [];
@@ -281,8 +296,15 @@ export const getDoctorSchedule = async (hospitalId, doctorId) => {
       }
     });
 
-    // Sort by Bengali day order
-    const DAY_ORDER = ['শনিবার', 'রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার'];
+    const DAY_ORDER = [
+      'শনিবার',
+      'রবিবার',
+      'সোমবার',
+      'মঙ্গলবার',
+      'বুধবার',
+      'বৃহস্পতিবার',
+      'শুক্রবার',
+    ];
     schedule.sort((a, b) => {
       const ai = DAY_ORDER.indexOf(a.name);
       const bi = DAY_ORDER.indexOf(b.name);
@@ -298,6 +320,7 @@ export const getDoctorSchedule = async (hospitalId, doctorId) => {
 
 export default {
   subscribeToDoctorAppointments,
+  subscribeToDoctorInfo,
   computeSummaryCounts,
   getUniqueDates,
   getDoctorInfo,

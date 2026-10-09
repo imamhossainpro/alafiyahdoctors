@@ -2,84 +2,305 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper: get user doc
-    function userDoc(hospitalId) {
-      return get(/databases/$(database)/documents/hospitals/$(hospitalId)/users/$(request.auth.uid)).data;
-    }
-
+    // ==================================================
+    // ✅ Helper Functions
+    // ==================================================
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function hasRole(hospitalId, roles) {
-      return isSignedIn() && userDoc(hospitalId).role in roles;
+    function userDoc(hospitalId, uid) {
+      return get(/databases/$(database)/documents/hospitals/$(hospitalId)/users/$(uid)).data;
     }
 
-    function hasPermission(hospitalId, perm) {
-      return isSignedIn() &&
-        (userDoc(hospitalId).role == 'admin' ||
-         userDoc(hospitalId).permissionOverrides[perm] == true ||
-         userDoc(hospitalId).role == 'sub-admin');
+    function userExists(hospitalId, uid) {
+      return exists(/databases/$(database)/documents/hospitals/$(hospitalId)/users/$(uid));
     }
 
+    function isUserApproved(hospitalId) {
+      return isSignedIn()
+        && userExists(hospitalId, request.auth.uid)
+        && userDoc(hospitalId, request.auth.uid).approved == true
+        && userDoc(hospitalId, request.auth.uid).isActive != false;
+    }
+
+    function isAdmin(hospitalId) {
+      return isUserApproved(hospitalId)
+        && userDoc(hospitalId, request.auth.uid).role == 'admin';
+    }
+
+    function isAdminOrSub(hospitalId) {
+      return isUserApproved(hospitalId)
+        && userDoc(hospitalId, request.auth.uid).role in ['admin', 'sub-admin'];
+    }
+
+    function isStaff(hospitalId) {
+      return isUserApproved(hospitalId)
+        && userDoc(hospitalId, request.auth.uid).role in ['admin', 'sub-admin', 'editor', 'moderator'];
+    }
+
+    function isDoctor(hospitalId) {
+      return isUserApproved(hospitalId)
+        && userDoc(hospitalId, request.auth.uid).designation == 'Doctor'
+        && userDoc(hospitalId, request.auth.uid).doctorId != null;
+    }
+
+    function getDoctorId(hospitalId) {
+      return userDoc(hospitalId, request.auth.uid).doctorId;
+    }
+
+    // ==================================================
+    // 🏥 Hospital-level rules
+    // ==================================================
     match /hospitals/{hospitalId} {
+      allow read: if true;
+      allow write: if isAdmin(hospitalId);
 
-      // ---------- APPOINTMENTS ----------
-      match /appointments/{appointmentId} {
-        allow read: if isSignedIn();
+      // ==================================================
+      // 👤 users
+      // ==================================================
+      match /users/{userId} {
+        allow read: if isSignedIn() && request.auth.uid == userId;
+        allow read: if isStaff(hospitalId);
 
         allow create: if isSignedIn()
-          && request.resource.data.hospitalId == hospitalId;
+          && request.auth.uid == userId
+          && request.resource.data.role in ['viewer', 'patient'];
+        allow create: if isAdmin(hospitalId);
 
-        allow update: if isSignedIn() && (
-          // status change
-          request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['status','statusNote','updatedAt','checkedInAt','checkedInVia','qrCode','qrData','qrGeneratedAt'])
-          // archive
-          || request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['isArchived','archivedAt','archivedBy','archivedByName','updatedAt'])
-          // restore
-          || request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['isArchived','archivedAt','archivedBy','archivedByName','restoredAt','restoredBy','updatedAt'])
-          // edit
-          || hasPermission(hospitalId, 'booking.edit')
-          // marketing / referral edit
-          || hasPermission(hospitalId, 'booking.referral_edit')
-          || hasPermission(hospitalId, 'booking.marketing_assignment')
-          || hasPermission(hospitalId, 'booking.patient_type_change')
-        );
+        allow update: if isAdmin(hospitalId);
 
-        allow delete: if hasPermission(hospitalId, 'archive.delete');
+        allow update: if isSignedIn()
+          && request.auth.uid == userId
+          && !request.resource.data.diff(resource.data)
+              .affectedKeys()
+              .hasAny([
+                'role',
+                'permissionOverrides',
+                'approved',
+                'isActive',
+                'hospitalId',
+                'designation',
+                'doctorId'
+              ]);
+
+        allow delete: if isAdmin(hospitalId);
+
+        match /notifications/{notifId} {
+          allow read, write: if isSignedIn() && request.auth.uid == userId;
+        }
       }
 
-      // ---------- ACTIVITY LOGS (centralized) ----------
+      // ==================================================
+      // 📄 mous
+      // ==================================================
+      match /mous/{mouId} {
+        allow read: if isStaff(hospitalId);
+        allow create, update: if isStaff(hospitalId);
+        allow delete: if isAdmin(hospitalId);
+      }
+
+      // ==================================================
+      // 📋 appointments
+      // ==================================================
+      match /appointments/{appointmentId} {
+        allow read: if true;
+        allow read: if isDoctor(hospitalId)
+          && resource.data.doctorId == getDoctorId(hospitalId);
+        allow read: if isStaff(hospitalId);
+        allow create: if true;
+        allow update: if isStaff(hospitalId);
+
+        // Doctor can update own appointment status (limited fields)
+        allow update: if isDoctor(hospitalId)
+          && resource.data.doctorId == getDoctorId(hospitalId)
+          && request.resource.data.diff(resource.data)
+              .affectedKeys()
+              .hasOnly(['status', 'statusNote', 'updatedAt', 'checkedInAt', 'checkedInVia']);
+
+        allow delete: if isStaff(hospitalId);
+      }
+
+      // ==================================================
+      // 🏢 departments
+      // ==================================================
+      match /departments/{deptId} {
+        allow read: if true;
+        allow write: if isStaff(hospitalId);
+
+        match /doctors/{doctorId} {
+          allow read: if true;
+          allow write: if isStaff(hospitalId);
+        }
+      }
+
+      // ==================================================
+      // 📅 panels
+      // ==================================================
+      match /panels/{panelId} {
+        allow read: if true;
+        allow write: if isStaff(hospitalId);
+      }
+
+      // ==================================================
+      // 🦶 footer
+      // ==================================================
+      match /footer/{docId} {
+        allow read: if true;
+        allow write: if isStaff(hospitalId);
+      }
+
+      // ==================================================
+      // ⚙️ settings
+      // ==================================================
+      match /settings/{docId} {
+        allow read: if docId == 'mouContent';
+        allow read: if isStaff(hospitalId);
+        allow write: if isAdminOrSub(hospitalId);
+      }
+
+      // ==================================================
+      // 📺 displaySettings
+      // ==================================================
+      match /displaySettings/{docId} {
+        allow read: if true;
+        allow write: if isAdmin(hospitalId);
+      }
+
+      // ==================================================
+      // 🔢 counters
+      // ==================================================
+      match /counters/{counterId} {
+        allow read: if true;
+        allow write: if true;
+      }
+
+      // ==================================================
+      // 👥 patients
+      // ==================================================
+      match /patients/{patientId} {
+        allow read: if isStaff(hospitalId);
+        allow create: if true;
+        allow update: if isStaff(hospitalId);
+        allow delete: if isStaff(hospitalId);
+
+        match /visits/{visitId} {
+          allow read: if isStaff(hospitalId);
+          allow create: if true;
+          allow update: if isStaff(hospitalId);
+          allow delete: if isStaff(hospitalId);
+        }
+
+        match /notifications/{notifId} {
+          allow read, write: if true;
+        }
+      }
+
+      // ==================================================
+      // 📍 locations
+      // ==================================================
+      match /locations/{locationId} {
+        allow read: if true;
+        allow write: if isStaff(hospitalId);
+      }
+
+      // ==================================================
+      // 📜 activityLogs
+      // ==================================================
       match /activityLogs/{logId} {
-        allow read: if isSignedIn();
-        allow create: if isSignedIn();
-        allow update, delete: if false; // immutable
+        allow read: if isStaff(hospitalId);
+        allow create: if isStaff(hospitalId);
+        allow update, delete: if isAdmin(hospitalId);
       }
 
-      // ---------- AUDIT LOGS (legacy – allow signed-in) ----------
-      match /audit_logs/{logId} {
-        allow read: if isSignedIn();
-        allow create: if isSignedIn();
-        allow update, delete: if false;
+      // ==================================================
+      // 📢 promotions
+      // ==================================================
+      match /promotions/{promoId} {
+        allow read: if true;
+        allow write: if isStaff(hospitalId);
       }
 
-      // ---------- USERS ----------
-      match /users/{userId} {
+      // ==================================================
+      // 📊 reports
+      // ==================================================
+      match /reports/{reportId} {
         allow read: if isSignedIn();
-        allow create: if isSignedIn() && userId == request.auth.uid;
-        allow update: if isSignedIn() &&
-          (userId == request.auth.uid || userDoc(hospitalId).role == 'admin');
-        allow delete: if isSignedIn() && userDoc(hospitalId).role == 'admin';
+        allow write: if isStaff(hospitalId);
       }
 
-      // ---------- OTHER COLLECTIONS ----------
-      match /{document=**} {
-        allow read: if isSignedIn();
-        allow write: if isSignedIn();
+      // ==================================================
+      // 📝 profileEditRequests — Doctor submit, Admin approve
+      // ==================================================
+      match /profileEditRequests/{reqId} {
+        // ---------- READ ----------
+        allow read: if isStaff(hospitalId);
+
+        allow read: if isDoctor(hospitalId)
+          && resource.data.doctorId == getDoctorId(hospitalId);
+
+        // ---------- CREATE ----------
+        allow create: if isDoctor(hospitalId)
+          && request.resource.data.doctorId == getDoctorId(hospitalId)
+          && request.resource.data.submittedBy == request.auth.uid
+          && request.resource.data.status == 'pending'
+          && request.resource.data.changes.keys().hasOnly([
+               'name',
+               'nameEn',
+               'quals',
+               'specialty',
+               'workplace',
+               'imageUrl',
+               'timeSlots'
+             ])
+          && request.resource.data.changes.keys().size() > 0
+          && request.resource.data.reviewedBy == null
+          && request.resource.data.reviewedAt == null;
+
+        // ---------- UPDATE ----------
+        // Admin/Sub-admin approve/reject
+        allow update: if isAdminOrSub(hospitalId)
+          && resource.data.status == 'pending'
+          && request.resource.data.status in ['approved', 'rejected']
+          && request.resource.data.diff(resource.data)
+              .affectedKeys()
+              .hasOnly([
+                'status',
+                'reviewedBy',
+                'reviewedByName',
+                'reviewedAt',
+                'reviewNote'
+              ]);
+
+        // Doctor cancel own pending
+        allow update: if isDoctor(hospitalId)
+          && resource.data.doctorId == getDoctorId(hospitalId)
+          && resource.data.submittedBy == request.auth.uid
+          && resource.data.status == 'pending'
+          && request.resource.data.status == 'cancelled'
+          && request.resource.data.diff(resource.data)
+              .affectedKeys()
+              .hasOnly(['status']);
+
+        // ---------- DELETE ----------
+        allow delete: if isAdmin(hospitalId);
+
+        allow delete: if isDoctor(hospitalId)
+          && resource.data.doctorId == getDoctorId(hospitalId)
+          && resource.data.submittedBy == request.auth.uid
+          && resource.data.status == 'pending';
       }
+    }
+
+    // ==================================================
+    // 🚫 Global deny (top-level)
+    // ==================================================
+    match /users/{userId} {
+      allow read, write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

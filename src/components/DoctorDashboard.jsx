@@ -6,6 +6,8 @@
 // ✅ Real data from Firestore (safe fields only)
 // ✅ Responsive: hamburger drawer (mobile) + sticky sidebar (desktop)
 // ✅ FIXED: React Error #310 — all hooks before any return
+// ✅ NEW: Real-time pending profile request badge
+// ✅ NEW: Error boundary
 // ==================================================
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -29,12 +31,15 @@ import DoctorSummaryCards from './doctor/DoctorSummaryCards';
 import DoctorPatientList from './doctor/DoctorPatientList';
 import DoctorDailyReport from './doctor/DoctorDailyReport';
 import DoctorProfile from './doctor/DoctorProfile';
+import DoctorErrorBoundary from './doctor/DoctorErrorBoundary';
 
 import {
   subscribeToDoctorAppointments,
   computeSummaryCounts,
   getTodayString,
 } from '../services/doctorAppointmentService';
+
+import { subscribeToMyRequests } from '../services/doctorProfileRequestService';
 
 // ==================================================
 // ✅ Component CSS
@@ -380,10 +385,6 @@ const DASH_CSS = `
 // ✅ Component
 // ==================================================
 export default function DoctorDashboard() {
-  // ================================================
-  // ⚠️ RULES OF HOOKS: ALL hooks FIRST, no return between
-  // ================================================
-
   const navigate = useNavigate();
   const location = useLocation();
   const { user, loading: authLoading, logout } = useAuth();
@@ -395,29 +396,27 @@ export default function DoctorDashboard() {
   const [appointmentsLoading, setAppointmentsLoading] = useState(true);
   const [appointmentsError, setAppointmentsError] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [pendingProfileRequests, setPendingProfileRequests] = useState(0);
 
   const hospitalId = currentHospital?.id || 'alafiyah_main';
 
   const isDoctor = user?.designation === 'Doctor' && !!user?.doctorId;
   const isAdmin = user?.role === 'admin' || user?.role === 'sub-admin';
 
-  // ✅ Path / active tab — safe memo, before any return
   const path = location.pathname;
   const activeTab = path.includes('/doctor/')
     ? path.split('/doctor/')[1]?.split('/')[0] || 'overview'
     : 'overview';
 
-  // ✅ Today's string — safe, before any return
   const todayStr = getTodayString();
 
-  // ✅ Counts memo — MUST be called on every render
   const todayCounts = useMemo(
     () => computeSummaryCounts(appointments, todayStr),
     [appointments, todayStr]
   );
 
   // ==================================================
-  // ✅ Effects (still before any return)
+  // ✅ Effects
   // ==================================================
 
   // Auth redirect
@@ -452,12 +451,31 @@ export default function DoctorDashboard() {
     };
   }, [hospitalId, user?.doctorId, isDoctor]);
 
+  // Pending profile request count
+  useEffect(() => {
+    if (!isDoctor || !user?.doctorId) return;
+    const unsub = subscribeToMyRequests(
+      hospitalId,
+      user.doctorId,
+      (list) => {
+        const pending = (list || []).filter(
+          (r) => r.status === 'pending'
+        ).length;
+        setPendingProfileRequests(pending);
+      },
+      (err) => console.warn('subscribeToMyRequests error:', err.message)
+    );
+    return () => {
+      if (typeof unsub === 'function') unsub();
+    };
+  }, [hospitalId, user?.doctorId, isDoctor]);
+
   // Close drawer on route change
   useEffect(() => {
     setDrawerOpen(false);
   }, [path]);
 
-  // ESC + body scroll lock when drawer open
+  // ESC + body scroll lock
   useEffect(() => {
     if (!drawerOpen) return;
     const onKey = (e) => {
@@ -473,7 +491,7 @@ export default function DoctorDashboard() {
   }, [drawerOpen]);
 
   // ==================================================
-  // ✅ Derived values (safe, no hooks)
+  // ✅ Derived values
   // ==================================================
   const handleLogout = () => {
     logout();
@@ -578,7 +596,6 @@ export default function DoctorDashboard() {
   // ✅ CONDITIONAL RETURNS — only after ALL hooks
   // ==================================================
 
-  // Loading auth
   if (authLoading) {
     return (
       <>
@@ -590,7 +607,6 @@ export default function DoctorDashboard() {
     );
   }
 
-  // Not logged in
   if (!user) {
     return (
       <>
@@ -602,7 +618,6 @@ export default function DoctorDashboard() {
     );
   }
 
-  // Access denied
   if (!isDoctor && !isAdmin) {
     return (
       <>
@@ -714,6 +729,23 @@ export default function DoctorDashboard() {
                 >
                   <Icon size={18} />
                   {item.label}
+                  {item.id === 'profile' && pendingProfileRequests > 0 && (
+                    <span
+                      style={{
+                        marginLeft: 'auto',
+                        background: '#DC2626',
+                        color: '#fff',
+                        fontSize: '10.5px',
+                        fontWeight: 700,
+                        borderRadius: '10px',
+                        padding: '2px 7px',
+                        minWidth: '18px',
+                        textAlign: 'center',
+                      }}
+                    >
+                      {pendingProfileRequests}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -732,7 +764,9 @@ export default function DoctorDashboard() {
 
         {/* Main */}
         <main className="dd-main">
-          {renderTabContent()}
+          <DoctorErrorBoundary>
+            {renderTabContent()}
+          </DoctorErrorBoundary>
         </main>
       </div>
     </>
