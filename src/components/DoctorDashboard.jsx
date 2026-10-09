@@ -5,8 +5,7 @@
 // ✅ Only accessible for designation: 'Doctor'
 // ✅ Real data from Firestore (safe fields only)
 // ✅ Responsive: hamburger drawer (mobile) + sticky sidebar (desktop)
-// ✅ Fixed: content overflow, profile card, professional info cards
-// ✅ Fixed: main content min-width: 0, no horizontal scroll
+// ✅ FIXED: React Error #310 — all hooks before any return
 // ==================================================
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -38,12 +37,9 @@ import {
 } from '../services/doctorAppointmentService';
 
 // ==================================================
-// ✅ Component CSS — responsive layout (no Tailwind assumed)
+// ✅ Component CSS
 // ==================================================
 const DASH_CSS = `
-  /* =============================================
-     Root
-     ============================================= */
   .dd-root {
     display: flex;
     min-height: 100vh;
@@ -55,9 +51,7 @@ const DASH_CSS = `
   }
   .dd-root * { box-sizing: border-box; }
 
-  /* =============================================
-     Sidebar — desktop / tablet
-     ============================================= */
+  /* ---------- Sidebar ---------- */
   .dd-sidebar {
     width: 240px;
     background: #FFFFFF;
@@ -188,9 +182,7 @@ const DASH_CSS = `
   }
   .dd-logout-btn:hover { background: #FECACA; }
 
-  /* =============================================
-     Mobile top header (hamburger)
-     ============================================= */
+  /* ---------- Mobile top header ---------- */
   .dd-mobile-header {
     display: none;
     align-items: center;
@@ -246,19 +238,15 @@ const DASH_CSS = `
     font-weight: 500;
   }
 
-  /* =============================================
-     Main content
-     ============================================= */
+  /* ---------- Main ---------- */
   .dd-main {
     flex: 1;
-    min-width: 0;             /* ✅ critical: prevents flex overflow */
+    min-width: 0;
     padding: 24px;
     overflow-x: hidden;
   }
 
-  /* =============================================
-     Mobile drawer overlay
-     ============================================= */
+  /* ---------- Overlay ---------- */
   .dd-overlay {
     display: none;
     position: fixed;
@@ -269,31 +257,15 @@ const DASH_CSS = `
   }
   @keyframes dd-fade-in { from { opacity: 0 } to { opacity: 1 } }
 
-  /* =============================================
-     Breakpoints
-     ============================================= */
-
-  /* ---------- Tablet (768–1023px) ---------- */
+  /* ---------- Responsive ---------- */
   @media (max-width: 1023px) {
-    .dd-sidebar {
-      width: 220px;
-    }
-    .dd-main {
-      padding: 20px;
-    }
+    .dd-sidebar { width: 220px; }
+    .dd-main { padding: 20px; }
   }
 
-  /* ---------- Mobile (<=767px) ---------- */
   @media (max-width: 767px) {
-    .dd-root {
-      display: block;             /* stack header + main */
-    }
-
-    .dd-mobile-header {
-      display: flex;
-    }
-
-    /* Sidebar becomes a fixed drawer (off-canvas) */
+    .dd-root { display: block; }
+    .dd-mobile-header { display: flex; }
     .dd-sidebar {
       position: fixed;
       top: 0;
@@ -305,14 +277,8 @@ const DASH_CSS = `
       z-index: 50;
       box-shadow: 0 10px 30px rgba(15, 23, 42, 0.2);
     }
-    .dd-sidebar.is-open {
-      transform: translateX(0);
-    }
-
-    .dd-overlay.is-open {
-      display: block;
-    }
-
+    .dd-sidebar.is-open { transform: translateX(0); }
+    .dd-overlay.is-open { display: block; }
     .dd-main {
       padding: 14px;
       width: 100%;
@@ -320,19 +286,12 @@ const DASH_CSS = `
     }
   }
 
-  /* ---------- Small mobile (<=360px) ---------- */
   @media (max-width: 360px) {
-    .dd-main {
-      padding: 10px;
-    }
-    .dd-sidebar {
-      max-width: 88vw;
-    }
+    .dd-main { padding: 10px; }
+    .dd-sidebar { max-width: 88vw; }
   }
 
-  /* =============================================
-     Tab content loading / error states
-     ============================================= */
+  /* ---------- Loading / Error / Access ---------- */
   .dd-loading-box {
     background: #fff;
     padding: 60px 20px;
@@ -373,9 +332,6 @@ const DASH_CSS = `
     font-size: 13.5px;
   }
 
-  /* =============================================
-     Access Denied / Auth
-     ============================================= */
   .dd-centered-wrap {
     min-height: 100vh;
     display: flex;
@@ -424,37 +380,50 @@ const DASH_CSS = `
 // ✅ Component
 // ==================================================
 export default function DoctorDashboard() {
+  // ================================================
+  // ⚠️ RULES OF HOOKS: ALL hooks FIRST, no return between
+  // ================================================
+
   const navigate = useNavigate();
   const location = useLocation();
   const { user, loading: authLoading, logout } = useAuth();
   const { currentHospital } = useHospital();
   const { can } = usePermission();
 
-  const [showAuth, setShowAuth] = useState(false);
+  const [showAuth] = useState(false);
   const [appointments, setAppointments] = useState([]);
   const [appointmentsLoading, setAppointmentsLoading] = useState(true);
   const [appointmentsError, setAppointmentsError] = useState(null);
-
-  // ✅ Mobile drawer state
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const hospitalId = currentHospital?.id || 'alafiyah_main';
 
-  // ==================================================
-  // ✅ Doctor / Admin
-  // ==================================================
   const isDoctor = user?.designation === 'Doctor' && !!user?.doctorId;
   const isAdmin = user?.role === 'admin' || user?.role === 'sub-admin';
 
+  // ✅ Path / active tab — safe memo, before any return
+  const path = location.pathname;
+  const activeTab = path.includes('/doctor/')
+    ? path.split('/doctor/')[1]?.split('/')[0] || 'overview'
+    : 'overview';
+
+  // ✅ Today's string — safe, before any return
+  const todayStr = getTodayString();
+
+  // ✅ Counts memo — MUST be called on every render
+  const todayCounts = useMemo(
+    () => computeSummaryCounts(appointments, todayStr),
+    [appointments, todayStr]
+  );
+
   // ==================================================
-  // ✅ Auth redirects
+  // ✅ Effects (still before any return)
   // ==================================================
+
+  // Auth redirect
   useEffect(() => {
     if (authLoading) return;
-    if (!user) {
-      setShowAuth(true);
-      return;
-    }
+    if (!user) return;
     if (isDoctor) return;
     if (isAdmin) {
       navigate('/admin', { replace: true });
@@ -462,9 +431,7 @@ export default function DoctorDashboard() {
     }
   }, [authLoading, user, isDoctor, isAdmin, navigate]);
 
-  // ==================================================
-  // ✅ Subscribe to appointments
-  // ==================================================
+  // Subscribe to appointments
   useEffect(() => {
     if (!isDoctor || !user?.doctorId) return;
     setAppointmentsLoading(true);
@@ -485,24 +452,12 @@ export default function DoctorDashboard() {
     };
   }, [hospitalId, user?.doctorId, isDoctor]);
 
-  // ==================================================
-  // ✅ Active tab from URL
-  // ==================================================
-  const path = location.pathname;
-  const activeTab = path.includes('/doctor/')
-    ? path.split('/doctor/')[1]?.split('/')[0] || 'overview'
-    : 'overview';
-
-  // ==================================================
-  // ✅ Close drawer on route change
-  // ==================================================
+  // Close drawer on route change
   useEffect(() => {
     setDrawerOpen(false);
   }, [path]);
 
-  // ==================================================
-  // ✅ Close drawer with ESC + lock body scroll
-  // ==================================================
+  // ESC + body scroll lock when drawer open
   useEffect(() => {
     if (!drawerOpen) return;
     const onKey = (e) => {
@@ -518,67 +473,8 @@ export default function DoctorDashboard() {
   }, [drawerOpen]);
 
   // ==================================================
-  // ✅ Loading state
+  // ✅ Derived values (safe, no hooks)
   // ==================================================
-  if (authLoading) {
-    return (
-      <>
-        <style>{DASH_CSS}</style>
-        <div className="dd-centered-wrap">
-          <div style={{ color: '#64748B', fontSize: 16 }}>লোড হচ্ছে...</div>
-        </div>
-      </>
-    );
-  }
-
-  // ==================================================
-  // ✅ Not logged in
-  // ==================================================
-  if (!user) {
-    return (
-      <>
-        <style>{DASH_CSS}</style>
-        <div style={{ minHeight: '100vh', background: '#F8FAFC' }}>
-          <AuthPage onClose={() => setShowAuth(false)} />
-        </div>
-      </>
-    );
-  }
-
-  // ==================================================
-  // ✅ Access denied
-  // ==================================================
-  if (!isDoctor && !isAdmin) {
-    return (
-      <>
-        <style>{DASH_CSS}</style>
-        <div className="dd-centered-wrap">
-          <div className="dd-access-card">
-            <ShieldAlert size={56} color="#DC2626" />
-            <h2>Access Denied</h2>
-            <p>আপনি Doctor designation-এ নেই।</p>
-            <button
-              className="dd-access-btn"
-              onClick={() => navigate('/')}
-              type="button"
-            >
-              হোমপেজে ফিরে যান
-            </button>
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  // ==================================================
-  // ✅ Today's counts
-  // ==================================================
-  const todayStr = getTodayString();
-  const todayCounts = useMemo(
-    () => computeSummaryCounts(appointments, todayStr),
-    [appointments, todayStr]
-  );
-
   const handleLogout = () => {
     logout();
     setTimeout(() => window.location.reload(), 100);
@@ -589,9 +485,6 @@ export default function DoctorDashboard() {
     setDrawerOpen(false);
   };
 
-  // ==================================================
-  // ✅ Sidebar items
-  // ==================================================
   const sidebarItems = [
     {
       id: 'overview',
@@ -623,9 +516,6 @@ export default function DoctorDashboard() {
     },
   ];
 
-  // ==================================================
-  // ✅ Tab content renderer
-  // ==================================================
   const renderTabContent = () => {
     if (appointmentsLoading && activeTab === 'overview') {
       return (
@@ -680,21 +570,70 @@ export default function DoctorDashboard() {
         return <DoctorProfile user={user} />;
 
       default:
-        return (
-          <div className="dd-loading-box">Page not found</div>
-        );
+        return <div className="dd-loading-box">Page not found</div>;
     }
   };
 
   // ==================================================
-  // ✅ RENDER
+  // ✅ CONDITIONAL RETURNS — only after ALL hooks
+  // ==================================================
+
+  // Loading auth
+  if (authLoading) {
+    return (
+      <>
+        <style>{DASH_CSS}</style>
+        <div className="dd-centered-wrap">
+          <div style={{ color: '#64748B', fontSize: 16 }}>লোড হচ্ছে...</div>
+        </div>
+      </>
+    );
+  }
+
+  // Not logged in
+  if (!user) {
+    return (
+      <>
+        <style>{DASH_CSS}</style>
+        <div style={{ minHeight: '100vh', background: '#F8FAFC' }}>
+          <AuthPage onClose={() => {}} />
+        </div>
+      </>
+    );
+  }
+
+  // Access denied
+  if (!isDoctor && !isAdmin) {
+    return (
+      <>
+        <style>{DASH_CSS}</style>
+        <div className="dd-centered-wrap">
+          <div className="dd-access-card">
+            <ShieldAlert size={56} color="#DC2626" />
+            <h2>Access Denied</h2>
+            <p>আপনি Doctor designation-এ নেই।</p>
+            <button
+              className="dd-access-btn"
+              onClick={() => navigate('/')}
+              type="button"
+            >
+              হোমপেজে ফিরে যান
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ==================================================
+  // ✅ MAIN RENDER
   // ==================================================
   return (
     <>
       <style>{DASH_CSS}</style>
       <div className="dd-root">
 
-        {/* ============ Mobile top header ============ */}
+        {/* Mobile top header */}
         <header className="dd-mobile-header">
           <button
             type="button"
@@ -717,19 +656,15 @@ export default function DoctorDashboard() {
           </div>
         </header>
 
-        {/* ============ Overlay (mobile drawer backdrop) ============ */}
+        {/* Overlay */}
         <div
           className={`dd-overlay ${drawerOpen ? 'is-open' : ''}`}
           onClick={() => setDrawerOpen(false)}
           aria-hidden="true"
         />
 
-        {/* ============ Sidebar / Drawer ============ */}
-        <aside
-          className={`dd-sidebar ${drawerOpen ? 'is-open' : ''}`}
-          aria-hidden={!drawerOpen && typeof window !== 'undefined' && window.innerWidth < 768}
-        >
-          {/* Brand */}
+        {/* Sidebar */}
+        <aside className={`dd-sidebar ${drawerOpen ? 'is-open' : ''}`}>
           <div className="dd-sidebar-brand">
             <div className="dd-brand-icon">
               <Stethoscope size={20} />
@@ -739,7 +674,6 @@ export default function DoctorDashboard() {
               <div className="dd-brand-sub">Doctor Panel</div>
             </div>
 
-            {/* Mobile close button inside drawer */}
             <button
               type="button"
               className="dd-hamburger"
@@ -755,7 +689,6 @@ export default function DoctorDashboard() {
             </button>
           </div>
 
-          {/* User block */}
           <div className="dd-sidebar-user">
             <div className="dd-user-name">{user?.name || 'Doctor'}</div>
             <div className="dd-user-role">
@@ -764,7 +697,6 @@ export default function DoctorDashboard() {
             {isAdmin && <span className="dd-admin-tag">ADMIN</span>}
           </div>
 
-          {/* Navigation */}
           <nav className="dd-nav" role="navigation">
             {sidebarItems.map((item) => {
               const Icon = item.icon;
@@ -787,7 +719,6 @@ export default function DoctorDashboard() {
             })}
           </nav>
 
-          {/* Logout */}
           <div className="dd-sidebar-footer">
             <button
               type="button"
@@ -799,7 +730,7 @@ export default function DoctorDashboard() {
           </div>
         </aside>
 
-        {/* ============ Main content ============ */}
+        {/* Main */}
         <main className="dd-main">
           {renderTabContent()}
         </main>
