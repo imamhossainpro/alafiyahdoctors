@@ -6,9 +6,9 @@
 // ✅ Filter by status
 // ✅ Statistics summary
 // ✅ Modern UI with cards
-// ✅ Header-এ action buttons (সিরিয়াল, সময়সূচি, প্রোফাইল, লগআউট)
+// ✅ Header-এ action buttons
 // ✅ Mobile না থাকলে banner (redirect নয়)
-// ✅ QR button বাদ
+// ✅ Sorting: সর্বশেষ updated booking সবার উপরে
 // ==================================================
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -46,6 +46,38 @@ const FILTERS = [
   { key: 'completed', label: 'সম্পন্ন', icon: CheckCircle2 },
   { key: 'cancelled', label: 'বাতিল', icon: XCircle },
 ];
+
+// ==================================================
+// ✅ Helper: Get the most recent timestamp for sorting
+// ==================================================
+const getLatestTimestamp = (booking) => {
+  // Priority: updatedAt > statusChangedAt > createdAt > timestamp > bookingDate
+  const candidates = [
+    booking.updatedAt,
+    booking.statusChangedAt,
+    booking.confirmedAt,
+    booking.checkedInAt,
+    booking.completedAt,
+    booking.cancelledAt,
+    booking.createdAt,
+    booking.timestamp,
+    booking.bookingDate,
+  ];
+
+  for (const ts of candidates) {
+    if (!ts) continue;
+
+    // Firestore Timestamp
+    if (typeof ts === 'object' && ts.seconds) {
+      return ts.seconds * 1000;
+    }
+    // ISO string or Date
+    const parsed = new Date(ts).getTime();
+    if (!isNaN(parsed)) return parsed;
+  }
+
+  return 0;
+};
 
 // ==================================================
 // ✅ Main Component
@@ -129,25 +161,39 @@ export default function PatientDashboard() {
   }, [user?.uid, user?.mobile, hospitalId, reloadKey]);
 
   // ==================================================
-  // ✅ Filtered bookings
+  // ✅ Sorted bookings — সর্বশেষ updated সবার উপরে
+  // ==================================================
+  const sortedBookings = useMemo(() => {
+    if (!bookings || bookings.length === 0) return [];
+
+    return [...bookings].sort((a, b) => {
+      const timeA = getLatestTimestamp(a);
+      const timeB = getLatestTimestamp(b);
+      return timeB - timeA; // descending: newest first
+    });
+  }, [bookings]);
+
+  // ==================================================
+  // ✅ Filtered bookings (sorted order বজায় রেখে)
   // ==================================================
   const filteredBookings = useMemo(() => {
-    if (filter === 'all') return bookings;
+    if (filter === 'all') return sortedBookings;
+
     if (filter === 'active') {
-      return bookings.filter(
+      return sortedBookings.filter(
         (b) => !['completed', 'cancelled', 'no-show'].includes(b.status)
       );
     }
     if (filter === 'completed') {
-      return bookings.filter((b) => b.status === 'completed');
+      return sortedBookings.filter((b) => b.status === 'completed');
     }
     if (filter === 'cancelled') {
-      return bookings.filter(
+      return sortedBookings.filter(
         (b) => b.status === 'cancelled' || b.status === 'no-show'
       );
     }
-    return bookings;
-  }, [bookings, filter]);
+    return sortedBookings;
+  }, [sortedBookings, filter]);
 
   // ==================================================
   // ✅ Stats
@@ -291,7 +337,6 @@ export default function PatientDashboard() {
             gap: '14px',
           }}
         >
-          {/* ---------- Left: User info ---------- */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <div
               style={{
@@ -309,21 +354,10 @@ export default function PatientDashboard() {
               <UserIcon size={24} color="#fff" />
             </div>
             <div>
-              <div
-                style={{
-                  fontSize: '12px',
-                  opacity: 0.9,
-                  fontWeight: '500',
-                }}
-              >
+              <div style={{ fontSize: '12px', opacity: 0.9, fontWeight: '500' }}>
                 স্বাগতম
               </div>
-              <div
-                style={{
-                  fontSize: '18px',
-                  fontWeight: '800',
-                }}
-              >
+              <div style={{ fontSize: '18px', fontWeight: '800' }}>
                 {user.name || user.email?.split('@')[0] || 'রোগী'}
               </div>
               {user.mobile && (
@@ -340,7 +374,6 @@ export default function PatientDashboard() {
             </div>
           </div>
 
-          {/* ---------- Right: Action buttons ---------- */}
           <div
             style={{
               display: 'flex',
@@ -348,7 +381,6 @@ export default function PatientDashboard() {
               flexWrap: 'wrap',
             }}
           >
-            {/* ✅ সিরিয়াল নিশ্চিত করুন */}
             <button
               onClick={() => navigate('/booking')}
               style={{
@@ -371,7 +403,6 @@ export default function PatientDashboard() {
               সিরিয়াল নিশ্চিত করুন
             </button>
 
-            {/* ✅ আজকের ডাক্তার সময়সূচি */}
             <button
               onClick={() => navigate('/')}
               style={{
@@ -393,7 +424,6 @@ export default function PatientDashboard() {
               আজকের ডাক্তার সময়সূচি
             </button>
 
-            {/* রিফ্রেশ */}
             <button
               onClick={handleRefresh}
               disabled={refreshing}
@@ -412,14 +442,10 @@ export default function PatientDashboard() {
                 fontFamily: 'inherit',
               }}
             >
-              <RefreshCw
-                size={14}
-                className={refreshing ? 'spin' : ''}
-              />
+              <RefreshCw size={14} className={refreshing ? 'spin' : ''} />
               রিফ্রেশ
             </button>
 
-            {/* প্রোফাইল */}
             <button
               onClick={() => navigate('/profile')}
               style={{
@@ -441,7 +467,6 @@ export default function PatientDashboard() {
               প্রোফাইল
             </button>
 
-            {/* লগআউট */}
             <button
               onClick={async () => {
                 await logout();
@@ -727,11 +752,7 @@ export default function PatientDashboard() {
             }}
           >
             {filteredBookings.map((booking) => (
-              <BookingCard
-                key={booking.id}
-                booking={booking}
-                /* ✅ onShowQR prop বাদ — QR button দেখাবে না */
-              />
+              <BookingCard key={booking.id} booking={booking} />
             ))}
           </div>
         )}
@@ -773,9 +794,6 @@ export default function PatientDashboard() {
         নতুন সিরিয়াল
       </button>
 
-      {/* ==================================================
-          Global animations
-          ================================================== */}
       <style>{`
         @keyframes spin {
           to { transform: rotate(360deg); }
@@ -791,7 +809,7 @@ export default function PatientDashboard() {
 }
 
 // ==================================================
-// ✅ Sub-Component: Stat Card
+// ✅ Stat Card
 // ==================================================
 function StatCard({ label, value, color, bg }) {
   return (

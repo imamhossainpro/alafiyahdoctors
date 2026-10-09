@@ -1,13 +1,12 @@
 // src/components/patient/BookingCard.jsx
 // ==================================================
-// 🎫 BookingCard — Modern patient booking display
+// 🎫 BookingCard — Color Psychology based design
 // ==================================================
-// ✅ Serial number badge (big & bold)
-// ✅ Status badge with color
-// ✅ Quick info grid
-// ✅ Status timeline
+// ✅ Status অনুযায়ী ভিন্ন header gradient
+// ✅ Status অনুযায়ী badge color
+// ✅ Status অনুযায়ী shadow intensity
+// ✅ Serial number badge status-colored
 // ✅ Expandable details
-// ✅ QR button (only if onShowQR is passed)
 // ==================================================
 import React, { useState } from 'react';
 import {
@@ -24,48 +23,100 @@ import {
   Building2,
   Ticket,
   FileText,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Clock3,
 } from 'lucide-react';
 import StatusTimeline from './StatusTimeline';
 
 // ==================================================
-// ✅ Status styles
+// ✅ Status styles — Color Psychology
 // ==================================================
 const STATUS_STYLES = {
   pending: {
-    bg: '#fef3c7',
-    color: '#92400e',
+    // 🟦 অপেক্ষা — শান্ত, প্রতীক্ষা
     label: 'অপেক্ষমাণ',
-    border: '#fde68a',
+    headerGradient: 'linear-gradient(135deg, #1c5fa8 0%, #4fa3d1 100%)',
+    headerText: '#fff',
+    badgeBg: '#fef3c7',
+    badgeColor: '#92400e',
+    badgeBorder: '#fde68a',
+    serialBg: 'rgba(255,255,255,0.2)',
+    serialBorder: 'rgba(255,255,255,0.4)',
+    shadow: '0 4px 20px rgba(28,95,168,0.12)',
+    accentColor: '#1c5fa8',
+    icon: Clock3,
   },
   confirmed: {
-    bg: '#dbeafe',
-    color: '#1e40af',
+    // 🟩 নিশ্চিত — নিরাপত্তা, সম্মতি
     label: 'নিশ্চিত',
-    border: '#93c5fd',
+    headerGradient: 'linear-gradient(135deg, #16a34a 0%, #4ade80 100%)',
+    headerText: '#fff',
+    badgeBg: '#dcfce7',
+    badgeColor: '#166534',
+    badgeBorder: '#86efac',
+    serialBg: 'rgba(255,255,255,0.2)',
+    serialBorder: 'rgba(255,255,255,0.4)',
+    shadow: '0 4px 20px rgba(22,163,74,0.15)',
+    accentColor: '#16a34a',
+    icon: CheckCircle2,
   },
   'checked-in': {
-    bg: '#ede9fe',
-    color: '#6d28d9',
+    // 🟪 চেক-ইন — প্রস্তুতি
     label: 'চেক-ইন',
-    border: '#c4b5fd',
+    headerGradient: 'linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%)',
+    headerText: '#fff',
+    badgeBg: '#ede9fe',
+    badgeColor: '#6d28d9',
+    badgeBorder: '#c4b5fd',
+    serialBg: 'rgba(255,255,255,0.2)',
+    serialBorder: 'rgba(255,255,255,0.4)',
+    shadow: '0 4px 20px rgba(124,58,237,0.15)',
+    accentColor: '#7c3aed',
+    icon: User,
   },
   completed: {
-    bg: '#dcfce7',
-    color: '#166534',
+    // 🟢 সম্পন্ন — সাফল্য
     label: 'সম্পন্ন',
-    border: '#86efac',
+    headerGradient: 'linear-gradient(135deg, #065f46 0%, #10b981 100%)',
+    headerText: '#fff',
+    badgeBg: '#dcfce7',
+    badgeColor: '#065f46',
+    badgeBorder: '#10b981',
+    serialBg: 'rgba(255,255,255,0.2)',
+    serialBorder: 'rgba(255,255,255,0.4)',
+    shadow: '0 2px 12px rgba(6,95,70,0.12)',
+    accentColor: '#065f46',
+    icon: CheckCircle2,
   },
   cancelled: {
-    bg: '#fee2e2',
-    color: '#991b1b',
+    // 🟥 বাতিল — বিপদ, সতর্কতা
     label: 'বাতিল',
-    border: '#fca5a5',
+    headerGradient: 'linear-gradient(135deg, #991b1b 0%, #ef4444 100%)',
+    headerText: '#fff',
+    badgeBg: '#fee2e2',
+    badgeColor: '#991b1b',
+    badgeBorder: '#fca5a5',
+    serialBg: 'rgba(255,255,255,0.2)',
+    serialBorder: 'rgba(255,255,255,0.4)',
+    shadow: '0 2px 12px rgba(153,27,27,0.12)',
+    accentColor: '#dc2626',
+    icon: XCircle,
   },
   'no-show': {
-    bg: '#f3f4f6',
-    color: '#4b5563',
+    // ⬜ অনুপস্থিত — নিরপেক্ষ
     label: 'অনুপস্থিত',
-    border: '#d1d5db',
+    headerGradient: 'linear-gradient(135deg, #475569 0%, #94a3b8 100%)',
+    headerText: '#fff',
+    badgeBg: '#f3f4f6',
+    badgeColor: '#4b5563',
+    badgeBorder: '#d1d5db',
+    serialBg: 'rgba(255,255,255,0.2)',
+    serialBorder: 'rgba(255,255,255,0.4)',
+    shadow: '0 2px 8px rgba(0,0,0,0.06)',
+    accentColor: '#64748b',
+    icon: AlertTriangle,
   },
 };
 
@@ -110,22 +161,20 @@ export default function BookingCard({ booking, onShowQR }) {
         borderRadius: '16px',
         border: '1px solid #e2e8f0',
         overflow: 'hidden',
-        boxShadow: isActive
-          ? '0 4px 20px rgba(28,95,168,0.08)'
-          : '0 2px 8px rgba(0,0,0,0.04)',
+        boxShadow: style.shadow,
         transition: 'all 0.2s ease',
         fontFamily:
           "'Hind Siliguri', 'Noto Sans Bengali', system-ui, sans-serif",
       }}
     >
       {/* ==================================================
-          Header
+          Header — Status-based gradient
           ================================================== */}
       <div
         style={{
-          background: 'linear-gradient(135deg, #1c5fa8 0%, #4fa3d1 100%)',
+          background: style.headerGradient,
           padding: '20px 22px',
-          color: '#fff',
+          color: style.headerText,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -142,14 +191,14 @@ export default function BookingCard({ booking, onShowQR }) {
             flex: 1,
           }}
         >
-          {/* Serial badge */}
+          {/* Serial badge — status color */}
           <div
             style={{
               width: '68px',
               height: '68px',
               borderRadius: '14px',
-              background: 'rgba(255,255,255,0.2)',
-              border: '2px solid rgba(255,255,255,0.4)',
+              background: style.serialBg,
+              border: `2px solid ${style.serialBorder}`,
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
@@ -211,12 +260,12 @@ export default function BookingCard({ booking, onShowQR }) {
         <div
           style={{
             padding: '6px 14px',
-            background: style.bg,
-            color: style.color,
+            background: style.badgeBg,
+            color: style.badgeColor,
             borderRadius: '20px',
             fontSize: '12.5px',
             fontWeight: '700',
-            border: `1.5px solid ${style.border}`,
+            border: `1.5px solid ${style.badgeBorder}`,
             whiteSpace: 'nowrap',
             flexShrink: 0,
           }}
@@ -245,21 +294,25 @@ export default function BookingCard({ booking, onShowQR }) {
             icon={Calendar}
             label="তারিখ"
             value={formatDate(booking.bookingDate)}
+            accent={style.accentColor}
           />
           <InfoRow
             icon={Clock}
             label="সময়"
             value={booking.doctorTime || 'নির্ধারিত'}
+            accent={style.accentColor}
           />
           <InfoRow
             icon={Stethoscope}
             label="বিভাগ"
             value={booking.doctorDept || '-'}
+            accent={style.accentColor}
           />
           <InfoRow
             icon={Hash}
             label="সিরিয়াল"
             value={`#${booking.serialNo || '-'}`}
+            accent={style.accentColor}
           />
         </div>
       </div>
@@ -315,7 +368,7 @@ export default function BookingCard({ booking, onShowQR }) {
           {expanded ? 'কম দেখান' : 'বিস্তারিত দেখুন'}
         </button>
 
-        {/* ✅ QR button — শুধু onShowQR পাস করা হলে */}
+        {/* QR button */}
         {showQRButton && (
           <button
             onClick={() => onShowQR(booking.id)}
@@ -444,7 +497,6 @@ export default function BookingCard({ booking, onShowQR }) {
         </div>
       )}
 
-      {/* Local animations */}
       <style>{`
         @keyframes slideDown {
           from { opacity: 0; max-height: 0; }
@@ -458,7 +510,7 @@ export default function BookingCard({ booking, onShowQR }) {
 // ==================================================
 // ✅ Sub-component: Info Row
 // ==================================================
-function InfoRow({ icon: Icon, label, value }) {
+function InfoRow({ icon: Icon, label, value, accent }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
       <div
@@ -466,14 +518,14 @@ function InfoRow({ icon: Icon, label, value }) {
           width: '36px',
           height: '36px',
           borderRadius: '9px',
-          background: '#eff6ff',
+          background: `${accent}15`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           flexShrink: 0,
         }}
       >
-        <Icon size={16} color="#1c5fa8" />
+        <Icon size={16} color={accent} />
       </div>
       <div style={{ minWidth: 0, flex: 1 }}>
         <div
