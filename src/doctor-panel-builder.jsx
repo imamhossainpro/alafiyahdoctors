@@ -1,6 +1,6 @@
 // src/doctor-panel-builder.jsx
 // ==================================================
-// 🏥 Doctor Panel Builder — Full File (Part 1/4)
+// 🏥 Doctor Panel Builder — Full File
 // ==================================================
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
@@ -54,10 +54,6 @@ const COLOR_THEMES = [
   '#4438ab', '#475569',
 ];
 
-// ==================================================
-// ✅ RESTRICTED ROLES — panel manage hide হবে
-// ==================================================
-// ✅ যেসব role-এ "এডিট / × / + নতুন দিন" দেখা যাবে না
 const RESTRICTED_ROLES = ['viewer', 'patient', 'user'];
 
 // ==================================================
@@ -357,6 +353,10 @@ const CSS = `
 .dpb .serial-booking-button:hover{background:linear-gradient(135deg,#0f766e,#115e59);transform:translateY(-1px);box-shadow:0 4px 12px rgba(13,148,136,0.35);}
 .dpb .serial-booking-button:active{transform:translateY(0);box-shadow:0 2px 6px rgba(13,148,136,0.25);}
 .dpb .serial-booking-button:focus-visible{outline:2px solid #0f766e;outline-offset:2px;}
+
+/* ✅ NEW — Doctor Dashboard Button (blue theme) */
+.dpb .serial-booking-button.dashboard-btn{background:linear-gradient(135deg,#1D4ED8,#1E40AF);box-shadow:0 2px 8px rgba(29,78,216,0.25);}
+.dpb .serial-booking-button.dashboard-btn:hover{background:linear-gradient(135deg,#1E40AF,#1E3A8A);box-shadow:0 4px 12px rgba(29,78,216,0.35);}
 
 @media (max-width: 480px) {
   .dpb .serial-booking-button { width: 100%; padding: 10px 18px; font-size: 13.5px; }
@@ -736,6 +736,7 @@ function DoctorLinkModal({ doctor, onClose }) {
     </div>
   );
 }
+
 // ==================================================
 // ✅ DoctorRow — individual doctor row in dept card
 // ==================================================
@@ -1248,7 +1249,6 @@ function DoctorModal({ initial, onSave, onClose }) {
         </div>
 
         <div className="modal-body">
-          {/* Image upload */}
           <label style={{ fontWeight: '700', display: 'block', marginBottom: '8px' }}>
             ডাক্তারের ছবি
           </label>
@@ -1305,7 +1305,6 @@ function DoctorModal({ initial, onSave, onClose }) {
             </div>
           </div>
 
-          {/* Name fields */}
           <label>ডাক্তারের নাম (বাংলা)</label>
           <input
             className="input"
@@ -1355,7 +1354,6 @@ function DoctorModal({ initial, onSave, onClose }) {
             placeholder="যেমনঃ চট্টগ্রাম মেডিকেল কলেজ হাসপাতাল"
           />
 
-          {/* Time slots */}
           <div style={{ marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
             <label style={{ fontWeight: '700', display: 'block', marginBottom: '4px' }}>
               ⏰ সাক্ষাতের সময় (একাধিক স্লট যোগ করুন)
@@ -1621,8 +1619,7 @@ function PanelModal({ mode, initial, activeDeptCount, departments, onSave, onClo
 }
 
 // ==================================================
-// ✅ PanelSwitcher — panel tabs
-// ✅ Viewer / Patient / User role-এ এডিট × / + নতুন দিন hide
+// ✅ PanelSwitcher
 // ==================================================
 function PanelSwitcher({
   panels,
@@ -1653,7 +1650,6 @@ function PanelSwitcher({
                 {p.name || 'নামহীন'}
               </button>
 
-              {/* ✅ Edit button — শুধু canManagePanels হলে দেখাবে */}
               {!isReadOnly && canManagePanels && (
                 <button
                   className="panel-pill-icon"
@@ -1665,7 +1661,6 @@ function PanelSwitcher({
                 </button>
               )}
 
-              {/* ✅ Delete (×) button — শুধু canManagePanels হলে দেখাবে */}
               {!isReadOnly && canManagePanels && panels.length > 1 ? (
                 <button
                   className={
@@ -1684,7 +1679,6 @@ function PanelSwitcher({
         })}
       </div>
 
-      {/* ✅ "+ নতুন দিন" button — শুধু canManagePanels হলে দেখাবে */}
       {!isReadOnly && canManagePanels && (
         <button className="btn btn-secondary panel-add-btn" onClick={onAdd}>
           <Plus size={14} /> নতুন দিন
@@ -1693,8 +1687,9 @@ function PanelSwitcher({
     </div>
   );
 }
+
 // ==================================================
-// ✅ EditPanel — Panel editor view
+// ✅ EditPanel
 // ==================================================
 function EditPanel({
   panel,
@@ -1736,7 +1731,7 @@ function EditPanel({
         </div>
         <p className="section-hint">
           {`প্রতিটি ডাক্তারের পাশের বক্সে টিক দিয়ে বেছে নিন কারা "${panel.name}"-এর পোস্টারে দেখাবে। 🔗 আইকনে ক্লিক করে বুকিং লিংক দেখুন। ⬆️⬇️ দিয়ে এই দিনের জন্য বিভাগের ক্রম ঠিক করুন — অন্য দিনের ক্রম অপরিবর্তিত থাকবে।`}
-          </p>
+        </p>
         <input
           className="input"
           value={panel.title}
@@ -1859,7 +1854,7 @@ function EditPanel({
 }
 
 // ==================================================
-// ✅ DeptHeader — poster department header
+// ✅ DeptHeader
 // ==================================================
 function DeptHeader({ dept }) {
   const Icon = ICONS[dept.icon] || ICONS.Stethoscope;
@@ -1876,10 +1871,14 @@ function DeptHeader({ dept }) {
 }
 
 // ==================================================
-// ✅ DoctorEntry — poster doctor entry (with booking button)
+// ✅ DoctorEntry — ROLE-AWARE BUTTON
 // ==================================================
-function DoctorEntry({ doc, accentColor }) {
-  const hasValidId = doc.id && typeof doc.id === 'string' && doc.id.trim() !== '';
+// Doctor logged in → "🏥 ডাক্তার ড্যাশবোর্ড" button (blue)
+// Others          → "সিরিয়াল নিন" button (teal)
+// ==================================================
+function DoctorEntry({ doc, accentColor, isDoctorLoggedIn = false }) {
+  const hasValidId =
+    doc.id && typeof doc.id === 'string' && doc.id.trim() !== '';
 
   const bookingUrl = hasValidId
     ? buildBookingUrl(doc.id, doc.nameEn || doc.name || '', 'direct')
@@ -1902,7 +1901,26 @@ function DoctorEntry({ doc, accentColor }) {
         </div>
       )}
 
-      {hasValidId && (
+      {/* ✅ Doctor logged in → Dashboard button */}
+      {hasValidId && isDoctorLoggedIn && (
+        <a
+          href="/doctor"
+          className="serial-booking-button dashboard-btn"
+          aria-label="ডাক্তার ড্যাশবোর্ডে যান"
+          onClick={() => {
+            trackEvent('doctor_dashboard_button_click', {
+              doctor_id: doc.id,
+              doctor_name: doc.name,
+              source: 'website_button',
+            });
+          }}
+        >
+          🏥 ডাক্তার ড্যাশবোর্ড
+        </a>
+      )}
+
+      {/* ✅ Others → Booking button */}
+      {hasValidId && !isDoctorLoggedIn && (
         <a
           href={bookingUrl}
           target="_blank"
@@ -1926,11 +1944,15 @@ function DoctorEntry({ doc, accentColor }) {
 }
 
 // ==================================================
-// ✅ PreviewPanel — poster preview + print/PDF/PNG
+// ✅ PreviewPanel
 // ==================================================
 function PreviewPanel({ panel, departments, checkedIds, footer, onBack, user }) {
   const printRef = useRef(null);
   const isAdmin = user?.role === 'admin';
+
+  // ✅ NEW — Check if logged-in user is a Doctor
+  const isDoctorLoggedIn =
+    user?.designation === 'Doctor' && !!user?.doctorId;
 
   const handlePrint = () => {
     if (!isAdmin) {
@@ -2066,7 +2088,12 @@ function PreviewPanel({ panel, departments, checkedIds, footer, onBack, user }) 
               <div className="dept-block" key={dept.id}>
                 <DeptHeader dept={dept} />
                 {dept.doctors.map((doc) => (
-                  <DoctorEntry key={doc.id} doc={doc} accentColor={dept.color} />
+                  <DoctorEntry
+                    key={doc.id}
+                    doc={doc}
+                    accentColor={dept.color}
+                    isDoctorLoggedIn={isDoctorLoggedIn}
+                  />
                 ))}
               </div>
             ))}
@@ -2101,7 +2128,7 @@ function PreviewPanel({ panel, departments, checkedIds, footer, onBack, user }) 
 }
 
 // ==================================================
-// ✅ ManageDoctorsView — master doctor list
+// ✅ ManageDoctorsView
 // ==================================================
 function ManageDoctorsView({
   departments,
@@ -2175,7 +2202,7 @@ export default function DoctorPanelBuilder() {
   const location = useLocation();
   const { currentHospital } = useHospital();
   const hospitalId = currentHospital?.id || 'alafiyah_main';
- const { user, logout, loading: authLoading } = useAuth();
+  const { user, logout, loading: authLoading } = useAuth();
 
   const isAdmin = user?.role === 'admin';
   const isSubAdmin = user?.role === 'sub-admin';
@@ -2184,13 +2211,9 @@ export default function DoctorPanelBuilder() {
   const isViewer = user?.role === 'viewer';
   const isGuest = !user;
 
-  // ==================================================
-  // ✅ RESTRICTED ROLE — viewer / patient / user
-  // ==================================================
   const isRestrictedRole = !!user && RESTRICTED_ROLES.includes(user.role);
   const canManagePanels = !isGuest && !isRestrictedRole;
 
-  // 🔍 DEBUG — browser Console-এ দেখুন
   console.log('🔍 [DPB] user.role =', user?.role);
   console.log('🔍 [DPB] isRestrictedRole =', isRestrictedRole);
   console.log('🔍 [DPB] canManagePanels =', canManagePanels);
@@ -2200,26 +2223,20 @@ export default function DoctorPanelBuilder() {
   const bookingDoctorMatch = path.match(/^\/booking\/(.+)$/);
   const bookingDoctorId = bookingDoctorMatch ? bookingDoctorMatch[1] : null;
 
-  // ==================================================
-  // ✅ activeView — /mou সমর্থন সহ
-  // ==================================================
- let activeView;
-if (path === '/') {
-  activeView = 'preview';
-} else if (bookingDoctorId) {
-  activeView = 'booking';
-} else {
-  activeView = path.substring(1);
-}
+  let activeView;
+  if (path === '/') {
+    activeView = 'preview';
+  } else if (bookingDoctorId) {
+    activeView = 'booking';
+  } else {
+    activeView = path.substring(1);
+  }
 
   const setActiveView = (view) => {
     if (view === 'preview') navigate('/');
     else navigate(`/${view}`);
   };
 
-  // ==================================================
-  // ✅ State
-  // ==================================================
   const [showAuth, setShowAuth] = useState(false);
   const [allUsers, setAllUsers] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -2237,30 +2254,22 @@ if (path === '/') {
   const debounceRef = useRef(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  // ==================================================
-  // ✅ Logout
-  // ==================================================
   const handleLogout = () => {
     logout();
     setTimeout(() => window.location.reload(), 100);
   };
 
-  // ==================================================
-  // ✅ Data load
-  // ==================================================
   useEffect(() => {
     const loadData = async () => {
       const hid = hospitalId || 'alafiyah_main';
       setLoading(true);
       try {
-        // -------- Departments --------
         const deptSnapshot = await getDocs(collection(db, 'hospitals', hid, 'departments'));
         const depts = deptSnapshot.docs
           .map((doc) => ({ id: doc.id, ...doc.data() }))
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         setDepartments(depts);
 
-        // -------- Panels --------
         const panelSnapshot = await getDocs(collection(db, 'hospitals', hid, 'panels'));
         let panelList = panelSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
@@ -2272,7 +2281,6 @@ if (path === '/') {
 
         const defaultDeptOrder = depts.map((d) => d.id);
 
-        // Migration: panels without departmentOrder
         const panelsNeedingMigration = panelList.filter(
           (p) => !p.departmentOrder || p.departmentOrder.length === 0
         );
@@ -2297,7 +2305,6 @@ if (path === '/') {
               : defaultDeptOrder,
         }));
 
-        // Default panel
         if (panelList.length === 0) {
           const defaultPanel = {
             id: 'শনিবার',
@@ -2312,12 +2319,10 @@ if (path === '/') {
 
         setPanels(panelList);
 
-        // -------- Footer --------
         const footerRef = doc(db, 'hospitals', hid, 'footer', 'data');
         const footerSnap = await getDoc(footerRef);
         if (footerSnap.exists()) setFooter(footerSnap.data());
 
-        // -------- Active panel detection --------
         const params = new URLSearchParams(window.location.search);
         let targetDay = params.get('day');
         if (!targetDay) {
@@ -2342,9 +2347,6 @@ if (path === '/') {
     loadData();
   }, [hospitalId, reloadKey]);
 
-  // ==================================================
-  // ✅ Admin users load
-  // ==================================================
   useEffect(() => {
     if (!isAdmin || !hospitalId) {
       setAllUsers([]);
@@ -2372,9 +2374,6 @@ if (path === '/') {
     loadUsers();
   }, [isAdmin, hospitalId]);
 
-  // ==================================================
-  // ✅ Save helpers
-  // ==================================================
   const saveDepartments = async (newDepts) => {
     if (!hospitalId) return;
     try {
@@ -2419,9 +2418,6 @@ if (path === '/') {
     }
   };
 
-  // ==================================================
-  // ✅ Derived state
-  // ==================================================
   const activePanel =
     panels.find((p) => p.id === activePanelId) ||
     (panels.length > 0
@@ -2438,9 +2434,6 @@ if (path === '/') {
   const allChecked =
     allDoctorIds.length > 0 && allDoctorIds.every((id) => checkedIds.has(id));
 
-  // ==================================================
-  // ✅ Admin user actions
-  // ==================================================
   const handleApprove = async (userId) => {
     if (!hospitalId) return;
     try {
@@ -2475,9 +2468,6 @@ if (path === '/') {
     }
   };
 
-  // ==================================================
-  // ✅ Panel update
-  // ==================================================
   const updatePanel = (updater, immediate) => {
     const updated = updater(activePanel);
     const newPanels = panels.map((p) => (p.id === activePanelId ? updated : p));
@@ -2513,9 +2503,6 @@ if (path === '/') {
     }
   };
 
-  // ==================================================
-  // ✅ Handlers
-  // ==================================================
   const handleUpdateTitle = (title) => updatePanel((p) => ({ ...p, title }), true);
 
   const handleUpdateFooter = (changes) => {
@@ -2756,87 +2743,63 @@ if (path === '/') {
     setLinkModalDoctor(doctor);
   };
 
-  // ==================================================
-  // ✅ Authorization — /mou সমর্থন সহ
-  // ==================================================
   const getIsAuthorized = () => {
-  if (
-    path === '/' ||
-    path === '/booking' ||
-    path === '/display' ||
-    path === '/preview' ||
-    path === '/login'
-    // ✅ '/mou' সরানো হয়েছে — App.jsx-এ handle হবে
-  )
-    return true;
-  if (bookingDoctorId) return true;
-  if (path === '/edit' && (isEditor || isModerator || isSubAdmin || isAdmin)) return true;
-  if (path === '/doctors' && (isSubAdmin || isAdmin)) return true;
-  if (path === '/dashboard' && (isEditor || isModerator || isSubAdmin || isAdmin))
-    return true;
-  if (path === '/admin' && isAdmin) return true;
-  return false;
-};
+    if (
+      path === '/' ||
+      path === '/booking' ||
+      path === '/display' ||
+      path === '/preview' ||
+      path === '/login'
+    )
+      return true;
+    if (bookingDoctorId) return true;
+    if (path === '/edit' && (isEditor || isModerator || isSubAdmin || isAdmin)) return true;
+    if (path === '/doctors' && (isSubAdmin || isAdmin)) return true;
+    if (path === '/dashboard' && (isEditor || isModerator || isSubAdmin || isAdmin))
+      return true;
+    if (path === '/admin' && isAdmin) return true;
+    return false;
+  };
 
-  // ==================================================
-  // ✅ Loading state
-  // ==================================================
-  // ✅ Auth loading → show skeleton
-if (authLoading) {
-  return (
-    <>
-      <style>{CSS}</style>
-      <AppShellSkeleton />
-    </>
-  );
-}
-
-if (loading) {
-  return (
-    <>
-      <style>{CSS}</style>
-      <AppShellSkeleton />
-    </>
-  );
-}
-
- 
-// ==================================================
-// ✅ Login — AuthPage দেখাও
-// ==================================================
-if (path === '/login') {
-  // ✅ Already logged in → redirect to patient dashboard
-  if (user) {
-    return <Navigate to="/my-bookings" replace />;
+  if (authLoading) {
+    return (
+      <>
+        <style>{CSS}</style>
+        <AppShellSkeleton />
+      </>
+    );
   }
 
-  return (
-    <div className="dpb">
-      <style>{CSS}</style>
-      <AuthPage onClose={() => navigate('/')} />
-    </div>
-  );
-}
+  if (loading) {
+    return (
+      <>
+        <style>{CSS}</style>
+        <AppShellSkeleton />
+      </>
+    );
+  }
 
-// ==================================================
-// ✅ /mou → MOUGenerator (login required internally)
-// ==================================================
-if (path === '/mou') {
-  return <MOUGenerator />;
-}
+  if (path === '/login') {
+    if (user) {
+      return <Navigate to="/my-bookings" replace />;
+    }
+
+    return (
+      <div className="dpb">
+        <style>{CSS}</style>
+        <AuthPage onClose={() => navigate('/')} />
+      </div>
+    );
+  }
 
   if (!getIsAuthorized()) return <NotFoundPage />;
 
   const isDirectBookingView = !!bookingDoctorId;
 
-  // ==================================================
-  // ✅ RENDER
-  // ==================================================
   return (
     <div className="dpb">
       <style>{CSS}</style>
 
-      {/* ========== Top Bar ========== */}
       {!isDirectBookingView && (
         <div className="topbar no-print">
           <div className="topbar-title">
@@ -2876,20 +2839,21 @@ if (path === '/mou') {
                   প্যানেল বিল্ডার
                 </button>
               )}
-                {/* ✅ MOU Button — শুধু admin দেখবে */}
-                  {isAdmin && (
-                    <button
-                      className={activeView === 'mou' ? 'tab active' : 'tab'}
-                      onClick={() => navigate('/mou')}
-                      style={{
-                        background: 'linear-gradient(45deg, #7c3aed, #a78bfa)',
-                        color: '#fff',
-                        fontWeight: '700',
-                      }}
-                    >
-                      📄 MOU
-                    </button>
-                  )}
+
+              {isAdmin && (
+                <button
+                  className={activeView === 'mou' ? 'tab active' : 'tab'}
+                  onClick={() => navigate('/mou')}
+                  style={{
+                    background: 'linear-gradient(45deg, #7c3aed, #a78bfa)',
+                    color: '#fff',
+                    fontWeight: '700',
+                  }}
+                >
+                  📄 MOU
+                </button>
+              )}
+
               {!isGuest && (isSubAdmin || isAdmin) && (
                 <button
                   className={activeView === 'doctors' ? 'tab active' : 'tab'}
@@ -2920,7 +2884,6 @@ if (path === '/mou') {
 
             <NotificationBell user={user} />
 
-            {/* ✅ My Bookings button — logged-in users */}
             {!isGuest && (
               <button
                 onClick={() => navigate('/my-bookings')}
@@ -2943,13 +2906,11 @@ if (path === '/mou') {
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow =
-                    '0 6px 16px rgba(139,92,246,0.45)';
+                  e.currentTarget.style.boxShadow = '0 6px 16px rgba(139,92,246,0.45)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow =
-                    '0 4px 12px rgba(139,92,246,0.35)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(139,92,246,0.35)';
                 }}
               >
                 <Ticket size={14} />
@@ -2959,7 +2920,8 @@ if (path === '/mou') {
 
             {!isGuest && (
               <button className="logout-btn" onClick={handleLogout}>
-                <LogOut size={14} /> লগআউট              </button>
+                <LogOut size={14} /> লগআউট
+              </button>
             )}
 
             {isGuest && (
@@ -2971,8 +2933,6 @@ if (path === '/mou') {
         </div>
       )}
 
-      {/* ========== Panel Switcher ========== */}
-      {/* ✅ canManagePanels prop পাঠানো হচ্ছে — viewer/patient/user role-এ hide হবে */}
       {!isDirectBookingView && (activeView === 'preview' || activeView === 'edit') && (
         <PanelSwitcher
           panels={panels}
@@ -2994,7 +2954,6 @@ if (path === '/mou') {
         />
       )}
 
-      {/* ========== Views ========== */}
       {activeView === 'booking' && (
         <BookingSystem
           departments={departments}
@@ -3077,7 +3036,6 @@ if (path === '/mou') {
         <AdminDashboard user={user} />
       )}
 
-      {/* ========== Modals ========== */}
       {showAuth && <AuthPage onClose={() => setShowAuth(false)} />}
 
       {deptModal && (
