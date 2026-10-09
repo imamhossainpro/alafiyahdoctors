@@ -6,7 +6,7 @@ import { useHospital } from '../context/HospitalContext';
 import { useAuth } from '../context/AuthContext';
 import { usePermission } from '../context/PermissionContext';
 import { db, updateDoc, doc, collection, getDocs, getDoc, onSnapshot } from '../firebase';
-import { RefreshCw, Shield, FileText, Search, FileSignature } from 'lucide-react';
+import { RefreshCw, Shield, FileText, Search, FileSignature, UserCheck } from 'lucide-react';
 import {
   updateAppointmentStatus,
   archiveAppointment,
@@ -32,6 +32,8 @@ const LocationManager = lazy(() => import('./admin/LocationManager'));
 const UserAccessManager = lazy(() => import('./admin/UserAccessManager'));
 const QueueControlPanel = lazy(() => import('./admin/QueueControlPanel'));
 const PromoManager = lazy(() => import('./admin/PromoManager'));
+// ✅ NEW: Doctor Profile Edit Requests
+const ProfileEditRequests = lazy(() => import('./admin/ProfileEditRequests'));
 
 // ==================================================
 // ✅ Tab Loader
@@ -159,6 +161,7 @@ function AdminPanel({ users = [], onApprove, onSetRole, onDeleteUser }) {
                       <option value="editor">এডিটর</option>
                       <option value="moderator">মডারেটর</option>
                       <option value="viewer">ভিউয়ার</option>
+                      <option value="doctor">ডাক্তার</option>
                       <option value="patient">রোগী</option>
                     </select>
                   </td>
@@ -225,6 +228,8 @@ export default function AdminDashboard({ user: propUser }) {
   const [filterPreset, setFilterPreset] = useState('all');
   const [departments, setDepartments] = useState([]);
   const [panels, setPanels] = useState([]);
+  // ✅ NEW: pending profile request count for badge
+  const [pendingProfileRequests, setPendingProfileRequests] = useState(0);
 
   // ==================================================
   // ✅ Initial Load – Marketing Team
@@ -343,6 +348,25 @@ export default function AdminDashboard({ user: propUser }) {
     );
     return () => unsub();
   }, [hospitalId, can]);
+
+  // ==================================================
+  // ✅ NEW: Real-time pending profile requests count
+  // ==================================================
+  useEffect(() => {
+    if (!hospitalId) return;
+    if (!(user?.role === 'admin' || user?.role === 'sub-admin')) return;
+
+    const reqRef = collection(db, 'hospitals', hospitalId, 'profileEditRequests');
+    const unsub = onSnapshot(
+      reqRef,
+      (snap) => {
+        const pending = snap.docs.filter((d) => d.data().status === 'pending').length;
+        setPendingProfileRequests(pending);
+      },
+      (err) => console.warn('profile requests count listener error:', err.message)
+    );
+    return () => unsub();
+  }, [hospitalId, user?.role]);
 
   // ==================================================
   // ✅ Silent Refresh
@@ -756,6 +780,41 @@ export default function AdminDashboard({ user: propUser }) {
             </button>
           )}
 
+          {/* ✅ NEW: Profile Edit Requests (admin/sub-admin only) */}
+          {(user?.role === 'admin' || user?.role === 'sub-admin') && (
+            <button
+              onClick={() => { setShowArchived(false); setTab('profile_requests'); }}
+              style={{
+                padding: '8px 16px',
+                background: tab === 'profile_requests' ? '#1c5fa8' : '#ffffff',
+                color: tab === 'profile_requests' ? '#ffffff' : '#333333',
+                border: '1px solid #e2e8f0',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                fontWeight: '600',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <UserCheck size={14} /> Profile Requests
+              {pendingProfileRequests > 0 && (
+                <span style={{
+                  background: '#dc2626',
+                  color: '#fff',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  borderRadius: '10px',
+                  padding: '1px 7px',
+                  minWidth: '18px',
+                  textAlign: 'center',
+                }}>
+                  {pendingProfileRequests}
+                </span>
+              )}
+            </button>
+          )}
+
           {can('booking.view') && (
             <button
               onClick={() => { setShowArchived(false); setTab('appointments'); }}
@@ -906,6 +965,16 @@ export default function AdminDashboard({ user: propUser }) {
           </Suspense>
         </SafeArea>
       )}
+
+      {/* ✅ NEW: Profile Edit Requests tab */}
+      {tab === 'profile_requests' &&
+        (user?.role === 'admin' || user?.role === 'sub-admin') && (
+          <SafeArea>
+            <Suspense fallback={<TabLoader />}>
+              <ProfileEditRequests />
+            </Suspense>
+          </SafeArea>
+        )}
 
       {tab === 'appointments' && can('booking.view') && (
         <SafeArea>

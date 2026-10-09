@@ -2,7 +2,8 @@
 // ==================================================
 // 👤 Doctor Profile — From departments collection
 // ==================================================
-// ✅ Read-only (doctor cannot edit own profile)
+// ✅ Read-only profile display
+// ✅ Edit button → sends request to admin
 // ✅ Real data from Firestore
 // ==================================================
 
@@ -10,16 +11,27 @@ import React, { useEffect, useState } from 'react';
 import {
   User,
   Mail,
-  Phone,
   Stethoscope,
   Building2,
   Award,
   Clock,
   Calendar,
   Loader2,
+  Edit3,
+  CheckCircle2,
+  XCircle,
+  Hourglass,
+  AlertCircle,
 } from 'lucide-react';
 import { useHospital } from '../../context/HospitalContext';
-import { getDoctorInfo, getDoctorSchedule } from '../../services/doctorAppointmentService';
+import {
+  getDoctorInfo,
+  getDoctorSchedule,
+} from '../../services/doctorAppointmentService';
+import {
+  subscribeToMyRequests,
+} from '../../services/doctorProfileRequestService';
+import DoctorProfileEditModal from './DoctorProfileEditModal';
 
 const CSS = `
   .dpf-container {
@@ -84,6 +96,27 @@ const CSS = `
     border-radius: 20px;
     font-size: 12px;
     font-weight: 700;
+  }
+  .dpf-edit-btn {
+    padding: 9px 18px;
+    background: #1c5fa8;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13.5px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: inherit;
+    transition: all 0.2s;
+    margin-bottom: 8px;
+  }
+  .dpf-edit-btn:hover {
+    background: #154a82;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(28,95,168,0.3);
   }
   .dpf-body {
     padding: 24px;
@@ -158,7 +191,43 @@ const CSS = `
     text-align: center;
     color: #64748b;
   }
+  .dpf-pending-banner {
+    margin: 0 24px 12px 24px;
+    padding: 12px 16px;
+    background: #fef3c7;
+    border: 1px solid #fcd34d;
+    border-radius: 10px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13px;
+    color: #92400e;
+    line-height: 1.5;
+  }
+  .dpf-pending-banner strong {
+    color: #78350f;
+  }
+  .dpf-status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    margin-left: 6px;
+  }
+  .dpf-status-pending {
+    background: #fef3c7;
+    color: #92400e;
+  }
 `;
+
+const formatTime = (ts) => {
+  if (!ts) return '';
+  const d = ts.toDate ? ts.toDate() : new Date(ts.seconds * 1000);
+  return d.toLocaleString('bn-BD');
+};
 
 export default function DoctorProfile({ user }) {
   const { currentHospital } = useHospital();
@@ -167,6 +236,30 @@ export default function DoctorProfile({ user }) {
   const [doctor, setDoctor] = useState(null);
   const [schedule, setSchedule] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [myRequests, setMyRequests] = useState([]);
+
+  // ==================================================
+  // ✅ Load doctor info + schedule
+  // ==================================================
+  const loadProfile = async () => {
+    if (!user?.doctorId) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const [docInfo, sch] = await Promise.all([
+        getDoctorInfo(hospitalId, user.doctorId),
+        getDoctorSchedule(hospitalId, user.doctorId),
+      ]);
+      setDoctor(docInfo);
+      setSchedule(sch);
+    } catch (err) {
+      console.error('Profile load error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -195,6 +288,24 @@ export default function DoctorProfile({ user }) {
     };
   }, [hospitalId, user?.doctorId]);
 
+  // ==================================================
+  // ✅ Subscribe to my requests (to show pending banner)
+  // ==================================================
+  useEffect(() => {
+    if (!user?.doctorId) return;
+    const unsub = subscribeToMyRequests(
+      hospitalId,
+      user.doctorId,
+      (list) => setMyRequests(list),
+      (err) => console.warn('subscribeToMyRequests error:', err.message)
+    );
+    return () => {
+      if (typeof unsub === 'function') unsub();
+    };
+  }, [hospitalId, user?.doctorId]);
+
+  const pendingRequest = myRequests.find((r) => r.status === 'pending');
+
   if (loading) {
     return (
       <>
@@ -217,7 +328,7 @@ export default function DoctorProfile({ user }) {
         {/* Banner */}
         <div className="dpf-banner" />
 
-        {/* Avatar + Name */}
+        {/* Avatar + Name + Edit Button */}
         <div className="dpf-avatar-wrap">
           <div className="dpf-avatar">
             {doctor?.imageUrl ? (
@@ -231,13 +342,35 @@ export default function DoctorProfile({ user }) {
               {doctor?.name || user?.name || 'Doctor'}
             </h2>
             {doctor?.nameEn && (
-              <div className="dpf-name-en">{doctor.nameEn}</div>
+              <div className="dpf-nameEn dpf-name-en">{doctor.nameEn}</div>
             )}
             {doctor?.deptName && (
               <span className="dpf-dept">{doctor.deptName}</span>
             )}
           </div>
+          <button
+            className="dpf-edit-btn"
+            onClick={() => setShowEditModal(true)}
+          >
+            <Edit3 size={15} /> Edit Profile
+          </button>
         </div>
+
+        {/* Pending Request Banner */}
+        {pendingRequest && (
+          <div className="dpf-pending-banner">
+            <Hourglass size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+            <div>
+              <strong>⏳ আপনার একটি এডিট রিকোয়েস্ট pending আছে</strong>
+              <div style={{ marginTop: 4 }}>
+                পাঠানো হয়েছে: {formatTime(pendingRequest.submittedAt)}
+              </div>
+              <div style={{ marginTop: 2, fontSize: 12 }}>
+                অ্যাডমিন এপ্রুভ করলে পরিবর্তন প্রোফাইলে দেখাবে।
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Body */}
         <div className="dpf-body">
@@ -299,17 +432,13 @@ export default function DoctorProfile({ user }) {
             </div>
           )}
 
-          {/* Contact (English only, from login) */}
+          {/* Account */}
           <div className="dpf-section">
             <div className="dpf-section-title">
               <User size={14} /> Account
             </div>
             <div className="dpf-row">
-              <Field
-                icon={Mail}
-                label="Email"
-                value={user?.email}
-              />
+              <Field icon={Mail} label="Email" value={user?.email} />
               <Field
                 icon={User}
                 label="Designation"
@@ -317,8 +446,40 @@ export default function DoctorProfile({ user }) {
               />
             </div>
           </div>
+
+          {/* Request History */}
+          {myRequests.length > 0 && (
+            <div className="dpf-section">
+              <div className="dpf-section-title">
+                <Hourglass size={14} /> My Edit Requests
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {myRequests.slice(0, 5).map((req) => (
+                  <RequestRow key={req.id} req={req} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Edit Modal */}
+      {showEditModal && (
+        <DoctorProfileEditModal
+          currentProfile={{
+            name: doctor?.name || user?.name || '',
+            nameEn: doctor?.nameEn || user?.nameEn || '',
+            specialty: doctor?.specialty || '',
+            quals: doctor?.quals || '',
+            workplace: doctor?.workplace || '',
+          }}
+          onClose={() => setShowEditModal(false)}
+          onSubmitted={() => {
+            // Reload profile data after submit
+            loadProfile();
+          }}
+        />
+      )}
     </>
   );
 }
@@ -332,6 +493,96 @@ function Field({ icon: Icon, label, value }) {
       <div className="dpf-value">
         {value || <span className="dpf-empty">—</span>}
       </div>
+    </div>
+  );
+}
+
+function RequestRow({ req }) {
+  const statusMeta = {
+    pending: {
+      icon: Hourglass,
+      label: 'Pending',
+      bg: '#fef3c7',
+      color: '#92400e',
+    },
+    approved: {
+      icon: CheckCircle2,
+      label: 'Approved',
+      bg: '#dcfce7',
+      color: '#166534',
+    },
+    rejected: {
+      icon: XCircle,
+      label: 'Rejected',
+      bg: '#fee2e2',
+      color: '#991b1b',
+    },
+    cancelled: {
+      icon: AlertCircle,
+      label: 'Cancelled',
+      bg: '#f1f5f9',
+      color: '#64748b',
+    },
+  };
+  const meta = statusMeta[req.status] || statusMeta.pending;
+  const Icon = meta.icon;
+
+  const fieldCount = Object.keys(req.changes || {}).length;
+
+  return (
+    <div
+      style={{
+        background: '#fff',
+        border: '1px solid #e2e8f0',
+        borderRadius: 10,
+        padding: '10px 14px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 8,
+      }}
+    >
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+          {fieldCount} টি field পরিবর্তনের রিকোয়েস্ট
+        </div>
+        <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
+          {req.submittedAt
+            ? (req.submittedAt.toDate
+                ? req.submittedAt.toDate()
+                : new Date(req.submittedAt.seconds * 1000)
+              ).toLocaleString('bn-BD')
+            : '—'}
+        </div>
+        {req.reviewNote && (
+          <div
+            style={{
+              fontSize: 11.5,
+              color: '#64748b',
+              marginTop: 2,
+              fontStyle: 'italic',
+            }}
+          >
+            নোট: {req.reviewNote}
+          </div>
+        )}
+      </div>
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 5,
+          padding: '4px 12px',
+          background: meta.bg,
+          color: meta.color,
+          borderRadius: 20,
+          fontSize: 11.5,
+          fontWeight: 700,
+        }}
+      >
+        <Icon size={12} /> {meta.label}
+      </span>
     </div>
   );
 }
