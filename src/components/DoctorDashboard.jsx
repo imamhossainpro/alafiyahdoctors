@@ -421,7 +421,7 @@ const DASH_CSS = `
 // ✅ Default branding (fallback)
 // ==================================================
 const DEFAULT_BRANDING = {
-  name: 'আল-আফিয়া',
+  name: 'আল-আফিয়াহ হসপিটাল',
   subtitle: 'Doctor Panel',
   logo: '/logo.png',
 };
