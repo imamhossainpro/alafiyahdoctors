@@ -4,12 +4,10 @@
 // ==================================================
 // ✅ Exact A4 size (595.32pt × 841.92pt)
 // ✅ Times New Roman 14pt / 18.5pt line height
-// ✅ 36pt margin
 // ✅ Dynamic placeholders {{key}}, **bold**, @@optional@@
 // ✅ Dynamic logo watermark (from Vercel Blob URL)
 // ✅ Dynamic beneficiary label — FULL BOLD
-// ✅ Page 3 layout fixed (footer no longer overlaps)
-// ✅ Print CSS with page-break
+// ✅ Footer fixed at page bottom — NO overlap, NO cut-off in print
 // ==================================================
 import React from 'react';
 import { formatDateLong } from '../../utils/mouFields';
@@ -23,20 +21,16 @@ const esc = (s) =>
   );
 
 const getValue = (data, key) => {
-  // Special: _nodot → remove trailing period
   if (key.endsWith('_nodot')) {
     const base = getValue(data, key.slice(0, -6));
     return base.replace(/\.$/, '');
   }
 
-  // Special: agreement_date_fmt → format date long
   if (key === 'agreement_date_fmt') {
     return formatDateLong(data.agreement_date);
   }
 
-  // ==================================================
-  // ✅ Special: beneficiary_full_text — FULL BOLD LINE
-  // ==================================================
+  // ✅ Beneficiary full text — FULL BOLD
   if (key === 'beneficiary_full_text') {
     const custom = (data.beneficiary_full_text || '').trim();
     if (custom) return `**${custom}**`;
@@ -59,9 +53,6 @@ const getValue = (data, key) => {
     return `**${hospital} will provide following Special discount rates & facilities for the ${label} of ${partner} ${member}.**`;
   }
 
-  // ==================================================
-  // ✅ Legacy fallbacks
-  // ==================================================
   if (key === 'beneficiary_label') {
     return (
       data.beneficiary_label ||
@@ -165,7 +156,7 @@ export const buildPages = (data) => {
 <p>This agreement is being executed in 2(two) identical originals, one to be retained by ${B1} Authority and other copy ${B2}.</p>`,
 
     // ==================================================
-    // PAGE 3  ← ✅ Content ends well above footer
+    // PAGE 3
     // ==================================================
     `<p style="margin-top:6pt;text-align:left">**9. Contact Person:**</p>
 <table class="ct">
@@ -226,7 +217,7 @@ export const MOU_PRINT_CSS = `
     width: 595.32pt;
     height: 841.92pt;
     box-sizing: border-box;
-    padding: 36.5pt 36pt 80pt;    /* ✅ bottom padding big enough for footer */
+    padding: 36.5pt 36pt 60pt;   /* ✅ bottom padding: content শেষ হবে footer-এর আগে */
     margin: 0 0 14px;
     background: #ffffff;
     color: #000000;
@@ -274,19 +265,20 @@ export const MOU_PRINT_CSS = `
     left: calc(var(--t, 36pt) - 18pt);
   }
 
-  /* ✅ Footer positioned at fixed bottom, outside content flow */
+  /* ✅ Footer — Screen preview: absolute bottom; Print: fixed bottom */
   .mou-page .foot {
     position: absolute;
-    left: 35pt;
-    right: 34pt;
+    left: 0;
+    right: 0;
     bottom: 14pt;
+    padding: 3pt 36pt 0 35pt;
     border-top: 1pt solid #d9d9d9;
-    padding: 3pt 0 0 1pt;
     font: 11pt Calibri, Carlito, "Segoe UI", sans-serif;
     line-height: 13pt;
     text-align: left;
     background: #ffffff;
     z-index: 5;
+    box-sizing: border-box;
   }
   .mou-page .foot .g { color: #7f7f7f; letter-spacing: 0.12em; }
 
@@ -330,27 +322,60 @@ export const MOU_PRINT_CSS = `
     background: rgba(180, 35, 24, 0.15);
   }
 
+  /* ==================================================
+     ✅ PRINT — footer becomes fixed at page bottom
+     ================================================== */
   @page {
     size: A4;
     margin: 0;
   }
 
   @media print {
-    body { background: #ffffff; }
+    html, body {
+      background: #ffffff;
+      margin: 0;
+      padding: 0;
+    }
+
     .mou-pages {
       transform: none !important;
-      width: auto;
+      width: 100%;
       height: auto !important;
     }
+
     .mou-page {
       margin: 0;
       box-shadow: none;
-      height: 841.92pt;
+      height: 297mm;               /* ✅ exact A4 height in mm */
+      width: 210mm;                /* ✅ exact A4 width in mm */
+      padding: 12.9mm 12.7mm 21mm; /* ✅ bottom padding for footer */
       break-after: page;
+      page-break-after: always;
+      overflow: hidden;
+      box-sizing: border-box;
     }
-    .mou-page:last-child { break-after: auto; }
+
+    .mou-page:last-child {
+      break-after: auto;
+      page-break-after: auto;
+    }
+
+    /* ✅ Footer stays at physical page bottom */
+    .mou-page .foot {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 8mm;                 /* ✅ fixed distance from page bottom */
+      padding: 2mm 12.7mm 0 12.3mm;
+      background: #ffffff;
+      z-index: 10;
+    }
+
+    /* ✅ Hide background highlight in print */
     .mou-page .v,
-    .mou-page .v.miss { background: none !important; }
+    .mou-page .v.miss {
+      background: none !important;
+    }
   }
 `;
 
