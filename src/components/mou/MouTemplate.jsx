@@ -2,6 +2,14 @@
 // ==================================================
 // 📄 MOU Document Template — 3 A4 Pages
 // ==================================================
+// ✅ Exact A4 size (595.32pt × 841.92pt)
+// ✅ Times New Roman 14pt / 18.5pt line height
+// ✅ 36pt margin
+// ✅ Dynamic placeholders {{key}}, **bold**, @@optional@@
+// ✅ Dynamic logo watermark (from Firebase Storage URL)
+// ✅ Dynamic beneficiary label — FULL BOLD
+// ✅ Print CSS with page-break
+// ==================================================
 import React from 'react';
 import { formatDateLong } from '../../utils/mouFields';
 
@@ -14,15 +22,18 @@ const esc = (s) =>
   );
 
 const getValue = (data, key) => {
+  // Special: _nodot → remove trailing period
   if (key.endsWith('_nodot')) {
     const base = getValue(data, key.slice(0, -6));
     return base.replace(/\.$/, '');
   }
-
+  // Special: agreement_date_fmt → format date long
   if (key === 'agreement_date_fmt') {
     return formatDateLong(data.agreement_date);
   }
-
+  // ==================================================
+  // ✅ NEW: beneficiary_full_text — full bold line
+  // ==================================================
   if (key === 'beneficiary_full_text') {
     const custom = (data.beneficiary_full_text || '').trim();
     if (custom) return `**${custom}**`;
@@ -44,49 +55,35 @@ const getValue = (data, key) => {
 
     return `**${hospital} will provide following Special discount rates & facilities for the ${label} of ${partner} ${member}.**`;
   }
-
-  if (key === 'beneficiary_label') {
-    return (
-      data.beneficiary_label ||
-      data.beneficiaryLabel ||
-      'Employees & Students'
-    )
-      .toString()
-      .trim();
-  }
-
-  if (key === 'beneficiary_member_text') {
-    return (
-      data.beneficiary_member_text ||
-      data.memberText ||
-      'along with their member'
-    )
-      .toString()
-      .trim();
-  }
-
   return (data[key] || '').toString().trim();
 };
 
+/**
+ * Template string processor
+ * - {{key}} → actual value with <span class="v">
+ * - **text** → <b>text</b>
+ * - @@key|prefix@@ → optional line, skipped if empty
+ */
 const processTemplate = (templateStr, data) => {
-  return (
-    templateStr
-      .replace(/@@(\w+)\|?([^@]*)@@/g, (m, k, pre) => {
-        const v = getValue(data, k);
-        return v ? `${pre}<span class="v">${esc(v)}</span><br>` : '';
-      })
-      .replace(/\{\{(\w+)\}\}/g, (m, k) => {
-        const v = getValue(data, k);
-        return v
-          ? `<span class="v">${esc(v)}</span>`
-          : '<span class="v miss">________</span>';
-      })
-      .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
-  );
+  return templateStr
+    // Optional line: @@key|prefix@@
+    .replace(/@@(\w+)\|?([^@]*)@@/g, (m, k, pre) => {
+      const v = getValue(data, k);
+      return v ? `${pre}<span class="v">${esc(v)}</span><br>` : '';
+    })
+    // Placeholder: {{key}}
+    .replace(/\{\{(\w+)\}\}/g, (m, k) => {
+      const v = getValue(data, k);
+      return v
+        ? `<span class="v">${esc(v)}</span>`
+        : '<span class="v miss">________</span>';
+    })
+    // Bold: **text**
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
 };
 
 // ==================================================
-// ✅ Template builder
+// ✅ Template builder — requires data for inline values
 // ==================================================
 export const buildPages = (data) => {
   const B1 = '**{{org1_name}}**';
@@ -115,7 +112,7 @@ export const buildPages = (data) => {
 <div class="it"><span class="no">2.</span>${B1} may include ${B2} in its corporate client list.</div>`,
 
     // ==================================================
-    // PAGE 2
+    // PAGE 2  ← ✅ শুধু এই লাইনটা পরিবর্তন
     // ==================================================
     `<div class="it" style="line-height:16.1pt"><span class="no">3.</span>{{beneficiary_full_text}}</div>
 <ul style="margin:17.2pt -24pt 0 0;line-height:17.1pt">
@@ -195,7 +192,7 @@ export const buildPages = (data) => {
 };
 
 // ==================================================
-// ✅ Print Styles
+// ✅ Print Styles — EXACTLY as original
 // ==================================================
 export const MOU_PRINT_CSS = `
   .mou-pages {
@@ -207,9 +204,9 @@ export const MOU_PRINT_CSS = `
   .mou-page {
     position: relative;
     width: 595.32pt;
-    height: 841.92pt;
+    min-height: 841.92pt;
     box-sizing: border-box;
-    padding: 36.5pt 36pt 36pt;   /* ✅ equal padding, no extra bottom */
+    padding: 36.5pt 36pt 0;
     margin: 0 0 14px;
     background: #ffffff;
     color: #000000;
@@ -257,19 +254,16 @@ export const MOU_PRINT_CSS = `
     left: calc(var(--t, 36pt) - 18pt);
   }
 
-  /* ✅ Footer — inside page, at absolute bottom, below content */
   .mou-page .foot {
     position: absolute;
     left: 35pt;
     right: 34pt;
-    bottom: 12pt;
+    top: 778pt;
     border-top: 1pt solid #d9d9d9;
-    padding: 3pt 0 0 1pt;
+    padding: 1.5pt 0 0 1pt;
     font: 11pt Calibri, Carlito, "Segoe UI", sans-serif;
     line-height: 13pt;
     text-align: left;
-    background: #ffffff;
-    z-index: 5;
   }
   .mou-page .foot .g { color: #7f7f7f; letter-spacing: 0.12em; }
 
@@ -314,7 +308,7 @@ export const MOU_PRINT_CSS = `
   }
 
   /* ==================================================
-     ✅ PRINT — exact A4 with footer at bottom
+     ✅ PRINT STYLES — EXACTLY as original
      ================================================== */
   @page {
     size: A4;
@@ -322,60 +316,34 @@ export const MOU_PRINT_CSS = `
   }
 
   @media print {
-    html, body {
-      background: #ffffff !important;
-      margin: 0;
-      padding: 0;
-    }
-
+    body { background: #ffffff; }
     .mou-pages {
       transform: none !important;
       width: auto;
       height: auto !important;
     }
-
     .mou-page {
       margin: 0;
       box-shadow: none;
-      width: 210mm;
-      height: 297mm;
-      padding: 12.9mm 12.7mm 12mm;  /* ✅ bottom padding for footer */
+      height: 841pt;
+      min-height: 0;
       break-after: page;
-      page-break-after: always;
-      overflow: hidden;
-      box-sizing: border-box;
     }
-
-    .mou-page:last-child {
-      break-after: auto;
-      page-break-after: auto;
-    }
-
-    .mou-page .foot {
-      position: absolute;
-      left: 12.3mm;
-      right: 12mm;
-      bottom: 6mm;
-      padding: 2mm 0 0 0.3mm;
-      background: #ffffff;
-      z-index: 10;
-    }
-
+    .mou-page:last-child { break-after: auto; }
     .mou-page .v,
-    .mou-page .v.miss {
-      background: none !important;
-    }
+    .mou-page .v.miss { background: none !important; }
   }
 `;
 
 // ==================================================
-// ✅ Rendered Pages Component
+// ✅ Rendered Pages Component — with dynamic logo watermark
 // ==================================================
 export default function MouTemplate({ data, pagesRef, logoUrl }) {
   if (!data) return null;
 
   const pages = buildPages(data);
 
+  // ✅ Watermark inline style (only if logoUrl provided)
   const watermarkStyle = logoUrl
     ? {
         position: 'absolute',
@@ -407,10 +375,12 @@ export default function MouTemplate({ data, pagesRef, logoUrl }) {
             className="mou-page"
             style={{ position: 'relative' }}
           >
+            {/* ✅ Dynamic watermark overlay */}
             {logoUrl && (
               <div aria-hidden="true" style={watermarkStyle} />
             )}
 
+            {/* ✅ Actual content above watermark */}
             <div
               style={{
                 position: 'relative',
