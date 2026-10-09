@@ -1,10 +1,11 @@
 // src/context/AuthContext.jsx
 // ==================================================
-// 🔐 Authentication Context — Web (Fixed)
+// 🔐 Authentication Context
 // ==================================================
 // ✅ User data + permissions load
 // ✅ Real-time user document listener
-// ✅ Better error handling
+// ✅ Logout function (only manual + user error)
+// ✅ Session persistence without unwanted logout
 // ==================================================
 import React, {
   createContext,
@@ -45,6 +46,15 @@ export function AuthProvider({ children }) {
           if (userDoc.exists()) {
             const data = userDoc.data();
 
+            // ⚠️ Inactive user → signOut (only when explicitly disabled)
+            if (data.isActive === false) {
+              console.warn('⚠️ [AuthContext] User is inactive — signing out');
+              await auth.signOut();
+              setUser(null);
+              setLoading(false);
+              return;
+            }
+
             console.log('📋 [AuthContext] User data loaded:', {
               role: data.role,
               approved: data.approved,
@@ -58,7 +68,6 @@ export function AuthProvider({ children }) {
             });
           } else {
             console.warn('⚠️ [AuthContext] User document not found');
-            // Fallback user
             setUser({
               uid: firebaseUser.uid,
               email: firebaseUser.email,
@@ -106,6 +115,15 @@ export function AuthProvider({ children }) {
       (snap) => {
         if (snap.exists()) {
           const data = snap.data();
+
+          // ⚠️ Only sign out if explicitly disabled by admin
+          if (data.isActive === false) {
+            console.warn('⚠️ [AuthContext] User disabled — signing out');
+            auth.signOut();
+            setUser(null);
+            return;
+          }
+
           console.log('🔄 [AuthContext] User doc updated:', {
             role: data.role,
             overridesCount: Object.keys(data.permissionOverrides || {})
@@ -128,7 +146,7 @@ export function AuthProvider({ children }) {
   }, [user?.uid]);
 
   // ==================================================
-  // ✅ Logout
+  // ✅ Logout — manual only (or user disabled)
   // ==================================================
   const logout = async () => {
     try {

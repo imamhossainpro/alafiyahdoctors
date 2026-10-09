@@ -1,13 +1,12 @@
 // src/firebase.js
 // ==================================================
-// 🔥 Firebase Configuration — Full File (Fixed)
+// 🔥 Firebase Configuration — Full File
 // ==================================================
 // ✅ Firestore, Auth, Storage, Analytics
-// ✅ Google Sign-In
-// ✅ Phone (OTP) Sign-In
-// ✅ Email/Password Sign-In
+// ✅ Google Sign-In, Phone Sign-In, Email/Password
+// ✅ browserLocalPersistence — session tab বন্ধ করলেও থাকে
+// ✅ GA4 analytics with pending event queue
 // ✅ ESM exports for all services
-// ✅ GA4 tracking helper with pending queue
 // ==================================================
 import { initializeApp } from 'firebase/app';
 
@@ -40,22 +39,22 @@ import {
 import {
   getAuth,
   setPersistence,
-  browserSessionPersistence,
+  browserLocalPersistence,        // ✅ পরিবর্তন: session → local
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
   updateProfile,
-  // ✅ Google
+  // Google
   GoogleAuthProvider,
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
-  // ✅ Phone
+  // Phone
   RecaptchaVerifier,
   signInWithPhoneNumber,
   PhoneAuthProvider,
-  // ✅ Link phone to existing account
+  // Link phone to existing account
   linkWithCredential,
   linkWithPhoneNumber,
 } from 'firebase/auth';
@@ -98,9 +97,9 @@ export const storage = getStorage(app);
 const auth = getAuth(app);
 
 // ==================================================
-// ✅ Auth Persistence (session-only)
+// ✅ Auth Persistence — Local (tab বন্ধ করলেও session থাকে)
 // ==================================================
-setPersistence(auth, browserSessionPersistence).catch((error) =>
+setPersistence(auth, browserLocalPersistence).catch((error) =>
   console.error('Auth persistence error:', error)
 );
 
@@ -108,9 +107,8 @@ setPersistence(auth, browserSessionPersistence).catch((error) =>
 // ✅ Google Analytics 4 — single initialization with queue
 // ==================================================
 let analytics = null;
-const pendingEvents = []; // ✅ আগে declare করা হয়েছে
+const pendingEvents = [];
 
-// ✅ Analytics helper — safe event tracking
 export const trackEvent = (eventName, params = {}) => {
   if (!analytics) {
     // Analytics এখনো ready নয় → queue-এ রাখুন
@@ -167,16 +165,16 @@ export {
   createUserWithEmailAndPassword,
   signOut,
   updateProfile,
-  // ✅ Google
+  // Google
   GoogleAuthProvider,
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
-  // ✅ Phone
+  // Phone
   RecaptchaVerifier,
   signInWithPhoneNumber,
   PhoneAuthProvider,
-  // ✅ Link phone
+  // Link phone
   linkWithCredential,
   linkWithPhoneNumber,
 };
