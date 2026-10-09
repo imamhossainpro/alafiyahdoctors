@@ -57,10 +57,15 @@ export const MOU_GROUPS = [
     title: 'Beneficiary (Discounted Parties)',
     fields: [
       {
+        key: 'beneficiary_full_text',
+        label:
+          'Full Beneficiary Line (optional — leave empty to auto-compose)',
+        type: 'area',
+      },
+      {
         key: 'beneficiary_label',
-        label: 'Beneficiary Label',
+        label: 'Beneficiary Label (e.g. "Employees & Students")',
         type: 'text',
-        req: 1,
       },
       {
         key: 'beneficiary_member_text',
@@ -132,7 +137,14 @@ export const MOU_DEFAULTS = {
   org2_witness_name: '',
   org2_witness_designation: '',
 
-  // ✅ Beneficiary (dynamic)
+  // ==================================================
+  // ✅ Beneficiary (dynamic) — full line + parts
+  // ==================================================
+  // • beneficiary_full_text: পুরো কাস্টম লাইন (optional)
+  //   খালি থাকলে auto-compose হবে নিচের parts থেকে
+  // • beneficiary_label: "Employees & Students" ইত্যাদি
+  // • beneficiary_member_text: "along with their member" ইত্যাদি
+  beneficiary_full_text: '',
   beneficiary_label: 'Employees & Students',
   beneficiary_member_text: 'along with their member',
 
@@ -184,4 +196,42 @@ export const formatDateLong = (dateStr) => {
     month: 'long',
     year: 'numeric',
   });
+};
+
+// ==================================================
+// ✅ Helper: build the beneficiary line (used by template)
+// ==================================================
+// Priority: beneficiary_full_text → auto-composed from parts
+// ==================================================
+export const buildBeneficiaryLine = (data = {}) => {
+  const custom = (data.beneficiary_full_text || '').trim();
+  if (custom) return custom;
+
+  const hospital = (data.org1_name || '').trim();
+  const partner = (data.org2_name || '').trim();
+  const label =
+    (data.beneficiary_label || '').trim() || 'Employees & Students';
+  const member =
+    (data.beneficiary_member_text || '').trim() ||
+    'along with their member';
+
+  if (!hospital || !partner) {
+    return `${hospital || partner || 'The parties'} will provide following Special discount rates & facilities.`;
+  }
+
+  return `${hospital} will provide following Special discount rates & facilities for the ${label} of ${partner} ${member}.`;
+};
+
+// ==================================================
+// ✅ Default export (optional)
+// ==================================================
+export default {
+  MOU_GROUPS,
+  MOU_FIELDS,
+  MOU_FIELD_MAP,
+  MOU_DEFAULTS,
+  makeBlankMou,
+  validateMouField,
+  formatDateLong,
+  buildBeneficiaryLine,
 };

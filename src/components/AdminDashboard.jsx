@@ -32,7 +32,6 @@ const LocationManager = lazy(() => import('./admin/LocationManager'));
 const UserAccessManager = lazy(() => import('./admin/UserAccessManager'));
 const QueueControlPanel = lazy(() => import('./admin/QueueControlPanel'));
 const PromoManager = lazy(() => import('./admin/PromoManager'));
-const MouSettings = lazy(() => import('./admin/MouSettings'));   // ✅ NEW
 
 // ==================================================
 // ✅ Tab Loader
@@ -825,27 +824,6 @@ export default function AdminDashboard({ user: propUser }) {
             </button>
           )}
 
-          {/* ✅ NEW: MOU Settings Tab */}
-          {can('dashboard.view') && (
-            <button
-              onClick={() => { setShowArchived(false); setTab('mou'); }}
-              style={{
-                padding: '8px 16px',
-                background: tab === 'mou' ? '#1c5fa8' : '#ffffff',
-                color: tab === 'mou' ? '#ffffff' : '#333333',
-                border: '1px solid #e2e8f0',
-                borderRadius: '5px',
-                cursor: 'pointer',
-                fontWeight: '600',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-              }}
-            >
-              <FileSignature size={14} /> 📝 MOU Settings
-            </button>
-          )}
-
           {can('activity_log.view') && (
             <button
               onClick={() => setTab('logs')}
@@ -984,16 +962,6 @@ export default function AdminDashboard({ user: propUser }) {
           </Suspense>
         </SafeArea>
       )}
-
-      {/* ✅ NEW: MOU Settings Tab Content */}
-      {tab === 'mou' && can('dashboard.view') && (
-        <SafeArea>
-          <Suspense fallback={<TabLoader />}>
-            <MouSettings />
-          </Suspense>
-        </SafeArea>
-      )}
-
       {tab === 'user_access' && can('user.view') && (
         <SafeArea>
           <AdminPanel

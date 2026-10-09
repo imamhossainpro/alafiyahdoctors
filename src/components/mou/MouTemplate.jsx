@@ -7,7 +7,7 @@
 // ✅ 36pt margin
 // ✅ Dynamic placeholders {{key}}, **bold**, @@optional@@
 // ✅ Dynamic logo watermark (from Firebase Storage URL)
-// ✅ Dynamic beneficiary label (Employees & Students — editable)
+// ✅ Dynamic beneficiary label
 // ✅ Print CSS with page-break
 // ==================================================
 import React from 'react';
@@ -27,11 +27,41 @@ const getValue = (data, key) => {
     const base = getValue(data, key.slice(0, -6));
     return base.replace(/\.$/, '');
   }
+
   // Special: agreement_date_fmt → format date long
   if (key === 'agreement_date_fmt') {
     return formatDateLong(data.agreement_date);
   }
-  // Special: beneficiary_label — fallback chain
+
+  // ==================================================
+  // ✅ Special: beneficiary_full_text
+  // Priority: custom full line → auto-composed from parts
+  // ==================================================
+  if (key === 'beneficiary_full_text') {
+    const custom = (data.beneficiary_full_text || '').trim();
+    if (custom) return custom;
+
+    const label =
+      (data.beneficiary_label || '').trim() ||
+      data.beneficiaryLabel ||
+      'Employees & Students';
+    const member =
+      (data.beneficiary_member_text || '').trim() ||
+      data.memberText ||
+      'along with their member';
+    const hospital = (data.org1_name || '').trim();
+    const partner = (data.org2_name || '').trim();
+
+    if (!hospital || !partner) {
+      return `The parties will provide following Special discount rates & facilities.`;
+    }
+
+    return `${hospital} will provide following Special discount rates & facilities for the ${label} of ${partner} ${member}.`;
+  }
+
+  // ==================================================
+  // ✅ Legacy fallbacks (backward compatibility)
+  // ==================================================
   if (key === 'beneficiary_label') {
     return (
       data.beneficiary_label ||
@@ -41,7 +71,7 @@ const getValue = (data, key) => {
       .toString()
       .trim();
   }
-  // Special: beneficiary_member_text — fallback chain
+
   if (key === 'beneficiary_member_text') {
     return (
       data.beneficiary_member_text ||
@@ -51,6 +81,7 @@ const getValue = (data, key) => {
       .toString()
       .trim();
   }
+
   return (data[key] || '').toString().trim();
 };
 
@@ -79,7 +110,7 @@ const processTemplate = (templateStr, data) => {
 };
 
 // ==================================================
-// ✅ Template builder — requires data for inline values
+// ✅ Template builder
 // ==================================================
 export const buildPages = (data) => {
   const B1 = '**{{org1_name}}**';
@@ -108,9 +139,9 @@ export const buildPages = (data) => {
 <div class="it"><span class="no">2.</span>${B1} may include ${B2} in its corporate client list.</div>`,
 
     // ==================================================
-    // PAGE 2  ← ✅ Dynamic beneficiary label here
+    // PAGE 2  ← ✅ Dynamic beneficiary line
     // ==================================================
-    `<div class="it" style="line-height:16.1pt"><span class="no">3.</span>${B1} will provide following Special discount rates &amp; facilities for the **{{beneficiary_label}}** of ${B2} {{beneficiary_member_text}}.</div>
+    `<div class="it" style="line-height:16.1pt"><span class="no">3.</span>{{beneficiary_full_text}}</div>
 <ul style="margin:17.2pt -24pt 0 0;line-height:17.1pt">
   <li>{{discount_pathology}}% discount on all pathological investigation (Blood, Urine, Sputum etc).</li>
   <li>{{discount_radiology}}% discount on Radiology &amp; Imaging (X-ray, ECHO, ECG &amp; Ultrasonography etc),</li>
@@ -184,12 +215,11 @@ export const buildPages = (data) => {
 </div>`,
   ];
 
-  // Process each page through template engine
   return rawPages.map((h) => processTemplate(h, data));
 };
 
 // ==================================================
-// ✅ Print Styles (injected once)
+// ✅ Print Styles
 // ==================================================
 export const MOU_PRINT_CSS = `
   .mou-pages {
@@ -304,9 +334,6 @@ export const MOU_PRINT_CSS = `
     background: rgba(180, 35, 24, 0.15);
   }
 
-  /* ==================================================
-     ✅ PRINT STYLES
-     ================================================== */
   @page {
     size: A4;
     margin: 0;
@@ -333,14 +360,13 @@ export const MOU_PRINT_CSS = `
 `;
 
 // ==================================================
-// ✅ Rendered Pages Component — with dynamic logo watermark
+// ✅ Rendered Pages Component
 // ==================================================
 export default function MouTemplate({ data, pagesRef, logoUrl }) {
   if (!data) return null;
 
   const pages = buildPages(data);
 
-  // ✅ Watermark inline style (only if logoUrl provided)
   const watermarkStyle = logoUrl
     ? {
         position: 'absolute',
@@ -372,12 +398,10 @@ export default function MouTemplate({ data, pagesRef, logoUrl }) {
             className="mou-page"
             style={{ position: 'relative' }}
           >
-            {/* ✅ Dynamic watermark overlay */}
             {logoUrl && (
               <div aria-hidden="true" style={watermarkStyle} />
             )}
 
-            {/* ✅ Actual content above watermark */}
             <div
               style={{
                 position: 'relative',
