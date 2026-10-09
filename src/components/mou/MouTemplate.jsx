@@ -8,7 +8,7 @@
 // ✅ Dynamic placeholders {{key}}, **bold**, @@optional@@
 // ✅ Dynamic logo watermark (from Vercel Blob URL)
 // ✅ Dynamic beneficiary label — FULL BOLD
-// ✅ Page 3 layout fixed (no content cut-off)
+// ✅ Page 3 layout fixed (footer no longer overlaps)
 // ✅ Print CSS with page-break
 // ==================================================
 import React from 'react';
@@ -85,28 +85,19 @@ const getValue = (data, key) => {
   return (data[key] || '').toString().trim();
 };
 
-/**
- * Template string processor
- * - {{key}} → actual value with <span class="v">
- * - **text** → <b>text</b>
- * - @@key|prefix@@ → optional line, skipped if empty
- */
 const processTemplate = (templateStr, data) => {
   return (
     templateStr
-      // Optional line: @@key|prefix@@
       .replace(/@@(\w+)\|?([^@]*)@@/g, (m, k, pre) => {
         const v = getValue(data, k);
         return v ? `${pre}<span class="v">${esc(v)}</span><br>` : '';
       })
-      // Placeholder: {{key}}
       .replace(/\{\{(\w+)\}\}/g, (m, k) => {
         const v = getValue(data, k);
         return v
           ? `<span class="v">${esc(v)}</span>`
           : '<span class="v miss">________</span>';
       })
-      // Bold: **text**
       .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
   );
 };
@@ -141,7 +132,7 @@ export const buildPages = (data) => {
 <div class="it"><span class="no">2.</span>${B1} may include ${B2} in its corporate client list.</div>`,
 
     // ==================================================
-    // PAGE 2  ← ✅ Full-bold dynamic beneficiary line
+    // PAGE 2
     // ==================================================
     `<div class="it" style="line-height:16.1pt"><span class="no">3.</span>{{beneficiary_full_text}}</div>
 <ul style="margin:17.2pt -24pt 0 0;line-height:17.1pt">
@@ -174,7 +165,7 @@ export const buildPages = (data) => {
 <p>This agreement is being executed in 2(two) identical originals, one to be retained by ${B1} Authority and other copy ${B2}.</p>`,
 
     // ==================================================
-    // PAGE 3  ← ✅ Fixed: no content cut-off
+    // PAGE 3  ← ✅ Content ends well above footer
     // ==================================================
     `<p style="margin-top:6pt;text-align:left">**9. Contact Person:**</p>
 <table class="ct">
@@ -194,7 +185,7 @@ export const buildPages = (data) => {
   <span>For &amp; On Behalf of **{{org1_short_name}}**</span>
   <span>On behalf of **{{org2_short_name}}**</span>
 </div>
-<div class="sg" style="grid-template-columns:288pt 1fr;margin-top:38pt">
+<div class="sg" style="grid-template-columns:288pt 1fr;margin-top:30pt">
   <span class="d">${'…'.repeat(15)}</span>
   <span class="d">.${'…'.repeat(13)}</span>
   <b>{{org1_signatory_name}}</b>
@@ -204,8 +195,8 @@ export const buildPages = (data) => {
   <span>{{org1_name}}</span>
   <span>{{org2_name}}</span>
 </div>
-<p class="c" style="font-size:12pt;line-height:13.8pt;margin-top:32pt">In presence of</p>
-<div class="sg" style="grid-template-columns:252pt 1fr;margin-top:42pt">
+<p class="c" style="font-size:12pt;line-height:13.8pt;margin-top:26pt">In presence of</p>
+<div class="sg" style="grid-template-columns:252pt 1fr;margin-top:32pt">
   <span class="d">${'…'.repeat(15)}</span>
   <span class="d">${'…'.repeat(13)}</span>
   <b>{{org1_witness_name}}</b>
@@ -233,9 +224,9 @@ export const MOU_PRINT_CSS = `
   .mou-page {
     position: relative;
     width: 595.32pt;
-    min-height: 841.92pt;
+    height: 841.92pt;
     box-sizing: border-box;
-    padding: 36.5pt 36pt 48pt;    /* ✅ bottom padding */
+    padding: 36.5pt 36pt 80pt;    /* ✅ bottom padding big enough for footer */
     margin: 0 0 14px;
     background: #ffffff;
     color: #000000;
@@ -283,16 +274,19 @@ export const MOU_PRINT_CSS = `
     left: calc(var(--t, 36pt) - 18pt);
   }
 
+  /* ✅ Footer positioned at fixed bottom, outside content flow */
   .mou-page .foot {
     position: absolute;
     left: 35pt;
     right: 34pt;
-    bottom: 12pt;                 /* ✅ bottom থেকে distance */
+    bottom: 14pt;
     border-top: 1pt solid #d9d9d9;
-    padding: 1.5pt 0 0 1pt;
+    padding: 3pt 0 0 1pt;
     font: 11pt Calibri, Carlito, "Segoe UI", sans-serif;
     line-height: 13pt;
     text-align: left;
+    background: #ffffff;
+    z-index: 5;
   }
   .mou-page .foot .g { color: #7f7f7f; letter-spacing: 0.12em; }
 
@@ -351,7 +345,7 @@ export const MOU_PRINT_CSS = `
     .mou-page {
       margin: 0;
       box-shadow: none;
-      min-height: 841pt;
+      height: 841.92pt;
       break-after: page;
     }
     .mou-page:last-child { break-after: auto; }
