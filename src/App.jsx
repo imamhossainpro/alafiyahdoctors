@@ -28,7 +28,7 @@ const CheckIn = lazy(() => import('./components/CheckIn'));
 const NotFoundPage = lazy(() => import('./components/NotFoundPage'));
 const UserProfile = lazy(() => import('./components/UserProfile'));
 
-// ✅ NEW: Doctor Dashboard
+// ✅ Doctor Dashboard (own)
 const DoctorDashboard = lazy(() => import('./components/DoctorDashboard'));
 
 // ==================================================
@@ -91,10 +91,7 @@ function App() {
               📅 Booking Routes
               ================================================== */}
           {/* ✅ Doctor-specific booking — MUST come BEFORE /booking */}
-          <Route
-            path="/booking/:doctorId"
-            element={<DoctorPanelBuilder />}
-          />
+          <Route path="/booking/:doctorId" element={<DoctorPanelBuilder />} />
           {/* Generic booking */}
           <Route path="/booking" element={<DoctorPanelBuilder />} />
 
@@ -112,8 +109,6 @@ function App() {
           <Route path="/doctor" element={<DoctorDashboard />} />
           <Route path="/doctor/patients" element={<DoctorDashboard />} />
           <Route path="/doctor/reports" element={<DoctorDashboard />} />
-          <Route path="/doctor/history" element={<DoctorDashboard />} />
-          <Route path="/doctor/schedule" element={<DoctorDashboard />} />
           <Route path="/doctor/profile" element={<DoctorDashboard />} />
 
           {/* ==================================================
