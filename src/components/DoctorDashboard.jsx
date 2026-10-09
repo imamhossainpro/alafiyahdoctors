@@ -403,9 +403,9 @@ const DASH_CSS = `
 // ✅ Default branding (fallback)
 // ==================================================
 const DEFAULT_BRANDING = {
-  name: 'আল-আফিয়া',
+  name: 'Al-Afiyah Hospital',
   subtitle: 'Doctor Panel',
-  logo: '/logo.png',
+  logo: './assets/logo.png',
 };
 
 // ==================================================
