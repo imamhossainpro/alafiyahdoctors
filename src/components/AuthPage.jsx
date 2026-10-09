@@ -4,10 +4,9 @@
 // ==================================================
 // ✅ Google Sign-In (popup) — DEFAULT TAB
 // ✅ Email/Password Sign-In + Register
-// ✅ Clear message when user tries wrong method
 // ✅ Bengali error messages
 // ✅ GA4 tracking
-// ✅ Post-auth: সরাসরি home (/) এ redirect
+// ✅ Post-auth: সব user হোম পেজে (/) redirect
 // ==================================================
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -35,10 +34,10 @@ const DEFAULT_HOSPITAL_ID = 'alafiyah_main';
 // ==================================================
 // ✅ Main Component
 // ==================================================
-export default function AuthPage({ onClose, redirectAfterLogin }) {
+export default function AuthPage({ onClose }) {
   const navigate = useNavigate();
 
-  // ✅ DEFAULT TAB = Google (since most users registered via Google)
+  // ✅ DEFAULT TAB = Google
   const [tab, setTab] = useState('google');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -51,31 +50,35 @@ export default function AuthPage({ onClose, redirectAfterLogin }) {
   const [name, setName] = useState('');
 
   // ==================================================
-  // ✅ Post-Auth Handler
+  // ✅ Post-Auth Handler — সব user হোম পেজে যাবে
   // ==================================================
   const handlePostAuth = async (firebaseUser, provider) => {
     try {
-      // Ensure user doc exists in Firestore
+      // ১. Firestore-এ user doc তৈরি/আপডেট
       await ensureUserDoc(DEFAULT_HOSPITAL_ID, firebaseUser, {
         authProvider: provider,
         name: firebaseUser.displayName || '',
       });
 
-      // GA4 tracking
+      // ২. GA4 tracking
       trackEvent(`login_${provider}`, { method: provider });
 
-      // ✅ Redirect logic — সব user home-এ যাবে
-      if (redirectAfterLogin) {
-        navigate(redirectAfterLogin, { replace: true });
-      } else {
-        navigate('/', { replace: true });
+      console.log('✅ Login successful, redirecting to home');
+
+      // ৩. Modal হলে onClose কল হবে
+      if (typeof onClose === 'function') {
+        onClose();
       }
 
-      // Close modal if opened as modal
-      if (onClose) onClose();
+      // ৪. সব user হোম পেজে যাবে
+      setTimeout(() => {
+        navigate('/', { replace: true });
+      }, 100);
     } catch (err) {
       console.error('Post-auth error:', err);
-      setError('লগইন সম্পন্ন হয়েছে কিন্তু ব্যবহারকারীর তথ্য লোড করা যায়নি');
+      setError(
+        'লগইন সম্পন্ন হয়েছে কিন্তু ব্যবহারকারীর তথ্য লোড করা যায়নি'
+      );
     }
   };
 
@@ -137,7 +140,6 @@ export default function AuthPage({ onClose, redirectAfterLogin }) {
     } catch (err) {
       console.error('Email auth error:', err);
 
-      // ✅ Smart error messages — especially for wrong-method attempts
       let msg = err.message || 'লগইন ব্যর্থ হয়েছে';
 
       if (err.code === 'auth/user-not-found') {
@@ -146,9 +148,8 @@ export default function AuthPage({ onClose, redirectAfterLogin }) {
       } else if (err.code === 'auth/wrong-password') {
         msg = '❌ পাসওয়ার্ড ভুল। আবার চেষ্টা করুন।';
       } else if (err.code === 'auth/invalid-credential') {
-        // ✅ Most common case — user registered with Google but trying Email
         msg =
-          '❌ ইমেইল/পাসওয়ার্ড ভুল। আপনি যদি Google দিয়ে অ্যাকাউন্ট খুলে থাকেন, তাহলে উপরের "Google" tab-এ ক্লিক করুন অথবা Google দিয়ে লগইন করুন।';
+          '❌ ইমেইল/পাসওয়ার্ড ভুল। আপনি যদি Google দিয়ে অ্যাকাউন্ট খুলে থাকেন, তাহলে উপরের "Google" tab-এ ক্লিক করুন।';
       } else if (err.code === 'auth/email-already-in-use') {
         msg =
           '❌ এই ইমেইল আগে থেকেই ব্যবহৃত। Google দিয়ে লগইন করুন অথবা অন্য ইমেইল দিয়ে রেজিস্ট্রেশন করুন।';
@@ -162,7 +163,7 @@ export default function AuthPage({ onClose, redirectAfterLogin }) {
         msg = '❌ নেটওয়ার্ক সমস্যা — ইন্টারনেট চেক করুন।';
       } else if (err.code === 'auth/operation-not-allowed') {
         msg =
-          '❌ Email/Password Firebase Console-এ enable করা হয়নি। Firebase Console → Authentication → Sign-in method → Email/Password enable করুন।';
+          '❌ Email/Password Firebase Console-এ enable করা হয়নি।';
       }
 
       setError(msg);
@@ -172,7 +173,7 @@ export default function AuthPage({ onClose, redirectAfterLogin }) {
   };
 
   // ==================================================
-  // ✅ Styles (inline, no Tailwind)
+  // ✅ Styles
   // ==================================================
   const overlayStyle = {
     position: 'fixed',
@@ -313,7 +314,7 @@ export default function AuthPage({ onClose, redirectAfterLogin }) {
           </button>
         )}
 
-        {/* ============ Header ============ */}
+        {/* Header */}
         <div
           style={{
             padding: '28px 24px 20px',
@@ -346,18 +347,12 @@ export default function AuthPage({ onClose, redirectAfterLogin }) {
           >
             স্বাগতম
           </h2>
-          <p
-            style={{
-              margin: 0,
-              fontSize: '13.5px',
-              color: '#64748b',
-            }}
-          >
+          <p style={{ margin: 0, fontSize: '13.5px', color: '#64748b' }}>
             আপনার সিরিয়াল দেখতে লগইন করুন
           </p>
         </div>
 
-        {/* ============ Tabs ============ */}
+        {/* Tabs */}
         <div
           style={{
             display: 'flex',
@@ -408,7 +403,7 @@ export default function AuthPage({ onClose, redirectAfterLogin }) {
           </button>
         </div>
 
-        {/* ============ Body ============ */}
+        {/* Body */}
         <div style={{ padding: '24px' }}>
           {/* Error */}
           {error && (
@@ -447,7 +442,6 @@ export default function AuthPage({ onClose, redirectAfterLogin }) {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                lineHeight: 1.5,
               }}
             >
               <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
@@ -455,7 +449,7 @@ export default function AuthPage({ onClose, redirectAfterLogin }) {
             </div>
           )}
 
-          {/* ============ GOOGLE TAB ============ */}
+          {/* GOOGLE TAB */}
           {tab === 'google' && (
             <div>
               <p
@@ -513,7 +507,7 @@ export default function AuthPage({ onClose, redirectAfterLogin }) {
             </div>
           )}
 
-          {/* ============ EMAIL TAB ============ */}
+          {/* EMAIL TAB */}
           {tab === 'email' && (
             <form onSubmit={handleEmailSubmit}>
               {isRegister && (
@@ -635,7 +629,6 @@ export default function AuthPage({ onClose, redirectAfterLogin }) {
                 </button>
               </p>
 
-              {/* ✅ Google hint for Email tab users */}
               <div
                 style={{
                   marginTop: '18px',
@@ -656,7 +649,7 @@ export default function AuthPage({ onClose, redirectAfterLogin }) {
           )}
         </div>
 
-        {/* ============ Footer ============ */}
+        {/* Footer */}
         <div
           style={{
             padding: '14px 24px',
@@ -678,7 +671,7 @@ export default function AuthPage({ onClose, redirectAfterLogin }) {
         </div>
       </div>
 
-      {/* Global spin animation */}
+      {/* Spin animation */}
       <style>{`
         @keyframes authSpin {
           to { transform: rotate(360deg); }
