@@ -422,8 +422,8 @@ const DASH_CSS = `
 // ==================================================
 const DEFAULT_BRANDING = {
   name: 'আল-আফিয়াহ হসপিটাল',
-  subtitle: 'Doctor Panel',
-  logo: '/logo.png',
+  subtitle: 'ডাক্তার পোর্টাল',   
+  logo: './assets/logo.png',
 };
 
 // ==================================================
