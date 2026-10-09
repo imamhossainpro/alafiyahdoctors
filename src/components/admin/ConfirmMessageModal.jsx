@@ -9,7 +9,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Send, Loader2, Edit3, AlertCircle, Clock } from 'lucide-react';
 
 const RAILWAY_API_URL =
-  'https://soothing-healing-production-8e36.up.railway.app';
+  'https://api.alafiyahhospital.com';
 
 // ==================================================
 // ✅ Quick Time Preset Options

@@ -19,7 +19,7 @@ import { Bell, RefreshCw, Pause, Play, Users, Clock } from 'lucide-react';
 // ==================================================
 // ✅ Railway Backend URL — FCM Notification API
 // ==================================================
-const RAILWAY_API_URL = 'https://soothing-healing-production-8e36.up.railway.app';
+const RAILWAY_API_URL = 'https://api.alafiyahhospital.com';
 
 const getTodayString = () => {
   const d = new Date();
