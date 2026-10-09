@@ -644,23 +644,30 @@ export default function DoctorDashboard() {
             </div>
 
             <DoctorSummaryCards
-              counts={todayCounts}
-              onCardClick={(status) => {
-                navigate(`/doctor/patients?status=${status}`);
-              }}
+            counts={todayCounts}
+            onCardClick={(status) => {
+                // ✅ Card click → patients list with status + today filter
+                navigate(`/doctor/patients?status=${status}&date=today`);
+            }}
             />
 
             <DoctorPatientList
-              appointments={appointments}
-              initialDate={todayStr}
-              showDateFilter={false}
-              title="Today's Patients"
+            appointments={appointments}
+            initialDate={todayStr}
+            showDateFilter={true}
+            title="Today's Patients"
             />
           </div>
         );
 
       case 'patients':
-        return <DoctorPatientList appointments={appointments} />;
+        return (
+            <DoctorPatientList
+            appointments={appointments}
+            showDateFilter={true}
+            title="My Patients"
+            />
+        );
 
       case 'reports':
         return <DoctorDailyReport appointments={appointments} />;

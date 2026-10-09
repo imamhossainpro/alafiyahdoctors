@@ -1,611 +1,633 @@
 // src/components/doctor/DoctorPatientList.jsx
 // ==================================================
-// 👥 Doctor Patient List — Safe fields only
+// 👥 Doctor Patient List — with Date + Status filters
 // ==================================================
-// ✅ Search by name/serial
-// ✅ Date & status filters
-// ✅ Pagination
-// ✅ NO mobile, NO referral
+// ✅ URL params থেকে initial filter
+// ✅ Filter: আজ / গতকাল / আগামী / গত ৭ দিন / সব
+// ✅ Status: total / pending / approved / attended /
+//    doctor_seen / cancelled / upcoming / no-show
+// ✅ Search by name or serial
+// ✅ Safe fields only (no mobile, no referral)
 // ==================================================
+import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Search, X } from 'lucide-react';
 
-import React, { useState, useMemo } from 'react';
-import {
-  Search,
-  Filter,
-  X,
-  Calendar,
-  ChevronLeft,
-  ChevronRight,
-  Eye,
-  XCircle,
-} from 'lucide-react';
-
-const CSS = `
-  .dpl-container {
-    background: #fff;
-    border-radius: 14px;
-    border: 1px solid #e2e8f0;
-    overflow: hidden;
-  }
-  .dpl-header {
-    padding: 18px 20px;
-    border-bottom: 1px solid #e2e8f0;
-    background: #f8fafc;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .dpl-title {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 700;
-    color: #1e293b;
-  }
-  .dpl-filters {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-  .dpl-search {
-    display: flex;
-    align-items: center;
-    background: #fff;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    padding: 0 10px;
-    min-width: 220px;
-  }
-  .dpl-search input {
-    border: none;
-    background: transparent;
-    outline: none;
-    padding: 8px 6px;
-    font-size: 13.5px;
-    font-family: inherit;
-    width: 100%;
-    color: #1e293b;
-  }
-  .dpl-select {
-    padding: 8px 12px;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    font-size: 13px;
-    font-family: inherit;
-    background: #fff;
-    color: #1e293b;
-    cursor: pointer;
-  }
-  .dpl-btn-reset {
-    padding: 8px 14px;
-    background: #f1f5f9;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    font-size: 12.5px;
-    font-weight: 600;
-    color: #475569;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-  }
-  .dpl-btn-reset:hover {
-    background: #e2e8f0;
-  }
-
-  /* Table */
-  .dpl-table-wrap {
-    overflow-x: auto;
-  }
-  .dpl-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13.5px;
-    min-width: 900px;
-  }
-  .dpl-table thead {
-    background: #f8fafc;
-  }
-  .dpl-table th {
-    padding: 11px 12px;
-    text-align: left;
-    font-size: 12px;
-    font-weight: 700;
-    color: #475569;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-    border-bottom: 1px solid #e2e8f0;
-    white-space: nowrap;
-  }
-  .dpl-table td {
-    padding: 12px;
-    border-bottom: 1px solid #f1f5f9;
-    color: #1e293b;
-    vertical-align: middle;
-  }
-  .dpl-table tbody tr:hover {
-    background: #f8fafc;
-  }
-
-  .dpl-serial {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    background: #eff6ff;
-    color: #1c5fa8;
-    font-weight: 800;
-    font-size: 13px;
-    padding: 0 8px;
-  }
-  .dpl-name {
-    font-weight: 700;
-    color: #1e293b;
-  }
-  .dpl-name-en {
-    font-size: 11.5px;
-    color: #64748b;
-    font-style: italic;
-  }
-  .dpl-badge {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: 700;
-    white-space: nowrap;
-  }
-  .dpl-empty {
-    padding: 60px 20px;
-    text-align: center;
-    color: #64748b;
-  }
-  .dpl-empty-icon {
-    font-size: 48px;
-    margin-bottom: 12px;
-  }
-
-  /* Pagination */
-  .dpl-pagination {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 14px 20px;
-    border-top: 1px solid #e2e8f0;
-    background: #f8fafc;
-    font-size: 13px;
-    color: #475569;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-  .dpl-page-controls {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-  }
-  .dpl-page-btn {
-    padding: 6px 12px;
-    border: 1px solid #cbd5e1;
-    background: #fff;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 12.5px;
-    font-weight: 600;
-    color: #475569;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-  }
-  .dpl-page-btn:hover:not(:disabled) {
-    background: #eff6ff;
-    border-color: #1c5fa8;
-    color: #1c5fa8;
-  }
-  .dpl-page-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-  .dpl-page-info {
-    font-weight: 600;
-    color: #1e293b;
-  }
-
-  /* Status colors */
-  .st-pending { background: #fef3c7; color: #92400e; }
-  .st-confirmed { background: #dbeafe; color: #1e40af; }
-  .st-checked-in { background: #ede9fe; color: #6d28d9; }
-  .st-completed { background: #dcfce7; color: #166534; }
-  .st-cancelled { background: #fee2e2; color: #991b1b; }
-  .st-no-show { background: #f3f4f6; color: #4b5563; }
-  .st-default { background: #f1f5f9; color: #475569; }
-
-  @media (max-width: 640px) {
-    .dpl-header { padding: 14px 16px; }
-    .dpl-search { min-width: 160px; }
-    .dpl-pagination { padding: 12px 16px; }
-  }
-`;
-
-const STATUS_LABELS = {
-  pending: 'Pending',
-  confirmed: 'Approved',
-  'checked-in': 'Attended',
-  completed: 'Doctor Seen',
-  cancelled: 'Cancelled',
-  'no-show': 'No-Show',
+// ==================================================
+// ✅ Date helpers (Bangladesh timezone)
+// ==================================================
+const getBDDate = () => {
+  const now = new Date();
+  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+  return new Date(utc + 6 * 60 * 60 * 1000);
 };
 
-const STATUS_FILTERS = [
-  { value: 'all', label: 'All Status' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'confirmed', label: 'Approved' },
-  { value: 'checked-in', label: 'Attended' },
-  { value: 'completed', label: 'Doctor Seen' },
-  { value: 'cancelled', label: 'Cancelled' },
-  { value: 'no-show', label: 'No-Show' },
+const getTodayStr = () => {
+  const d = getBDDate();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate()
+  ).padStart(2, '0')}`;
+};
+
+const getYesterdayStr = () => {
+  const d = getBDDate();
+  d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate()
+  ).padStart(2, '0')}`;
+};
+
+const getWeekAgoStr = () => {
+  const d = getBDDate();
+  d.setDate(d.getDate() - 7);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate()
+  ).padStart(2, '0')}`;
+};
+
+// ==================================================
+// ✅ Filter options
+// ==================================================
+const DATE_FILTERS = [
+  { key: 'all', label: 'সব' },
+  { key: 'today', label: 'আজ' },
+  { key: 'yesterday', label: 'গতকাল' },
+  { key: 'upcoming', label: 'আগামী' },
+  { key: 'week', label: 'গত ৭ দিন' },
 ];
 
-const PAGE_SIZE = 15;
+const STATUS_FILTERS = [
+  { key: 'all', label: 'সব' },
+  { key: 'pending', label: 'Pending' },
+  { key: 'approved', label: 'Approved' },
+  { key: 'attended', label: 'Attended' },
+  { key: 'doctor_seen', label: 'Doctor Seen' },
+  { key: 'cancelled', label: 'Cancelled' },
+  { key: 'upcoming', label: 'Upcoming' },
+  { key: 'no-show', label: 'No-Show' },
+];
 
+// ==================================================
+// ✅ Status badge
+// ==================================================
 function StatusBadge({ status }) {
-  const s = (status || 'pending').toLowerCase();
-  const cls = `dpl-badge st-${s}`;
-  const label = STATUS_LABELS[s] || status;
-  return <span className={cls}>{label}</span>;
+  const meta = {
+    pending: { label: 'Pending', bg: '#FEF3C7', color: '#92400E' },
+    confirmed: { label: 'Approved', bg: '#DBEAFE', color: '#1E40AF' },
+    'checked-in': { label: 'Attended', bg: '#EDE9FE', color: '#6D28D9' },
+    completed: { label: 'Completed', bg: '#DCFCE7', color: '#166534' },
+    cancelled: { label: 'Cancelled', bg: '#FEE2E2', color: '#991B1B' },
+    'no-show': { label: 'No-Show', bg: '#F3F4F6', color: '#4B5563' },
+  }[status] || { label: status || 'Pending', bg: '#F1F5F9', color: '#475569' };
+
+  return (
+    <span
+      style={{
+        display: 'inline-block',
+        padding: '3px 10px',
+        background: meta.bg,
+        color: meta.color,
+        borderRadius: 20,
+        fontSize: 11.5,
+        fontWeight: 700,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {meta.label}
+    </span>
+  );
 }
 
+// ==================================================
+// ✅ MAIN COMPONENT
+// ==================================================
 export default function DoctorPatientList({
   appointments = [],
-  initialStatus = 'all',
-  initialDate = '',
+  initialDate,
   showDateFilter = true,
   title = 'My Patients',
 }) {
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState(initialStatus);
-  const [dateFilter, setDateFilter] = useState(initialDate);
-  const [page, setPage] = useState(1);
-  const [viewDetails, setViewDetails] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  // ✅ Unique dates for dropdown
-  const uniqueDates = useMemo(() => {
-    const set = new Set();
-    appointments.forEach((a) => {
-      if (a.bookingDate) set.add(a.bookingDate);
-    });
-    return Array.from(set).sort((a, b) => b.localeCompare(a));
-  }, [appointments]);
+  // ✅ URL থেকে initial filter নাও
+  const urlStatus = searchParams.get('status') || 'all';
+  const urlDate = searchParams.get('date') || 'all';
 
-  // ✅ Filter
-  const filtered = useMemo(() => {
-    let result = appointments;
+  const [filterStatus, setFilterStatus] = useState(urlStatus);
+  const [filterDate, setFilterDate] = useState(
+    urlDate !== 'all' ? urlDate : initialDate ? 'today' : 'all'
+  );
+  const [searchTerm, setSearchTerm] = useState('');
 
-    if (dateFilter) {
-      result = result.filter((a) => a.bookingDate === dateFilter);
+  // ✅ URL param change হলে sync
+  useEffect(() => {
+    const s = searchParams.get('status') || 'all';
+    const d = searchParams.get('date') || 'all';
+    setFilterStatus(s);
+    if (d !== 'all') setFilterDate(d);
+  }, [searchParams]);
+
+  // ==================================================
+  // ✅ Filtering logic
+  // ==================================================
+  const filteredAppointments = useMemo(() => {
+    let list = Array.isArray(appointments) ? [...appointments] : [];
+
+    const today = getTodayStr();
+    const yesterday = getYesterdayStr();
+    const weekAgo = getWeekAgoStr();
+
+    // ---------- Date filter ----------
+    if (filterDate === 'today') {
+      list = list.filter((a) => a.bookingDate === today);
+    } else if (filterDate === 'yesterday') {
+      list = list.filter((a) => a.bookingDate === yesterday);
+    } else if (filterDate === 'upcoming') {
+      list = list.filter((a) => a.bookingDate > today);
+    } else if (filterDate === 'week') {
+      list = list.filter(
+        (a) => a.bookingDate >= weekAgo && a.bookingDate <= today
+      );
     }
 
-    if (statusFilter && statusFilter !== 'all') {
-      if (statusFilter === 'upcoming') {
-        // ✅ Upcoming = confirmed but not yet checked-in
-        result = result.filter(
-          (a) =>
-            (a.status || '').toLowerCase() === 'confirmed'
+    // ---------- Status filter ----------
+    if (filterStatus && filterStatus !== 'all') {
+      if (filterStatus === 'approved') {
+        list = list.filter((a) => a.status === 'confirmed');
+      } else if (filterStatus === 'attended') {
+        list = list.filter((a) =>
+          ['checked-in', 'completed'].includes(a.status)
+        );
+      } else if (filterStatus === 'doctor_seen') {
+        list = list.filter((a) => a.status === 'completed');
+      } else if (filterStatus === 'upcoming') {
+        list = list.filter(
+          (a) => a.status === 'confirmed' && a.bookingDate > today
         );
       } else {
-        result = result.filter(
-          (a) => (a.status || '').toLowerCase() === statusFilter
-        );
+        list = list.filter((a) => a.status === filterStatus);
       }
     }
 
-    if (search.trim()) {
-      const term = search.trim().toLowerCase();
-      result = result.filter(
+    // ---------- Search filter ----------
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase().trim();
+      list = list.filter(
         (a) =>
           (a.name || '').toLowerCase().includes(term) ||
-          (a.nameEn || '').toLowerCase().includes(term) ||
           String(a.serialNo || '').includes(term)
       );
     }
 
-    return result;
-  }, [appointments, dateFilter, statusFilter, search]);
+    // ---------- Sort: date desc → serial asc ----------
+    list.sort((a, b) => {
+      const dateA = a.bookingDate || '';
+      const dateB = b.bookingDate || '';
+      if (dateA !== dateB) return dateB.localeCompare(dateA);
+      return (Number(a.serialNo) || 0) - (Number(b.serialNo) || 0);
+    });
 
-  // ✅ Pagination
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const paged = filtered.slice(
-    (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE
-  );
+    return list;
+  }, [appointments, filterStatus, filterDate, searchTerm]);
+
+  // ==================================================
+  // ✅ URL sync helpers
+  // ==================================================
+  const updateUrlParam = (key, value) => {
+    const params = new URLSearchParams(searchParams);
+    if (value === 'all') params.delete(key);
+    else params.set(key, value);
+    setSearchParams(params, { replace: true });
+  };
+
+  const handleDateClick = (key) => {
+    setFilterDate(key);
+    updateUrlParam('date', key);
+  };
+
+  const handleStatusClick = (key) => {
+    setFilterStatus(key);
+    updateUrlParam('status', key);
+  };
 
   const handleReset = () => {
-    setSearch('');
-    setStatusFilter('all');
-    setDateFilter('');
-    setPage(1);
+    setFilterDate('all');
+    setFilterStatus('all');
+    setSearchTerm('');
+    setSearchParams({}, { replace: true });
   };
 
   const hasActiveFilter =
-    search || statusFilter !== 'all' || dateFilter;
+    filterDate !== 'all' || filterStatus !== 'all' || searchTerm.trim();
 
+  // ==================================================
+  // ✅ Render
+  // ==================================================
   return (
-    <>
-      <style>{CSS}</style>
-      <div className="dpl-container">
-        {/* Header */}
-        <div className="dpl-header">
-          <h3 className="dpl-title">
-            {title} ({filtered.length})
-          </h3>
-          <div className="dpl-filters">
-            <div className="dpl-search">
-              <Search size={15} color="#64748b" />
-              <input
-                type="text"
-                placeholder="নাম / সিরিয়াল..."
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
-              />
-            </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Header */}
+      <div>
+        <h3
+          style={{
+            margin: '0 0 4px 0',
+            fontSize: 18,
+            fontWeight: 800,
+            color: '#0F172A',
+          }}
+        >
+          {title}
+        </h3>
+        <p style={{ margin: 0, fontSize: 13, color: '#64748B' }}>
+          নিচের ফিল্টার ব্যবহার করে নির্দিষ্ট রোগী খুঁজে নিন
+        </p>
+      </div>
 
-            <select
-              className="dpl-select"
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setPage(1);
+      {/* ============ Filter Bar ============ */}
+      <div
+        style={{
+          background: '#FFFFFF',
+          border: '1px solid #E2E8F0',
+          borderRadius: 12,
+          padding: '16px 20px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+        }}
+      >
+        {/* Date filter */}
+        {showDateFilter && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              flexWrap: 'wrap',
+            }}
+          >
+            <span
+              style={{
+                fontSize: 12.5,
+                fontWeight: 700,
+                color: '#64748B',
+                marginRight: 4,
               }}
             >
-              {STATUS_FILTERS.map((f) => (
-                <option key={f.value} value={f.value}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
-
-            {showDateFilter && (
-              <select
-                className="dpl-select"
-                value={dateFilter}
-                onChange={(e) => {
-                  setDateFilter(e.target.value);
-                  setPage(1);
+              📅 তারিখ:
+            </span>
+            {DATE_FILTERS.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => handleDateClick(f.key)}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: 20,
+                  border: '1px solid',
+                  borderColor: filterDate === f.key ? '#1D4ED8' : '#E2E8F0',
+                  background: filterDate === f.key ? '#1D4ED8' : '#FFFFFF',
+                  color: filterDate === f.key ? '#FFFFFF' : '#475569',
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  transition: 'all 0.15s',
                 }}
               >
-                <option value="">All Dates</option>
-                {uniqueDates.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-            )}
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
 
-            {hasActiveFilter && (
-              <button className="dpl-btn-reset" onClick={handleReset}>
-                <X size={13} /> Reset
+        {/* Status filter */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            flexWrap: 'wrap',
+          }}
+        >
+          <span
+            style={{
+              fontSize: 12.5,
+              fontWeight: 700,
+              color: '#64748B',
+              marginRight: 4,
+            }}
+          >
+            🏷️ স্ট্যাটাস:
+          </span>
+          {STATUS_FILTERS.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => handleStatusClick(f.key)}
+              style={{
+                padding: '6px 14px',
+                borderRadius: 20,
+                border: '1px solid',
+                borderColor: filterStatus === f.key ? '#1D4ED8' : '#E2E8F0',
+                background: filterStatus === f.key ? '#1D4ED8' : '#FFFFFF',
+                color: filterStatus === f.key ? '#FFFFFF' : '#475569',
+                fontSize: 12.5,
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                transition: 'all 0.15s',
+              }}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Search + Reset + Count */}
+        <div
+          style={{
+            display: 'flex',
+            gap: 10,
+            alignItems: 'center',
+            flexWrap: 'wrap',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              background: '#F8FAFC',
+              border: '1px solid #E2E8F0',
+              borderRadius: 8,
+              padding: '6px 12px',
+              flex: '1 1 240px',
+              minWidth: 200,
+            }}
+          >
+            <Search size={15} color="#64748B" />
+            <input
+              type="text"
+              placeholder="নাম বা সিরিয়াল সার্চ..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                flex: 1,
+                border: 'none',
+                background: 'transparent',
+                outline: 'none',
+                fontSize: 13.5,
+                fontFamily: 'inherit',
+                padding: '4px 0',
+              }}
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#94A3B8',
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: 0,
+                }}
+              >
+                <X size={14} />
               </button>
             )}
           </div>
-        </div>
 
-        {/* Table */}
-        {filtered.length === 0 ? (
-          <div className="dpl-empty">
-            <div className="dpl-empty-icon">📭</div>
-            <p style={{ fontWeight: 600, color: '#475569', marginBottom: 4 }}>
-              কোনো রেকর্ড পাওয়া যায়নি
-            </p>
-            <p style={{ fontSize: 12.5, color: '#94a3b8' }}>
-              ফিল্টার পরিবর্তন করে আবার চেষ্টা করুন
-            </p>
+          {hasActiveFilter && (
+            <button
+              type="button"
+              onClick={handleReset}
+              style={{
+                padding: '8px 14px',
+                background: '#FEE2E2',
+                color: '#DC2626',
+                border: '1px solid #FCA5A5',
+                borderRadius: 8,
+                fontSize: 12.5,
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              ✕ রিসেট
+            </button>
+          )}
+
+          <span
+            style={{
+              fontSize: 13,
+              color: '#64748B',
+              fontWeight: 600,
+              marginLeft: 'auto',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            মোট:{' '}
+            <strong style={{ color: '#1D4ED8', fontSize: 15 }}>
+              {filteredAppointments.length}
+            </strong>
+          </span>
+        </div>
+      </div>
+
+      {/* ============ Empty state ============ */}
+      {filteredAppointments.length === 0 ? (
+        <div
+          style={{
+            background: '#FFFFFF',
+            border: '1px dashed #CBD5E1',
+            borderRadius: 12,
+            padding: '50px 20px',
+            textAlign: 'center',
+            color: '#94A3B8',
+          }}
+        >
+          <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
+          <div
+            style={{
+              fontWeight: 600,
+              color: '#475569',
+              marginBottom: 4,
+              fontSize: 15,
+            }}
+          >
+            এই ফিল্টারে কোনো রোগী পাওয়া যায়নি
           </div>
-        ) : (
-          <div className="dpl-table-wrap">
-            <table className="dpl-table">
+          <div style={{ fontSize: 13 }}>
+            তারিখ বা স্ট্যাটাস পরিবর্তন করে আবার চেষ্টা করুন।
+          </div>
+          {hasActiveFilter && (
+            <button
+              type="button"
+              onClick={handleReset}
+              style={{
+                marginTop: 16,
+                padding: '9px 20px',
+                background: '#1D4ED8',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              সব ফিল্টার রিসেট করুন
+            </button>
+          )}
+        </div>
+      ) : (
+        // ============ Table ============
+        <div
+          style={{
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
+            borderRadius: 12,
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{ overflowX: 'auto' }}>
+            <table
+              style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                minWidth: 640,
+                fontSize: 13.5,
+              }}
+            >
               <thead>
-                <tr>
-                  <th>Serial</th>
-                  <th>Patient Name</th>
-                  <th>Age</th>
-                  <th>Date</th>
-                  <th>Time</th>
-                  <th>Status</th>
-                  <th style={{ textAlign: 'center' }}>Details</th>
+                <tr
+                  style={{
+                    background: '#F8FAFC',
+                    textAlign: 'left',
+                    color: '#475569',
+                  }}
+                >
+                  <th
+                    style={{
+                      padding: '12px 16px',
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap',
+                      width: 90,
+                    }}
+                  >
+                    সিরিয়াল
+                  </th>
+                  <th style={{ padding: '12px 16px', fontWeight: 700 }}>
+                    রোগীর নাম
+                  </th>
+                  <th
+                    style={{
+                      padding: '12px 16px',
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    তারিখ
+                  </th>
+                  <th
+                    style={{
+                      padding: '12px 16px',
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    সময়
+                  </th>
+                  <th
+                    style={{
+                      padding: '12px 16px',
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    স্ট্যাটাস
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {paged.map((a) => (
-                  <tr key={a.id}>
-                    <td>
-                      <span className="dpl-serial">
-                        #{a.serialNo || '-'}
-                      </span>
+                {filteredAppointments.map((appt) => (
+                  <tr
+                    key={appt.id}
+                    style={{
+                      borderTop: '1px solid #F1F5F9',
+                      transition: 'background 0.1s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#F8FAFC';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
+                    }}
+                  >
+                    <td
+                      style={{
+                        padding: '12px 16px',
+                        fontWeight: 700,
+                        color: '#1D4ED8',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      #{appt.serialNo || '-'}
                     </td>
-                    <td>
-                      <div className="dpl-name">{a.name || '-'}</div>
-                      {a.nameEn && a.nameEn !== a.name && (
-                        <div className="dpl-name-en">{a.nameEn}</div>
+                    <td
+                      style={{
+                        padding: '12px 16px',
+                        color: '#0F172A',
+                        fontWeight: 600,
+                        overflowWrap: 'anywhere',
+                      }}
+                    >
+                      {appt.name || '—'}
+                    </td>
+                    <td
+                      style={{
+                        padding: '12px 16px',
+                        color: '#475569',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {appt.bookingDate || '—'}
+                      {appt.bookingDay && (
+                        <div
+                          style={{
+                            fontSize: 11.5,
+                            color: '#94A3B8',
+                            marginTop: 2,
+                          }}
+                        >
+                          {appt.bookingDay}
+                        </div>
                       )}
                     </td>
-                    <td>{a.age || '-'}</td>
-                    <td>{a.bookingDate || '-'}</td>
-                    <td>{a.doctorTime || '-'}</td>
-                    <td>
-                      <StatusBadge status={a.status} />
+                    <td
+                      style={{
+                        padding: '12px 16px',
+                        color: '#475569',
+                        whiteSpace: 'nowrap',
+                        fontSize: 12.5,
+                      }}
+                    >
+                      {appt.doctorTime || '—'}
                     </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <button
-                        onClick={() => setViewDetails(a)}
-                        title="বিস্তারিত"
-                        style={{
-                          background: '#eff6ff',
-                          border: 'none',
-                          borderRadius: '6px',
-                          padding: '6px 10px',
-                          cursor: 'pointer',
-                          color: '#1c5fa8',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                        }}
-                      >
-                        <Eye size={14} />
-                      </button>
+                    <td style={{ padding: '12px 16px' }}>
+                      <StatusBadge status={appt.status} />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        )}
-
-        {/* Pagination */}
-        {filtered.length > 0 && (
-          <div className="dpl-pagination">
-            <span>
-              Showing{' '}
-              <span className="dpl-page-info">
-                {(currentPage - 1) * PAGE_SIZE + 1}–
-                {Math.min(currentPage * PAGE_SIZE, filtered.length)}
-              </span>{' '}
-              of <span className="dpl-page-info">{filtered.length}</span>
-            </span>
-            <div className="dpl-page-controls">
-              <button
-                className="dpl-page-btn"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-              >
-                <ChevronLeft size={13} /> Prev
-              </button>
-              <span className="dpl-page-info">
-                {currentPage} / {totalPages}
-              </span>
-              <button
-                className="dpl-page-btn"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-              >
-                Next <ChevronRight size={13} />
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Details Modal */}
-      {viewDetails && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15,23,42,0.55)',
-            zIndex: 9999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 20,
-          }}
-          onClick={() => setViewDetails(null)}
-        >
-          <div
-            style={{
-              background: '#fff',
-              borderRadius: 14,
-              maxWidth: 480,
-              width: '100%',
-              padding: 24,
-              maxHeight: '85vh',
-              overflowY: 'auto',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: 16,
-                borderBottom: '1px solid #e2e8f0',
-                paddingBottom: 12,
-              }}
-            >
-              <h3 style={{ margin: 0, color: '#1c5fa8', fontSize: 17 }}>
-                Patient Details
-              </h3>
-              <button
-                onClick={() => setViewDetails(null)}
-                style={{
-                  background: '#f1f5f9',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: 30,
-                  height: 30,
-                  cursor: 'pointer',
-                  fontWeight: 'bold',
-                }}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: 12,
-                fontSize: 13.5,
-              }}
-            >
-              <DetailRow label="Serial" value={`#${viewDetails.serialNo || '-'}`} />
-              <DetailRow label="Name" value={viewDetails.name || '-'} />
-              <DetailRow label="English Name" value={viewDetails.nameEn || '-'} />
-              <DetailRow label="Age" value={viewDetails.age || '-'} />
-              <DetailRow label="Gender" value={viewDetails.gender || '-'} />
-              <DetailRow label="Date" value={viewDetails.bookingDate || '-'} />
-              <DetailRow label="Day" value={viewDetails.bookingDay || '-'} />
-              <DetailRow label="Time" value={viewDetails.doctorTime || '-'} />
-              <DetailRow label="Department" value={viewDetails.doctorDept || '-'} />
-              <div style={{ gridColumn: '1/-1' }}>
-                <strong style={{ color: '#475569' }}>Status:</strong>{' '}
-                <StatusBadge status={viewDetails.status} />
-              </div>
-            </div>
-
-            <div
-              style={{
-                marginTop: 16,
-                padding: '10px 12px',
-                background: '#eff6ff',
-                borderRadius: 8,
-                fontSize: 12,
-                color: '#1e40af',
-              }}
-            >
-              🔒 Privacy: Mobile, referral তথ্য শুধু admin দেখতে পারেন
-            </div>
-          </div>
         </div>
       )}
-    </>
-  );
-}
-
-function DetailRow({ label, value }) {
-  return (
-    <div>
-      <strong style={{ color: '#475569', display: 'block', fontSize: 11.5 }}>
-        {label}
-      </strong>
-      <span style={{ color: '#1e293b', fontWeight: 600 }}>{value}</span>
     </div>
   );
 }

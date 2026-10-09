@@ -1,12 +1,11 @@
 // src/components/doctor/DoctorSummaryCards.jsx
 // ==================================================
-// 📊 Doctor Summary Cards — Dynamic counts (redesigned)
+// 📊 Doctor Summary Cards — Clickable stats
 // ==================================================
-// ✅ 4 columns × 2 rows (desktop)
-// ✅ 2 columns × 4 rows (mobile)
-// ✅ Larger cards, better spacing
+// ✅ 8 cards: Total, Pending, Approved, Attended,
+//    Doctor Seen, Cancelled, Upcoming, No-Show
+// ✅ প্রতিটি card click → filtered patient list
 // ==================================================
-
 import React from 'react';
 import {
   Users,
@@ -19,201 +18,204 @@ import {
   UserX,
 } from 'lucide-react';
 
-const CSS = `
-  .dsc-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-  }
-
-  @media (max-width: 1100px) {
-    .dsc-grid { grid-template-columns: repeat(3, 1fr); }
-  }
-  @media (max-width: 820px) {
-    .dsc-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-  }
-  @media (max-width: 480px) {
-    .dsc-grid { grid-template-columns: 1fr; gap: 10px; }
-  }
-
-  .dsc-card {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 14px;
-    padding: 18px 20px;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    text-align: left;
-    width: 100%;
-    min-width: 0;
-    font-family: inherit;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .dsc-card::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 4px;
-    background: var(--accent-color, #1c5fa8);
-    opacity: 0.85;
-  }
-
-  .dsc-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 24px rgba(28, 95, 168, 0.14);
-    border-color: var(--accent-color, #1c5fa8);
-  }
-
-  .dsc-card:focus-visible {
-    outline: 2px solid var(--accent-color, #1c5fa8);
-    outline-offset: 2px;
-  }
-
-  .dsc-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-
-  .dsc-content {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 2px;
-  }
-
-  .dsc-label {
-    font-size: 12px;
-    font-weight: 700;
-    color: #64748b;
-    letter-spacing: 0.2px;
-    line-height: 1.3;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .dsc-value {
-    font-size: 28px;
-    font-weight: 800;
-    line-height: 1;
-    letter-spacing: -0.5px;
-  }
-`;
-
+// ==================================================
+// ✅ Card configuration
+// ==================================================
 const CARDS = [
   {
     key: 'total',
     label: "Today's Total",
     icon: Users,
-    color: '#1c5fa8',
-    bg: 'rgba(28, 95, 168, 0.12)',
-    filterStatus: 'all',
+    color: '#1D4ED8',
+    bg: '#EFF6FF',
   },
   {
     key: 'pending',
     label: 'Pending',
     icon: Clock,
-    color: '#f59e0b',
-    bg: 'rgba(245, 158, 11, 0.12)',
-    filterStatus: 'pending',
+    color: '#D97706',
+    bg: '#FEF3C7',
   },
   {
-    key: 'confirmed',
+    key: 'approved',
     label: 'Approved',
     icon: CheckCircle,
-    color: '#3b82f6',
-    bg: 'rgba(59, 130, 246, 0.12)',
-    filterStatus: 'confirmed',
+    color: '#1E40AF',
+    bg: '#DBEAFE',
   },
   {
-    key: 'checkedIn',
+    key: 'attended',
     label: 'Attended',
     icon: UserCheck,
-    color: '#8b5cf6',
-    bg: 'rgba(139, 92, 246, 0.12)',
-    filterStatus: 'checked-in',
+    color: '#7C3AED',
+    bg: '#EDE9FE',
   },
   {
-    key: 'completed',
+    key: 'doctor_seen',
     label: 'Doctor Seen',
     icon: Stethoscope,
-    color: '#22c55e',
-    bg: 'rgba(34, 197, 94, 0.12)',
-    filterStatus: 'completed',
+    color: '#16A34A',
+    bg: '#DCFCE7',
   },
   {
     key: 'cancelled',
     label: 'Cancelled',
     icon: XCircle,
-    color: '#ef4444',
-    bg: 'rgba(239, 68, 68, 0.12)',
-    filterStatus: 'cancelled',
+    color: '#DC2626',
+    bg: '#FEE2E2',
   },
   {
     key: 'upcoming',
     label: 'Upcoming',
     icon: Calendar,
-    color: '#0ea5e9',
-    bg: 'rgba(14, 165, 233, 0.12)',
-    filterStatus: 'upcoming',
+    color: '#0891B2',
+    bg: '#CFFAFE',
   },
   {
-    key: 'noShow',
+    key: 'no-show',
     label: 'No-Show',
     icon: UserX,
-    color: '#6b7280',
-    bg: 'rgba(107, 114, 128, 0.12)',
-    filterStatus: 'no-show',
+    color: '#6B7280',
+    bg: '#F3F4F6',
   },
 ];
 
+// ==================================================
+// ✅ Map card key → counts object property
+// ==================================================
+const getCount = (counts, key) => {
+  if (!counts) return 0;
+  switch (key) {
+    case 'total':
+      return counts.total || 0;
+    case 'pending':
+      return counts.pending || 0;
+    case 'approved':
+      return counts.confirmed || 0;
+    case 'attended':
+      return (counts.checkedIn || 0) + (counts.completed || 0);
+    case 'doctor_seen':
+      return counts.completed || 0;
+    case 'cancelled':
+      return counts.cancelled || 0;
+    case 'upcoming':
+      return counts.upcoming || 0;
+    case 'no-show':
+      return counts.noShow || 0;
+    default:
+      return 0;
+  }
+};
+
+// ==================================================
+// ✅ Component
+// ==================================================
 export default function DoctorSummaryCards({ counts, onCardClick }) {
   return (
-    <>
-      <style>{CSS}</style>
-      <div className="dsc-grid">
-        {CARDS.map((card) => {
-          const Icon = card.icon;
-          const value = counts[card.key] ?? 0;
-          return (
-            <button
-              key={card.key}
-              className="dsc-card"
-              onClick={() => onCardClick && onCardClick(card.filterStatus)}
-              type="button"
-              style={{ '--accent-color': card.color }}
-              title={card.label}
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: 12,
+      }}
+    >
+      {CARDS.map((card) => {
+        const Icon = card.icon;
+        const count = getCount(counts, card.key);
+
+        return (
+          <button
+            key={card.key}
+            type="button"
+            onClick={() => onCardClick && onCardClick(card.key)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 14,
+              padding: '16px 18px',
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: 12,
+              cursor: 'pointer',
+              textAlign: 'left',
+              fontFamily: 'inherit',
+              transition: 'all 0.15s ease',
+              boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow =
+                '0 6px 16px rgba(15, 23, 42, 0.10)';
+              e.currentTarget.style.borderColor = card.color;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow =
+                '0 1px 2px rgba(15, 23, 42, 0.04)';
+              e.currentTarget.style.borderColor = '#E2E8F0';
+            }}
+          >
+            {/* Left color strip */}
+            <div
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: 4,
+                background: card.color,
+              }}
+            />
+
+            {/* Icon */}
+            <div
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 10,
+                background: card.bg,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
             >
-              <span
-                className="dsc-icon"
-                style={{ background: card.bg, color: card.color }}
+              <Icon size={22} color={card.color} strokeWidth={2.2} />
+            </div>
+
+            {/* Text */}
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: '#64748B',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  marginBottom: 4,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
               >
-                <Icon size={24} strokeWidth={2.2} />
-              </span>
-              <span className="dsc-content">
-                <span className="dsc-label">{card.label}</span>
-                <span className="dsc-value" style={{ color: card.color }}>
-                  {value}
-                </span>
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </>
+                {card.label}
+              </div>
+              <div
+                style={{
+                  fontSize: 26,
+                  fontWeight: 800,
+                  color: card.color,
+                  lineHeight: 1.1,
+                }}
+              >
+                {count}
+              </div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
   );
 }
