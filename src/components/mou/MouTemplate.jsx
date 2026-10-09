@@ -7,7 +7,7 @@
 // ✅ 36pt margin
 // ✅ Dynamic placeholders {{key}}, **bold**, @@optional@@
 // ✅ Dynamic logo watermark (from Firebase Storage URL)
-// ✅ Dynamic beneficiary label
+// ✅ Dynamic beneficiary label — FULL BOLD
 // ✅ Print CSS with page-break
 // ==================================================
 import React from 'react';
@@ -34,12 +34,14 @@ const getValue = (data, key) => {
   }
 
   // ==================================================
-  // ✅ Special: beneficiary_full_text
+  // ✅ Special: beneficiary_full_text — FULL BOLD LINE
   // Priority: custom full line → auto-composed from parts
+  // All return values are wrapped in **...** so the
+  // entire line becomes <b>...</b> after processing.
   // ==================================================
   if (key === 'beneficiary_full_text') {
     const custom = (data.beneficiary_full_text || '').trim();
-    if (custom) return custom;
+    if (custom) return `**${custom}**`;
 
     const label =
       (data.beneficiary_label || '').trim() ||
@@ -53,10 +55,10 @@ const getValue = (data, key) => {
     const partner = (data.org2_name || '').trim();
 
     if (!hospital || !partner) {
-      return `The parties will provide following Special discount rates & facilities.`;
+      return `**The parties will provide following Special discount rates & facilities.**`;
     }
 
-    return `${hospital} will provide following Special discount rates & facilities for the ${label} of ${partner} ${member}.`;
+    return `**${hospital} will provide following Special discount rates & facilities for the ${label} of ${partner} ${member}.**`;
   }
 
   // ==================================================
@@ -92,21 +94,23 @@ const getValue = (data, key) => {
  * - @@key|prefix@@ → optional line, skipped if empty
  */
 const processTemplate = (templateStr, data) => {
-  return templateStr
-    // Optional line: @@key|prefix@@
-    .replace(/@@(\w+)\|?([^@]*)@@/g, (m, k, pre) => {
-      const v = getValue(data, k);
-      return v ? `${pre}<span class="v">${esc(v)}</span><br>` : '';
-    })
-    // Placeholder: {{key}}
-    .replace(/\{\{(\w+)\}\}/g, (m, k) => {
-      const v = getValue(data, k);
-      return v
-        ? `<span class="v">${esc(v)}</span>`
-        : '<span class="v miss">________</span>';
-    })
-    // Bold: **text**
-    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  return (
+    templateStr
+      // Optional line: @@key|prefix@@
+      .replace(/@@(\w+)\|?([^@]*)@@/g, (m, k, pre) => {
+        const v = getValue(data, k);
+        return v ? `${pre}<span class="v">${esc(v)}</span><br>` : '';
+      })
+      // Placeholder: {{key}}
+      .replace(/\{\{(\w+)\}\}/g, (m, k) => {
+        const v = getValue(data, k);
+        return v
+          ? `<span class="v">${esc(v)}</span>`
+          : '<span class="v miss">________</span>';
+      })
+      // Bold: **text**
+      .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+  );
 };
 
 // ==================================================
@@ -139,7 +143,7 @@ export const buildPages = (data) => {
 <div class="it"><span class="no">2.</span>${B1} may include ${B2} in its corporate client list.</div>`,
 
     // ==================================================
-    // PAGE 2  ← ✅ Dynamic beneficiary line
+    // PAGE 2  ← ✅ Full-bold dynamic beneficiary line
     // ==================================================
     `<div class="it" style="line-height:16.1pt"><span class="no">3.</span>{{beneficiary_full_text}}</div>
 <ul style="margin:17.2pt -24pt 0 0;line-height:17.1pt">
