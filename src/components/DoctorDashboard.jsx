@@ -8,6 +8,7 @@
 // ✅ FIXED: React Error #310 — all hooks before any return
 // ✅ NEW: Real-time pending profile request badge
 // ✅ NEW: Error boundary
+// ✅ NEW: Dynamic hospital branding (name + logo)
 // ==================================================
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -22,9 +23,11 @@ import {
   Menu,
   X,
 } from 'lucide-react';
+import { getDoc, doc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { useHospital } from '../context/HospitalContext';
 import { usePermission } from '../context/PermissionContext';
+import { db } from '../firebase';
 import AuthPage from './AuthPage';
 
 import DoctorSummaryCards from './doctor/DoctorSummaryCards';
@@ -72,24 +75,31 @@ const DASH_CSS = `
   }
 
   .dd-sidebar-brand {
-    padding: 20px;
+    padding: 16px 20px;
     border-bottom: 1px solid #E2E8F0;
     display: flex;
     align-items: center;
     gap: 10px;
   }
   .dd-brand-icon {
-    width: 38px;
-    height: 38px;
+    width: 42px;
+    height: 42px;
     border-radius: 10px;
-    background: linear-gradient(135deg, #1D4ED8, #0F9488);
+    background: #FFFFFF;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #fff;
+    overflow: hidden;
     flex-shrink: 0;
+    border: 1px solid #E2E8F0;
   }
-  .dd-brand-text { line-height: 1.2; min-width: 0; }
+  .dd-brand-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+  .dd-brand-text { line-height: 1.2; min-width: 0; flex: 1; }
   .dd-brand-title {
     font-size: 15px;
     font-weight: 800;
@@ -102,6 +112,9 @@ const DASH_CSS = `
     font-size: 11px;
     color: #64748B;
     font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .dd-sidebar-user {
@@ -226,21 +239,26 @@ const DASH_CSS = `
     flex: 1;
   }
   .dd-mobile-title .dd-brand-icon {
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
     border-radius: 8px;
   }
-  .dd-mobile-title .dd-brand-icon svg { width: 18px; height: 18px; }
-  .dd-mobile-title-text { line-height: 1.1; min-width: 0; }
+  .dd-mobile-title-text { line-height: 1.1; min-width: 0; flex: 1; }
   .dd-mobile-title-text .dd-brand-title {
     font-size: 14px;
     font-weight: 800;
     color: #1D4ED8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .dd-mobile-title-text .dd-brand-sub {
     font-size: 10.5px;
     color: #64748B;
     font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   /* ---------- Main ---------- */
@@ -382,6 +400,15 @@ const DASH_CSS = `
 `;
 
 // ==================================================
+// ✅ Default branding (fallback)
+// ==================================================
+const DEFAULT_BRANDING = {
+  name: 'আল-আফিয়া',
+  subtitle: 'Doctor Panel',
+  logo: '/logo.png',
+};
+
+// ==================================================
 // ✅ Component
 // ==================================================
 export default function DoctorDashboard() {
@@ -397,6 +424,7 @@ export default function DoctorDashboard() {
   const [appointmentsError, setAppointmentsError] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [pendingProfileRequests, setPendingProfileRequests] = useState(0);
+  const [branding, setBranding] = useState(DEFAULT_BRANDING);
 
   const hospitalId = currentHospital?.id || 'alafiyah_main';
 
@@ -469,6 +497,35 @@ export default function DoctorDashboard() {
       if (typeof unsub === 'function') unsub();
     };
   }, [hospitalId, user?.doctorId, isDoctor]);
+
+  // ✅ Load hospital branding (name + logo) from footer/data
+  useEffect(() => {
+    if (!hospitalId) return;
+    let mounted = true;
+
+    (async () => {
+      try {
+        const ref = doc(db, 'hospitals', hospitalId, 'footer', 'data');
+        const snap = await getDoc(ref);
+        if (!mounted) return;
+
+        if (snap.exists()) {
+          const data = snap.data();
+          setBranding({
+            name: data.hospitalName || DEFAULT_BRANDING.name,
+            subtitle: data.hospitalSubtitle || DEFAULT_BRANDING.subtitle,
+            logo: data.logo || DEFAULT_BRANDING.logo,
+          });
+        }
+      } catch (err) {
+        console.warn('Hospital branding load failed:', err.message);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [hospitalId]);
 
   // Close drawer on route change
   useEffect(() => {
@@ -662,11 +719,15 @@ export default function DoctorDashboard() {
 
           <div className="dd-mobile-title">
             <div className="dd-brand-icon">
-              <Stethoscope size={18} />
+              {branding.logo ? (
+                <img src={branding.logo} alt="Logo" />
+              ) : (
+                <Stethoscope size={18} />
+              )}
             </div>
             <div className="dd-mobile-title-text">
-              <div className="dd-brand-title">আল-আফিয়া</div>
-              <div className="dd-brand-sub">Doctor Panel</div>
+              <div className="dd-brand-title">{branding.name}</div>
+              <div className="dd-brand-sub">{branding.subtitle}</div>
             </div>
           </div>
         </header>
@@ -682,11 +743,15 @@ export default function DoctorDashboard() {
         <aside className={`dd-sidebar ${drawerOpen ? 'is-open' : ''}`}>
           <div className="dd-sidebar-brand">
             <div className="dd-brand-icon">
-              <Stethoscope size={20} />
+              {branding.logo ? (
+                <img src={branding.logo} alt="Logo" />
+              ) : (
+                <Stethoscope size={20} />
+              )}
             </div>
             <div className="dd-brand-text">
-              <div className="dd-brand-title">আল-আফিয়া</div>
-              <div className="dd-brand-sub">Doctor Panel</div>
+              <div className="dd-brand-title">{branding.name}</div>
+              <div className="dd-brand-sub">{branding.subtitle}</div>
             </div>
 
             <button
