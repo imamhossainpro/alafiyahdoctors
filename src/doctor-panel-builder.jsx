@@ -203,6 +203,13 @@ const CSS = `
 .dpb .login-btn{background:#1c5fa8;color:#fff;border:none;border-radius:12px;padding:8px 14px;font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:5px;cursor:pointer;box-shadow:0 3px 10px rgba(28,95,168,0.30);transition:all 0.2s ease;}
 .dpb .login-btn:hover{background:#154a82;transform:translateY(-1px);box-shadow:0 5px 14px rgba(28,95,168,0.40);}
 
+/* ✅ Topbar action buttons — My Bookings + Doctor Dashboard */
+.dpb .topbar-action-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border:none;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.2s ease;white-space:nowrap;}
+.dpb .topbar-action-btn.my-bookings{background:linear-gradient(135deg,#8b5cf6,#a78bfa);color:#fff;box-shadow:0 4px 12px rgba(139,92,246,0.35);}
+.dpb .topbar-action-btn.my-bookings:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(139,92,246,0.45);}
+.dpb .topbar-action-btn.doctor-dashboard{background:linear-gradient(135deg,#1D4ED8,#1E40AF);color:#fff;box-shadow:0 4px 12px rgba(29,78,216,0.35);}
+.dpb .topbar-action-btn.doctor-dashboard:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(29,78,216,0.45);}
+
 .dpb .tabs{display:flex;background:transparent;border-radius:12px;padding:3px;gap:6px;flex-wrap:wrap;}
 .dpb .tab{border:none;background:#f1f5f9;padding:9px 16px;border-radius:12px;font-size:13.5px;font-weight:600;color:#64748b;cursor:pointer;transition:all 0.2s ease;box-shadow:0 1px 3px rgba(0,0,0,0.05);}
 .dpb .tab:hover{background:#e2e8f0;color:#334155;box-shadow:0 2px 6px rgba(0,0,0,0.08);}
@@ -354,10 +361,6 @@ const CSS = `
 .dpb .serial-booking-button:active{transform:translateY(0);box-shadow:0 2px 6px rgba(13,148,136,0.25);}
 .dpb .serial-booking-button:focus-visible{outline:2px solid #0f766e;outline-offset:2px;}
 
-/* ✅ NEW — Doctor Dashboard Button (blue theme) */
-.dpb .serial-booking-button.dashboard-btn{background:linear-gradient(135deg,#1D4ED8,#1E40AF);box-shadow:0 2px 8px rgba(29,78,216,0.25);}
-.dpb .serial-booking-button.dashboard-btn:hover{background:linear-gradient(135deg,#1E40AF,#1E3A8A);box-shadow:0 4px 12px rgba(29,78,216,0.35);}
-
 @media (max-width: 480px) {
   .dpb .serial-booking-button { width: 100%; padding: 10px 18px; font-size: 13.5px; }
 }
@@ -473,7 +476,7 @@ function SaveIndicator({ status }) {
 }
 
 // ==================================================
-// ✅ Admin Panel (Users management)
+// ✅ Admin Panel
 // ==================================================
 function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
   return (
@@ -553,7 +556,7 @@ function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
 }
 
 // ==================================================
-// ✅ Doctor Link Modal — UTM-tagged QR + link
+// ✅ Doctor Link Modal
 // ==================================================
 function DoctorLinkModal({ doctor, onClose }) {
   const [copied, setCopied] = useState(false);
@@ -738,7 +741,7 @@ function DoctorLinkModal({ doctor, onClose }) {
 }
 
 // ==================================================
-// ✅ DoctorRow — individual doctor row in dept card
+// ✅ DoctorRow
 // ==================================================
 function DoctorRow({
   doc,
@@ -832,7 +835,7 @@ function DoctorRow({
 }
 
 // ==================================================
-// ✅ DepartmentCard — department with doctors
+// ✅ DepartmentCard
 // ==================================================
 function DepartmentCard({
   dept,
@@ -892,12 +895,7 @@ function DepartmentCard({
             </button>
           )}
           {onMoveDown && (
-            <button
-              className="icon-btn"
-              onClick={onMoveDown}
-              disabled={index === total - 1}
-              title="নিচে সরান"
-            >
+            <button className="icon-btn" onClick={onMoveDown} disabled={index === total - 1} title="নিচে সরান">
               <ChevronDown size={16} />
             </button>
           )}
@@ -1030,7 +1028,7 @@ function DepartmentModal({ initial, onSave, onClose }) {
 }
 
 // ==================================================
-// ✅ DoctorModal — add/edit doctor with image upload
+// ✅ DoctorModal
 // ==================================================
 function DoctorModal({ initial, onSave, onClose }) {
   const [name, setName] = useState(initial ? initial.name : '');
@@ -1499,7 +1497,7 @@ function DoctorModal({ initial, onSave, onClose }) {
 }
 
 // ==================================================
-// ✅ PanelModal — add/rename panel
+// ✅ PanelModal
 // ==================================================
 function PanelModal({ mode, initial, activeDeptCount, departments, onSave, onClose }) {
   const [name, setName] = useState(initial ? initial.name : '');
@@ -1871,14 +1869,10 @@ function DeptHeader({ dept }) {
 }
 
 // ==================================================
-// ✅ DoctorEntry — ROLE-AWARE BUTTON
+// ✅ DoctorEntry — REVERTED to original (siriyal nin only)
 // ==================================================
-// Doctor logged in → "🏥 ডাক্তার ড্যাশবোর্ড" button (blue)
-// Others          → "সিরিয়াল নিন" button (teal)
-// ==================================================
-function DoctorEntry({ doc, accentColor, isDoctorLoggedIn = false }) {
-  const hasValidId =
-    doc.id && typeof doc.id === 'string' && doc.id.trim() !== '';
+function DoctorEntry({ doc, accentColor }) {
+  const hasValidId = doc.id && typeof doc.id === 'string' && doc.id.trim() !== '';
 
   const bookingUrl = hasValidId
     ? buildBookingUrl(doc.id, doc.nameEn || doc.name || '', 'direct')
@@ -1901,26 +1895,7 @@ function DoctorEntry({ doc, accentColor, isDoctorLoggedIn = false }) {
         </div>
       )}
 
-      {/* ✅ Doctor logged in → Dashboard button */}
-      {hasValidId && isDoctorLoggedIn && (
-        <a
-          href="/doctor"
-          className="serial-booking-button dashboard-btn"
-          aria-label="ডাক্তার ড্যাশবোর্ডে যান"
-          onClick={() => {
-            trackEvent('doctor_dashboard_button_click', {
-              doctor_id: doc.id,
-              doctor_name: doc.name,
-              source: 'website_button',
-            });
-          }}
-        >
-          🏥 ডাক্তার ড্যাশবোর্ড
-        </a>
-      )}
-
-      {/* ✅ Others → Booking button */}
-      {hasValidId && !isDoctorLoggedIn && (
+      {hasValidId && (
         <a
           href={bookingUrl}
           target="_blank"
@@ -1949,10 +1924,6 @@ function DoctorEntry({ doc, accentColor, isDoctorLoggedIn = false }) {
 function PreviewPanel({ panel, departments, checkedIds, footer, onBack, user }) {
   const printRef = useRef(null);
   const isAdmin = user?.role === 'admin';
-
-  // ✅ NEW — Check if logged-in user is a Doctor
-  const isDoctorLoggedIn =
-    user?.designation === 'Doctor' && !!user?.doctorId;
 
   const handlePrint = () => {
     if (!isAdmin) {
@@ -2088,12 +2059,7 @@ function PreviewPanel({ panel, departments, checkedIds, footer, onBack, user }) 
               <div className="dept-block" key={dept.id}>
                 <DeptHeader dept={dept} />
                 {dept.doctors.map((doc) => (
-                  <DoctorEntry
-                    key={doc.id}
-                    doc={doc}
-                    accentColor={dept.color}
-                    isDoctorLoggedIn={isDoctorLoggedIn}
-                  />
+                  <DoctorEntry key={doc.id} doc={doc} accentColor={dept.color} />
                 ))}
               </div>
             ))}
@@ -2214,9 +2180,14 @@ export default function DoctorPanelBuilder() {
   const isRestrictedRole = !!user && RESTRICTED_ROLES.includes(user.role);
   const canManagePanels = !isGuest && !isRestrictedRole;
 
+  // ✅ NEW — Check if logged-in user is a Doctor
+  const isDoctorLoggedIn =
+    !!user && user.designation === 'Doctor' && !!user.doctorId;
+
   console.log('🔍 [DPB] user.role =', user?.role);
   console.log('🔍 [DPB] isRestrictedRole =', isRestrictedRole);
   console.log('🔍 [DPB] canManagePanels =', canManagePanels);
+  console.log('🔍 [DPB] isDoctorLoggedIn =', isDoctorLoggedIn);
 
   const path = location.pathname;
 
@@ -2884,34 +2855,27 @@ export default function DoctorPanelBuilder() {
 
             <NotificationBell user={user} />
 
-            {!isGuest && (
+            {/* ============================================
+                ✅ Top-bar Action Button
+                Doctor logged in → "🏥 ডাক্তার ড্যাশবোর্ড"
+                Others         → "🎫 আমার সিরিয়াল"
+                ============================================ */}
+            {!isGuest && isDoctorLoggedIn && (
               <button
+                className="topbar-action-btn doctor-dashboard"
+                onClick={() => navigate('/doctor')}
+                aria-label="ডাক্তার ড্যাশবোর্ডে যান"
+              >
+                <Stethoscope size={14} />
+                ডাক্তার ড্যাশবোর্ড
+              </button>
+            )}
+
+            {!isGuest && !isDoctorLoggedIn && (
+              <button
+                className="topbar-action-btn my-bookings"
                 onClick={() => navigate('/my-bookings')}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '8px 16px',
-                  background: 'linear-gradient(135deg, #8b5cf6, #a78bfa)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '12px',
-                  fontSize: '13px',
-                  fontWeight: '700',
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                  boxShadow: '0 4px 12px rgba(139,92,246,0.35)',
-                  transition: 'all 0.2s ease',
-                  whiteSpace: 'nowrap',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 6px 16px rgba(139,92,246,0.45)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(139,92,246,0.35)';
-                }}
+                aria-label="আমার সিরিয়াল দেখুন"
               >
                 <Ticket size={14} />
                 আমার সিরিয়াল
