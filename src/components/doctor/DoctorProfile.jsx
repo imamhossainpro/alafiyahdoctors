@@ -5,6 +5,7 @@
 // ✅ Read-only profile display
 // ✅ Edit button → sends request to admin
 // ✅ Real data from Firestore
+// ✅ FIXED: Avatar layering (z-index) + proper spacing
 // ==================================================
 
 import React, { useEffect, useState } from 'react';
@@ -40,56 +41,73 @@ const CSS = `
     border: 1px solid #e2e8f0;
     overflow: hidden;
   }
+
+  /* ============================================
+     Banner + Avatar — properly layered
+     ============================================ */
   .dpf-banner {
-    height: 100px;
+    height: 130px;
     background: linear-gradient(135deg, #1c5fa8, #0d9488);
     position: relative;
+    z-index: 1;
   }
+
   .dpf-avatar-wrap {
     padding: 0 24px;
-    margin-top: -50px;
+    margin-top: -70px;
     display: flex;
     align-items: flex-end;
     gap: 20px;
     flex-wrap: wrap;
+    position: relative;
+    z-index: 10;
+    min-height: 100px;
   }
+
   .dpf-avatar {
-    width: 100px;
-    height: 100px;
+    width: 130px;
+    height: 130px;
     border-radius: 50%;
-    border: 4px solid #fff;
-    background: #eff6ff;
+    border: 5px solid #fff;
+    background: #f1f5f9;
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
     flex-shrink: 0;
+    position: relative;
+    z-index: 11;
   }
   .dpf-avatar img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    display: block;
   }
+
   .dpf-info {
-    padding-bottom: 8px;
+    padding-bottom: 6px;
     flex: 1;
     min-width: 200px;
+    margin-top: 10px;
   }
   .dpf-name {
     margin: 0 0 4px 0;
     font-size: 22px;
     font-weight: 800;
     color: #1e293b;
+    line-height: 1.2;
   }
   .dpf-name-en {
     font-size: 13px;
     color: #64748b;
     font-style: italic;
+    margin-bottom: 4px;
   }
   .dpf-dept {
     display: inline-block;
-    margin-top: 6px;
+    margin-top: 4px;
     padding: 3px 12px;
     background: #eff6ff;
     color: #1c5fa8;
@@ -97,12 +115,16 @@ const CSS = `
     font-size: 12px;
     font-weight: 700;
   }
+
+  /* ============================================
+     Edit Button
+     ============================================ */
   .dpf-edit-btn {
-    padding: 9px 18px;
+    padding: 10px 20px;
     background: #1c5fa8;
     color: #fff;
     border: none;
-    border-radius: 8px;
+    border-radius: 10px;
     cursor: pointer;
     font-size: 13.5px;
     font-weight: 700;
@@ -112,12 +134,18 @@ const CSS = `
     font-family: inherit;
     transition: all 0.2s;
     margin-bottom: 8px;
+    flex-shrink: 0;
+    box-shadow: 0 3px 10px rgba(28, 95, 168, 0.3);
   }
   .dpf-edit-btn:hover {
     background: #154a82;
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(28,95,168,0.3);
+    box-shadow: 0 5px 14px rgba(28, 95, 168, 0.4);
   }
+
+  /* ============================================
+     Body content
+     ============================================ */
   .dpf-body {
     padding: 24px;
     display: grid;
@@ -127,7 +155,10 @@ const CSS = `
     border-top: 1px solid #f1f5f9;
     padding-top: 20px;
   }
-  .dpf-section:first-child { border-top: none; padding-top: 0; }
+  .dpf-section:first-child {
+    border-top: none;
+    padding-top: 0;
+  }
   .dpf-section-title {
     display: flex;
     align-items: center;
@@ -191,6 +222,10 @@ const CSS = `
     text-align: center;
     color: #64748b;
   }
+
+  /* ============================================
+     Pending request banner
+     ============================================ */
   .dpf-pending-banner {
     margin: 0 24px 12px 24px;
     padding: 12px 16px;
@@ -207,19 +242,30 @@ const CSS = `
   .dpf-pending-banner strong {
     color: #78350f;
   }
-  .dpf-status-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 10px;
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 700;
-    margin-left: 6px;
-  }
-  .dpf-status-pending {
-    background: #fef3c7;
-    color: #92400e;
+
+  /* ============================================
+     Mobile responsive
+     ============================================ */
+  @media (max-width: 640px) {
+    .dpf-banner {
+      height: 100px;
+    }
+    .dpf-avatar-wrap {
+      margin-top: -50px;
+      gap: 12px;
+    }
+    .dpf-avatar {
+      width: 90px;
+      height: 90px;
+      border-width: 4px;
+    }
+    .dpf-name {
+      font-size: 18px;
+    }
+    .dpf-edit-btn {
+      padding: 8px 14px;
+      font-size: 12.5px;
+    }
   }
 `;
 
@@ -334,7 +380,7 @@ export default function DoctorProfile({ user }) {
             {doctor?.imageUrl ? (
               <img src={doctor.imageUrl} alt={doctor.name} />
             ) : (
-              <User size={42} color="#94a3b8" />
+              <User size={46} color="#94a3b8" />
             )}
           </div>
           <div className="dpf-info">
@@ -342,7 +388,7 @@ export default function DoctorProfile({ user }) {
               {doctor?.name || user?.name || 'Doctor'}
             </h2>
             {doctor?.nameEn && (
-              <div className="dpf-nameEn dpf-name-en">{doctor.nameEn}</div>
+              <div className="dpf-name-en">{doctor.nameEn}</div>
             )}
             {doctor?.deptName && (
               <span className="dpf-dept">{doctor.deptName}</span>
@@ -453,7 +499,13 @@ export default function DoctorProfile({ user }) {
               <div className="dpf-section-title">
                 <Hourglass size={14} /> My Edit Requests
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10,
+                }}
+              >
                 {myRequests.slice(0, 5).map((req) => (
                   <RequestRow key={req.id} req={req} />
                 ))}
@@ -475,7 +527,6 @@ export default function DoctorProfile({ user }) {
           }}
           onClose={() => setShowEditModal(false)}
           onSubmitted={() => {
-            // Reload profile data after submit
             loadProfile();
           }}
         />
@@ -484,6 +535,9 @@ export default function DoctorProfile({ user }) {
   );
 }
 
+// ==================================================
+// ✅ Helper — Field
+// ==================================================
 function Field({ icon: Icon, label, value }) {
   return (
     <div className="dpf-field">
@@ -497,6 +551,9 @@ function Field({ icon: Icon, label, value }) {
   );
 }
 
+// ==================================================
+// ✅ Helper — RequestRow
+// ==================================================
 function RequestRow({ req }) {
   const statusMeta = {
     pending: {
@@ -544,10 +601,22 @@ function RequestRow({ req }) {
       }}
     >
       <div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+        <div
+          style={{
+            fontSize: 13,
+            fontWeight: 700,
+            color: '#1e293b',
+          }}
+        >
           {fieldCount} টি field পরিবর্তনের রিকোয়েস্ট
         </div>
-        <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
+        <div
+          style={{
+            fontSize: 11.5,
+            color: '#64748b',
+            marginTop: 2,
+          }}
+        >
           {req.submittedAt
             ? (req.submittedAt.toDate
                 ? req.submittedAt.toDate()
