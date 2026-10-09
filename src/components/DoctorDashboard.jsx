@@ -1,11 +1,12 @@
 // src/components/DoctorDashboard.jsx
 // ==================================================
-// 🩺 Doctor Dashboard — Main Component (Phase 2)
+// 🩺 Doctor Dashboard — Main Component
 // ==================================================
 // ✅ Only accessible for designation: 'Doctor'
-// ✅ View-only (unless role: 'admin')
 // ✅ Real data from Firestore (safe fields only)
-// ✅ Multi-route (overview, patients, reports, profile)
+// ✅ Responsive: hamburger drawer (mobile) + sticky sidebar (desktop)
+// ✅ Fixed: content overflow, profile card, professional info cards
+// ✅ Fixed: main content min-width: 0, no horizontal scroll
 // ==================================================
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -13,7 +14,6 @@ import {
   LayoutDashboard,
   Users,
   FileText,
-  Calendar,
   User,
   LogOut,
   Stethoscope,
@@ -26,19 +26,403 @@ import { useHospital } from '../context/HospitalContext';
 import { usePermission } from '../context/PermissionContext';
 import AuthPage from './AuthPage';
 
-// ✅ Phase 2 components
 import DoctorSummaryCards from './doctor/DoctorSummaryCards';
 import DoctorPatientList from './doctor/DoctorPatientList';
 import DoctorDailyReport from './doctor/DoctorDailyReport';
 import DoctorProfile from './doctor/DoctorProfile';
 
-// ✅ Phase 2 service
 import {
   subscribeToDoctorAppointments,
   computeSummaryCounts,
   getTodayString,
 } from '../services/doctorAppointmentService';
 
+// ==================================================
+// ✅ Component CSS — responsive layout (no Tailwind assumed)
+// ==================================================
+const DASH_CSS = `
+  /* =============================================
+     Root
+     ============================================= */
+  .dd-root {
+    display: flex;
+    min-height: 100vh;
+    background: #F8FAFC;
+    font-family: 'Hind Siliguri', 'Noto Sans Bengali', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #0F172A;
+    overflow-x: hidden;
+    box-sizing: border-box;
+  }
+  .dd-root * { box-sizing: border-box; }
+
+  /* =============================================
+     Sidebar — desktop / tablet
+     ============================================= */
+  .dd-sidebar {
+    width: 240px;
+    background: #FFFFFF;
+    border-right: 1px solid #E2E8F0;
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    flex-shrink: 0;
+    z-index: 30;
+    transition: transform 0.25s ease;
+  }
+
+  .dd-sidebar-brand {
+    padding: 20px;
+    border-bottom: 1px solid #E2E8F0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .dd-brand-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #1D4ED8, #0F9488);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .dd-brand-text { line-height: 1.2; min-width: 0; }
+  .dd-brand-title {
+    font-size: 15px;
+    font-weight: 800;
+    color: #1D4ED8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .dd-brand-sub {
+    font-size: 11px;
+    color: #64748B;
+    font-weight: 500;
+  }
+
+  .dd-sidebar-user {
+    padding: 14px 20px;
+    border-bottom: 1px solid #E2E8F0;
+  }
+  .dd-user-name {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #0F172A;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+  }
+  .dd-user-role {
+    font-size: 11.5px;
+    color: #64748B;
+  }
+  .dd-admin-tag {
+    margin-top: 6px;
+    font-size: 10.5px;
+    background: #DBEAFE;
+    color: #1E40AF;
+    padding: 2px 8px;
+    border-radius: 10px;
+    display: inline-block;
+    font-weight: 700;
+  }
+
+  .dd-nav {
+    flex: 1;
+    padding: 12px;
+    overflow-y: auto;
+  }
+  .dd-nav-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: transparent;
+    color: #475569;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    text-align: left;
+    font-family: inherit;
+    transition: background 0.15s, color 0.15s;
+  }
+  .dd-nav-item:hover {
+    background: #F1F5F9;
+    color: #1D4ED8;
+  }
+  .dd-nav-item.is-active {
+    background: #1D4ED8;
+    color: #FFFFFF;
+  }
+
+  .dd-sidebar-footer {
+    padding: 14px;
+    border-top: 1px solid #E2E8F0;
+  }
+  .dd-logout-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px;
+    background: #FEE2E2;
+    color: #DC2626;
+    border: 1px solid #FCA5A5;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13.5px;
+    font-weight: 700;
+    font-family: inherit;
+    transition: background 0.15s;
+  }
+  .dd-logout-btn:hover { background: #FECACA; }
+
+  /* =============================================
+     Mobile top header (hamburger)
+     ============================================= */
+  .dd-mobile-header {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: #FFFFFF;
+    border-bottom: 1px solid #E2E8F0;
+    position: sticky;
+    top: 0;
+    z-index: 25;
+  }
+  .dd-hamburger {
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #F1F5F9;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    cursor: pointer;
+    color: #0F172A;
+    flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  .dd-hamburger:hover { background: #E2E8F0; }
+  .dd-hamburger:focus-visible {
+    outline: 2px solid #1D4ED8;
+    outline-offset: 2px;
+  }
+  .dd-mobile-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex: 1;
+  }
+  .dd-mobile-title .dd-brand-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+  .dd-mobile-title .dd-brand-icon svg { width: 18px; height: 18px; }
+  .dd-mobile-title-text { line-height: 1.1; min-width: 0; }
+  .dd-mobile-title-text .dd-brand-title {
+    font-size: 14px;
+    font-weight: 800;
+    color: #1D4ED8;
+  }
+  .dd-mobile-title-text .dd-brand-sub {
+    font-size: 10.5px;
+    color: #64748B;
+    font-weight: 500;
+  }
+
+  /* =============================================
+     Main content
+     ============================================= */
+  .dd-main {
+    flex: 1;
+    min-width: 0;             /* ✅ critical: prevents flex overflow */
+    padding: 24px;
+    overflow-x: hidden;
+  }
+
+  /* =============================================
+     Mobile drawer overlay
+     ============================================= */
+  .dd-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.5);
+    z-index: 40;
+    animation: dd-fade-in 0.18s ease;
+  }
+  @keyframes dd-fade-in { from { opacity: 0 } to { opacity: 1 } }
+
+  /* =============================================
+     Breakpoints
+     ============================================= */
+
+  /* ---------- Tablet (768–1023px) ---------- */
+  @media (max-width: 1023px) {
+    .dd-sidebar {
+      width: 220px;
+    }
+    .dd-main {
+      padding: 20px;
+    }
+  }
+
+  /* ---------- Mobile (<=767px) ---------- */
+  @media (max-width: 767px) {
+    .dd-root {
+      display: block;             /* stack header + main */
+    }
+
+    .dd-mobile-header {
+      display: flex;
+    }
+
+    /* Sidebar becomes a fixed drawer (off-canvas) */
+    .dd-sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      width: 260px;
+      max-width: 80vw;
+      transform: translateX(-100%);
+      z-index: 50;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.2);
+    }
+    .dd-sidebar.is-open {
+      transform: translateX(0);
+    }
+
+    .dd-overlay.is-open {
+      display: block;
+    }
+
+    .dd-main {
+      padding: 14px;
+      width: 100%;
+      min-width: 0;
+    }
+  }
+
+  /* ---------- Small mobile (<=360px) ---------- */
+  @media (max-width: 360px) {
+    .dd-main {
+      padding: 10px;
+    }
+    .dd-sidebar {
+      max-width: 88vw;
+    }
+  }
+
+  /* =============================================
+     Tab content loading / error states
+     ============================================= */
+  .dd-loading-box {
+    background: #fff;
+    padding: 60px 20px;
+    border-radius: 14px;
+    border: 1px solid #E2E8F0;
+    text-align: center;
+    color: #64748B;
+  }
+  .dd-spinner {
+    display: inline-block;
+    width: 32px;
+    height: 32px;
+    border: 3px solid #E2E8F0;
+    border-top-color: #1D4ED8;
+    border-radius: 50%;
+    animation: dd-spin 0.8s linear infinite;
+  }
+  @keyframes dd-spin { to { transform: rotate(360deg) } }
+
+  .dd-error-box {
+    background: #FEE2E2;
+    border: 1px solid #FCA5A5;
+    padding: 20px 24px;
+    border-radius: 12px;
+    color: #991B1B;
+  }
+  .dd-error-box strong { display: block; margin-bottom: 6px; }
+
+  .dd-tab-header h2 {
+    margin: 0 0 4px 0;
+    font-size: 22px;
+    font-weight: 800;
+    color: #0F172A;
+  }
+  .dd-tab-header p {
+    margin: 0;
+    color: #64748B;
+    font-size: 13.5px;
+  }
+
+  /* =============================================
+     Access Denied / Auth
+     ============================================= */
+  .dd-centered-wrap {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #F8FAFC;
+    padding: 20px;
+    font-family: 'Hind Siliguri', 'Noto Sans Bengali', -apple-system, sans-serif;
+  }
+  .dd-access-card {
+    background: #fff;
+    padding: 40px 32px;
+    border-radius: 16px;
+    border: 1px solid #E2E8F0;
+    text-align: center;
+    max-width: 440px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.08);
+  }
+  .dd-access-card h2 {
+    margin: 16px 0 8px;
+    color: #0F172A;
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .dd-access-card p {
+    color: #64748B;
+    font-size: 14px;
+    line-height: 1.6;
+    margin-bottom: 20px;
+  }
+  .dd-access-btn {
+    padding: 10px 24px;
+    background: #1D4ED8;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  .dd-access-btn:hover { background: #1E40AF; }
+`;
+
+// ==================================================
+// ✅ Component
+// ==================================================
 export default function DoctorDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -50,30 +434,28 @@ export default function DoctorDashboard() {
   const [appointments, setAppointments] = useState([]);
   const [appointmentsLoading, setAppointmentsLoading] = useState(true);
   const [appointmentsError, setAppointmentsError] = useState(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // ✅ Mobile drawer state
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const hospitalId = currentHospital?.id || 'alafiyah_main';
 
   // ==================================================
-  // ✅ Doctor check
+  // ✅ Doctor / Admin
   // ==================================================
-  const isDoctor =
-    user?.designation === 'Doctor' && !!user?.doctorId;
+  const isDoctor = user?.designation === 'Doctor' && !!user?.doctorId;
   const isAdmin = user?.role === 'admin' || user?.role === 'sub-admin';
 
   // ==================================================
-  // ✅ Redirect logic
+  // ✅ Auth redirects
   // ==================================================
   useEffect(() => {
     if (authLoading) return;
-
     if (!user) {
       setShowAuth(true);
       return;
     }
-
     if (isDoctor) return;
-
     if (isAdmin) {
       navigate('/admin', { replace: true });
       return;
@@ -81,11 +463,10 @@ export default function DoctorDashboard() {
   }, [authLoading, user, isDoctor, isAdmin, navigate]);
 
   // ==================================================
-  // ✅ Subscribe to doctor's appointments
+  // ✅ Subscribe to appointments
   // ==================================================
   useEffect(() => {
     if (!isDoctor || !user?.doctorId) return;
-
     setAppointmentsLoading(true);
     const unsub = subscribeToDoctorAppointments(
       hospitalId,
@@ -99,7 +480,6 @@ export default function DoctorDashboard() {
         setAppointmentsLoading(false);
       }
     );
-
     return () => {
       if (typeof unsub === 'function') unsub();
     };
@@ -114,22 +494,40 @@ export default function DoctorDashboard() {
     : 'overview';
 
   // ==================================================
+  // ✅ Close drawer on route change
+  // ==================================================
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [path]);
+
+  // ==================================================
+  // ✅ Close drawer with ESC + lock body scroll
+  // ==================================================
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setDrawerOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [drawerOpen]);
+
+  // ==================================================
   // ✅ Loading state
   // ==================================================
   if (authLoading) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          height: '100vh',
-          fontSize: '16px',
-          color: '#64748b',
-        }}
-      >
-        লোড হচ্ছে...
-      </div>
+      <>
+        <style>{DASH_CSS}</style>
+        <div className="dd-centered-wrap">
+          <div style={{ color: '#64748B', fontSize: 16 }}>লোড হচ্ছে...</div>
+        </div>
+      </>
     );
   }
 
@@ -138,87 +536,37 @@ export default function DoctorDashboard() {
   // ==================================================
   if (!user) {
     return (
-      <div
-        style={{
-          minHeight: '100vh',
-          background: '#f4f6fa',
-        }}
-      >
-        <AuthPage onClose={() => setShowAuth(false)} />
-      </div>
+      <>
+        <style>{DASH_CSS}</style>
+        <div style={{ minHeight: '100vh', background: '#F8FAFC' }}>
+          <AuthPage onClose={() => setShowAuth(false)} />
+        </div>
+      </>
     );
   }
 
   // ==================================================
-  // ✅ Access Denied
+  // ✅ Access denied
   // ==================================================
   if (!isDoctor && !isAdmin) {
     return (
-      <div
-        style={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: '#f4f6fa',
-          padding: '20px',
-          fontFamily:
-            "'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif",
-        }}
-      >
-        <div
-          style={{
-            background: '#fff',
-            padding: '40px 32px',
-            borderRadius: '16px',
-            border: '1px solid #e2e8f0',
-            textAlign: 'center',
-            maxWidth: '440px',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.08)',
-          }}
-        >
-          <ShieldAlert
-            size={56}
-            color="#dc2626"
-            style={{ marginBottom: '16px' }}
-          />
-          <h2
-            style={{
-              margin: '0 0 8px',
-              color: '#1e293b',
-              fontSize: '20px',
-              fontWeight: 700,
-            }}
-          >
-            Access Denied
-          </h2>
-          <p
-            style={{
-              color: '#64748b',
-              fontSize: '14px',
-              lineHeight: 1.6,
-              marginBottom: '20px',
-            }}
-          >
-            আপনি Doctor designation-এ নেই।
-          </p>
-          <button
-            onClick={() => navigate('/')}
-            style={{
-              padding: '10px 24px',
-              background: '#1c5fa8',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '8px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              fontSize: '14px',
-            }}
-          >
-            হোমপেজে ফিরে যান
-          </button>
+      <>
+        <style>{DASH_CSS}</style>
+        <div className="dd-centered-wrap">
+          <div className="dd-access-card">
+            <ShieldAlert size={56} color="#DC2626" />
+            <h2>Access Denied</h2>
+            <p>আপনি Doctor designation-এ নেই।</p>
+            <button
+              className="dd-access-btn"
+              onClick={() => navigate('/')}
+              type="button"
+            >
+              হোমপেজে ফিরে যান
+            </button>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -226,11 +574,19 @@ export default function DoctorDashboard() {
   // ✅ Today's counts
   // ==================================================
   const todayStr = getTodayString();
-  const todayCounts = computeSummaryCounts(appointments, todayStr);
+  const todayCounts = useMemo(
+    () => computeSummaryCounts(appointments, todayStr),
+    [appointments, todayStr]
+  );
 
   const handleLogout = () => {
     logout();
     setTimeout(() => window.location.reload(), 100);
+  };
+
+  const handleNavClick = (itemPath) => {
+    navigate(itemPath);
+    setDrawerOpen(false);
   };
 
   // ==================================================
@@ -267,57 +623,24 @@ export default function DoctorDashboard() {
     },
   ];
 
-  const handleNavClick = (itemPath) => {
-    navigate(itemPath);
-    setSidebarOpen(false);
-  };
-
   // ==================================================
-  // ✅ Render Tab Content
+  // ✅ Tab content renderer
   // ==================================================
   const renderTabContent = () => {
     if (appointmentsLoading && activeTab === 'overview') {
       return (
-        <div
-          style={{
-            background: '#fff',
-            padding: '60px 20px',
-            borderRadius: '14px',
-            border: '1px solid #e2e8f0',
-            textAlign: 'center',
-            color: '#64748b',
-          }}
-        >
-          <div
-            style={{
-              display: 'inline-block',
-              width: '32px',
-              height: '32px',
-              border: '3px solid #e2e8f0',
-              borderTopColor: '#1c5fa8',
-              borderRadius: '50%',
-              animation: 'spin 0.8s linear infinite',
-            }}
-          />
+        <div className="dd-loading-box">
+          <div className="dd-spinner" />
           <p style={{ marginTop: 12, fontSize: 14 }}>লোড হচ্ছে...</p>
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       );
     }
 
     if (appointmentsError) {
       return (
-        <div
-          style={{
-            background: '#fee2e2',
-            border: '1px solid #fca5a5',
-            padding: '20px 24px',
-            borderRadius: '12px',
-            color: '#991b1b',
-          }}
-        >
+        <div className="dd-error-box">
           <strong>⚠️ ডেটা লোড করতে সমস্যা:</strong>
-          <div style={{ marginTop: 6, fontSize: 13 }}>{appointmentsError}</div>
+          <div style={{ fontSize: 13 }}>{appointmentsError}</div>
         </div>
       );
     }
@@ -326,33 +649,18 @@ export default function DoctorDashboard() {
       case 'overview':
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {/* Header */}
-            <div>
-              <h2
-                style={{
-                  margin: '0 0 4px 0',
-                  fontSize: 22,
-                  fontWeight: 800,
-                  color: '#1e293b',
-                }}
-              >
-                Overview
-              </h2>
-              <p style={{ margin: 0, color: '#64748b', fontSize: 13.5 }}>
-                আজকের ({todayStr}) সিরিয়াল এবং রোগীর পরিসংখ্যান
-              </p>
+            <div className="dd-tab-header">
+              <h2>Overview</h2>
+              <p>আজকের ({todayStr}) সিরিয়াল এবং রোগীর পরিসংখ্যান</p>
             </div>
 
-            {/* Summary Cards */}
             <DoctorSummaryCards
               counts={todayCounts}
               onCardClick={(status) => {
-                // ✅ Card click → navigate to patients with filter
                 navigate(`/doctor/patients?status=${status}`);
               }}
             />
 
-            {/* Today's Patient List */}
             <DoctorPatientList
               appointments={appointments}
               initialDate={todayStr}
@@ -373,17 +681,7 @@ export default function DoctorDashboard() {
 
       default:
         return (
-          <div
-            style={{
-              background: '#fff',
-              padding: 40,
-              borderRadius: 12,
-              textAlign: 'center',
-              color: '#64748b',
-            }}
-          >
-            Page not found
-          </div>
+          <div className="dd-loading-box">Page not found</div>
         );
     }
   };
@@ -392,216 +690,120 @@ export default function DoctorDashboard() {
   // ✅ RENDER
   // ==================================================
   return (
-    <div
-      style={{
-        display: 'flex',
-        minHeight: '100vh',
-        background: '#f4f6fa',
-        fontFamily:
-          "'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif",
-      }}
-    >
-      {/* Mobile Sidebar Overlay */}
-      {sidebarOpen && (
-        <div
-          onClick={() => setSidebarOpen(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.5)',
-            zIndex: 40,
-          }}
-        />
-      )}
+    <>
+      <style>{DASH_CSS}</style>
+      <div className="dd-root">
 
-      {/* ============ Sidebar ============ */}
-      <aside
-        style={{
-          width: '240px',
-          background: '#ffffff',
-          borderRight: '1px solid #e2e8f0',
-          display: 'flex',
-          flexDirection: 'column',
-          position: 'sticky',
-          top: 0,
-          height: '100vh',
-          flexShrink: 0,
-          transition: 'transform 0.2s',
-        }}
-      >
-        {/* Logo/Title */}
-        <div
-          style={{
-            padding: '20px 20px 16px',
-            borderBottom: '1px solid #e2e8f0',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-          }}
-        >
-          <div
-            style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '10px',
-              background: 'linear-gradient(135deg, #1c5fa8, #0d9488)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#fff',
-              fontWeight: 800,
-              fontSize: '16px',
-              flexShrink: 0,
-            }}
-          >
-            <Stethoscope size={20} />
-          </div>
-          <div style={{ lineHeight: 1.2, minWidth: 0 }}>
-            <div
-              style={{
-                fontSize: '15px',
-                fontWeight: 800,
-                color: '#1c5fa8',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              আল-আফিয়া
-            </div>
-            <div
-              style={{
-                fontSize: '11px',
-                color: '#64748b',
-                fontWeight: 500,
-              }}
-            >
-              Doctor Panel
-            </div>
-          </div>
-        </div>
-
-        {/* User Info */}
-        <div
-          style={{
-            padding: '14px 20px',
-            borderBottom: '1px solid #e2e8f0',
-          }}
-        >
-          <div
-            style={{
-              fontSize: '13.5px',
-              fontWeight: 700,
-              color: '#1e293b',
-              marginBottom: '2px',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {user?.name || 'Doctor'}
-          </div>
-          <div style={{ fontSize: '11.5px', color: '#64748b' }}>
-            {user?.designation || 'Doctor'}
-          </div>
-          {isAdmin && (
-            <div
-              style={{
-                marginTop: '6px',
-                fontSize: '10.5px',
-                background: '#dbeafe',
-                color: '#1e40af',
-                padding: '2px 8px',
-                borderRadius: '10px',
-                display: 'inline-block',
-                fontWeight: 700,
-              }}
-            >
-              ADMIN
-            </div>
-          )}
-        </div>
-
-        {/* Nav Items */}
-        <nav style={{ flex: 1, padding: '12px', overflowY: 'auto' }}>
-          {sidebarItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-            const hasPerm = item.perm ? can(item.perm) : true;
-            if (!hasPerm) return null;
-
-            return (
-              <button
-                key={item.id}
-                onClick={() => handleNavClick(item.path)}
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  padding: '10px 14px',
-                  background: isActive ? '#1c5fa8' : 'transparent',
-                  color: isActive ? '#fff' : '#475569',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: isActive ? 700 : 600,
-                  marginBottom: '4px',
-                  textAlign: 'left',
-                  fontFamily: 'inherit',
-                  transition: 'all 0.2s',
-                }}
-              >
-                <Icon size={18} />
-                {item.label}
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* Footer */}
-        <div
-          style={{
-            padding: '14px',
-            borderTop: '1px solid #e2e8f0',
-          }}
-        >
+        {/* ============ Mobile top header ============ */}
+        <header className="dd-mobile-header">
           <button
-            onClick={handleLogout}
-            style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              padding: '10px',
-              background: '#fee2e2',
-              color: '#dc2626',
-              border: '1px solid #fca5a5',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '13.5px',
-              fontWeight: 700,
-              fontFamily: 'inherit',
-            }}
+            type="button"
+            className="dd-hamburger"
+            aria-label="Open navigation menu"
+            aria-expanded={drawerOpen}
+            onClick={() => setDrawerOpen(true)}
           >
-            <LogOut size={16} /> লগআউট
+            <Menu size={20} />
           </button>
-        </div>
-      </aside>
 
-      {/* ============ Main Content ============ */}
-      <main
-        style={{
-          flex: 1,
-          padding: '24px',
-          overflowX: 'auto',
-          minWidth: 0,
-        }}
-      >
-        {renderTabContent()}
-      </main>
-    </div>
+          <div className="dd-mobile-title">
+            <div className="dd-brand-icon">
+              <Stethoscope size={18} />
+            </div>
+            <div className="dd-mobile-title-text">
+              <div className="dd-brand-title">আল-আফিয়া</div>
+              <div className="dd-brand-sub">Doctor Panel</div>
+            </div>
+          </div>
+        </header>
+
+        {/* ============ Overlay (mobile drawer backdrop) ============ */}
+        <div
+          className={`dd-overlay ${drawerOpen ? 'is-open' : ''}`}
+          onClick={() => setDrawerOpen(false)}
+          aria-hidden="true"
+        />
+
+        {/* ============ Sidebar / Drawer ============ */}
+        <aside
+          className={`dd-sidebar ${drawerOpen ? 'is-open' : ''}`}
+          aria-hidden={!drawerOpen && typeof window !== 'undefined' && window.innerWidth < 768}
+        >
+          {/* Brand */}
+          <div className="dd-sidebar-brand">
+            <div className="dd-brand-icon">
+              <Stethoscope size={20} />
+            </div>
+            <div className="dd-brand-text">
+              <div className="dd-brand-title">আল-আফিয়া</div>
+              <div className="dd-brand-sub">Doctor Panel</div>
+            </div>
+
+            {/* Mobile close button inside drawer */}
+            <button
+              type="button"
+              className="dd-hamburger"
+              aria-label="Close navigation menu"
+              onClick={() => setDrawerOpen(false)}
+              style={{
+                marginLeft: 'auto',
+                background: 'transparent',
+                border: 'none',
+              }}
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* User block */}
+          <div className="dd-sidebar-user">
+            <div className="dd-user-name">{user?.name || 'Doctor'}</div>
+            <div className="dd-user-role">
+              {user?.designation || 'Doctor'}
+            </div>
+            {isAdmin && <span className="dd-admin-tag">ADMIN</span>}
+          </div>
+
+          {/* Navigation */}
+          <nav className="dd-nav" role="navigation">
+            {sidebarItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              const hasPerm = item.perm ? can(item.perm) : true;
+              if (!hasPerm) return null;
+
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleNavClick(item.path)}
+                  className={`dd-nav-item ${isActive ? 'is-active' : ''}`}
+                  aria-current={isActive ? 'page' : undefined}
+                >
+                  <Icon size={18} />
+                  {item.label}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Logout */}
+          <div className="dd-sidebar-footer">
+            <button
+              type="button"
+              className="dd-logout-btn"
+              onClick={handleLogout}
+            >
+              <LogOut size={16} /> লগআউট
+            </button>
+          </div>
+        </aside>
+
+        {/* ============ Main content ============ */}
+        <main className="dd-main">
+          {renderTabContent()}
+        </main>
+      </div>
+    </>
   );
 }

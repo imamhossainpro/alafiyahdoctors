@@ -9,6 +9,8 @@
 // ✅ Empty fields auto-hidden
 // ✅ Edit Profile + admin approval flow preserved
 // ✅ Existing services + modal reused (nothing new)
+// ✅ RESPONSIVE FIX: no horizontal overflow, proper text wrap,
+//    mobile stacked header, tablet 2-col, mobile 1-col
 // ==================================================
 
 import React, { useEffect, useState } from 'react';
@@ -40,17 +42,27 @@ import {
 import DoctorProfileEditModal from './DoctorProfileEditModal';
 
 // ==================================================
-// ✅ Design Tokens (from spec)
+// ✅ Design Tokens + Responsive Layout
 // ==================================================
 const CSS = `
+  /* ============================================
+     Root wrapper — prevents horizontal overflow
+     ============================================ */
   .dp-page {
     background: #F8FAFC;
     min-height: 100%;
+    width: 100%;
+    max-width: 100%;
     font-family: 'Hind Siliguri', 'Noto Sans Bengali', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     color: #0F172A;
     box-sizing: border-box;
+    overflow-x: hidden;
   }
-  .dp-page * { box-sizing: border-box; }
+  .dp-page *,
+  .dp-page *::before,
+  .dp-page *::after {
+    box-sizing: border-box;
+  }
 
   /* ============================================
      Compact Profile Header
@@ -66,6 +78,8 @@ const CSS = `
     flex-wrap: wrap;
     margin-bottom: 16px;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    width: 100%;
+    max-width: 100%;
   }
 
   .dp-avatar {
@@ -89,9 +103,10 @@ const CSS = `
   }
 
   .dp-identity {
-    flex: 1;
-    min-width: 220px;
+    flex: 1 1 200px;             /* ✅ grows and wraps */
+    min-width: 0;                /* ✅ critical for text overflow */
     overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .dp-name-bn {
@@ -101,6 +116,8 @@ const CSS = `
     margin: 0 0 3px 0;
     line-height: 1.3;
     letter-spacing: -0.2px;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .dp-name-en {
@@ -109,6 +126,8 @@ const CSS = `
     margin: 0 0 10px 0;
     font-weight: 500;
     line-height: 1.4;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .dp-badge-row {
@@ -127,7 +146,9 @@ const CSS = `
     font-size: 12px;
     font-weight: 600;
     line-height: 1.4;
-    white-space: nowrap;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
   .dp-badge-primary {
     background: #EFF6FF;
@@ -168,6 +189,8 @@ const CSS = `
     padding: 20px 24px;
     margin-bottom: 16px;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    width: 100%;
+    max-width: 100%;
   }
 
   .dp-section-title {
@@ -192,6 +215,7 @@ const CSS = `
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 12px;
+    width: 100%;
   }
 
   .dp-info-card {
@@ -200,6 +224,8 @@ const CSS = `
     border-radius: 8px;
     padding: 12px 14px;
     min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .dp-info-label {
@@ -221,7 +247,7 @@ const CSS = `
     font-weight: 600;
     color: #0F172A;
     line-height: 1.55;
-    word-break: break-word;
+    word-break: normal;              /* ✅ no break-all */
     overflow-wrap: anywhere;
     white-space: pre-line;
   }
@@ -233,6 +259,7 @@ const CSS = `
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+    width: 100%;
   }
 
   .dp-chip {
@@ -267,6 +294,8 @@ const CSS = `
     font-size: 13.5px;
     color: #92400E;
     line-height: 1.55;
+    width: 100%;
+    max-width: 100%;
   }
   .dp-pending svg { color: #D97706; flex-shrink: 0; margin-top: 1px; }
   .dp-pending strong {
@@ -293,24 +322,28 @@ const CSS = `
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
+    min-width: 0;
   }
-  .dp-req-left { min-width: 0; flex: 1; }
+  .dp-req-left { min-width: 0; flex: 1 1 180px; }
   .dp-req-title {
     font-size: 13px;
     font-weight: 700;
     color: #0F172A;
     margin-bottom: 3px;
+    overflow-wrap: anywhere;
   }
   .dp-req-meta {
     font-size: 11.5px;
     color: #64748B;
     line-height: 1.4;
+    overflow-wrap: anywhere;
   }
   .dp-req-note {
     font-size: 11.5px;
     color: #64748B;
     font-style: italic;
     margin-top: 3px;
+    overflow-wrap: anywhere;
   }
 
   .dp-status-chip {
@@ -354,53 +387,102 @@ const CSS = `
   }
 
   /* ============================================
-     Responsive breakpoints
+     RESPONSIVE BREAKPOINTS
      ============================================ */
-  @media (max-width: 900px) {
+
+  /* ---------- Tablet (768 – 1023px) ---------- */
+  @media (max-width: 1023px) {
     .dp-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+    .dp-header {
+      padding: 20px 22px;
+      gap: 18px;
+    }
+    .dp-section {
+      padding: 18px 22px;
+    }
   }
 
-  @media (max-width: 640px) {
+  /* ---------- Mobile (<= 767px) ---------- */
+  @media (max-width: 767px) {
+    .dp-page {
+      padding: 0;
+    }
     .dp-header {
-      padding: 18px;
-      gap: 14px;
+      padding: 16px;
+      gap: 12px;
+      flex-direction: column;
+      align-items: flex-start;
+      border-radius: 10px;
     }
     .dp-avatar {
       width: 72px;
       height: 72px;
+      border-width: 3px;
+    }
+    .dp-identity {
+      flex: 1 1 100%;
+      width: 100%;
     }
     .dp-name-bn {
-      font-size: 18px;
+      font-size: 19px;
     }
     .dp-name-en {
       font-size: 12.5px;
     }
+    .dp-badge {
+      font-size: 11.5px;
+      padding: 3px 10px;
+    }
+    .dp-edit-btn {
+      width: 100%;
+      padding: 11px 16px;
+      font-size: 13.5px;
+      justify-content: center;
+    }
     .dp-section {
-      padding: 16px 18px;
+      padding: 16px;
       border-radius: 10px;
+      margin-bottom: 12px;
     }
     .dp-section-title {
       font-size: 12.5px;
       margin-bottom: 14px;
       padding-bottom: 10px;
     }
-    .dp-edit-btn {
-      padding: 9px 14px;
-      font-size: 12.5px;
+    .dp-grid {
+      grid-template-columns: 1fr;
+      gap: 10px;
     }
     .dp-info-card {
-      padding: 11px 12px;
+      padding: 11px 13px;
     }
     .dp-info-value {
       font-size: 13.5px;
     }
+    .dp-pending {
+      padding: 12px 14px;
+      font-size: 13px;
+    }
+    .dp-req-row {
+      padding: 10px 12px;
+    }
   }
 
-  @media (max-width: 600px) {
-    .dp-grid {
-      grid-template-columns: 1fr;
+  /* ---------- Small mobile (<= 360px) ---------- */
+  @media (max-width: 360px) {
+    .dp-header {
+      padding: 14px;
+    }
+    .dp-section {
+      padding: 14px;
+    }
+    .dp-name-bn {
+      font-size: 17px;
+    }
+    .dp-info-value {
+      font-size: 13px;
     }
   }
 `;
