@@ -7,7 +7,7 @@
 // ✅ 36pt margin
 // ✅ Dynamic placeholders {{key}}, **bold**, @@optional@@
 // ✅ Dynamic logo watermark (from Firebase Storage URL)
-// ✅ Dynamic beneficiary label — FULL BOLD
+// ✅ Dynamic beneficiary label — FULL BOLD (NEW)
 // ✅ Print CSS with page-break
 // ==================================================
 import React from 'react';
@@ -33,6 +33,7 @@ const getValue = (data, key) => {
   }
   // ==================================================
   // ✅ NEW: beneficiary_full_text — full bold line
+  // Priority: custom full line → auto-composed from parts
   // ==================================================
   if (key === 'beneficiary_full_text') {
     const custom = (data.beneficiary_full_text || '').trim();
@@ -112,7 +113,7 @@ export const buildPages = (data) => {
 <div class="it"><span class="no">2.</span>${B1} may include ${B2} in its corporate client list.</div>`,
 
     // ==================================================
-    // PAGE 2  ← ✅ শুধু এই লাইনটা পরিবর্তন
+    // PAGE 2  ← ✅ ONLY CHANGE: dynamic beneficiary line
     // ==================================================
     `<div class="it" style="line-height:16.1pt"><span class="no">3.</span>{{beneficiary_full_text}}</div>
 <ul style="margin:17.2pt -24pt 0 0;line-height:17.1pt">
@@ -188,11 +189,12 @@ export const buildPages = (data) => {
 </div>`,
   ];
 
+  // Process each page through template engine
   return rawPages.map((h) => processTemplate(h, data));
 };
 
 // ==================================================
-// ✅ Print Styles — EXACTLY as original
+// ✅ Print Styles (injected once) — EXACTLY as original
 // ==================================================
 export const MOU_PRINT_CSS = `
   .mou-pages {
@@ -308,7 +310,7 @@ export const MOU_PRINT_CSS = `
   }
 
   /* ==================================================
-     ✅ PRINT STYLES — EXACTLY as original
+     ✅ PRINT STYLES
      ================================================== */
   @page {
     size: A4;
