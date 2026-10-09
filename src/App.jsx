@@ -5,14 +5,13 @@
 // ✅ সব routes: patient, doctor panel, MOU, admin
 // ✅ /add-mobile — Google/Email user-এর mobile verify
 // ✅ /my-bookings — Patient dashboard
-// ✅ /mou — MOU Generator
+// ✅ /mou — MOU Generator (dynamic content)
 // ✅ /booking/:doctorId — Direct doctor booking
 // ✅ Lazy loading + Suspense
 // ==================================================
 import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import AnalyticsTracker from './components/AnalyticsTracker';
-
 
 // ==================================================
 // ✅ Lazy load components
@@ -26,7 +25,6 @@ const PatientDashboard = lazy(
 const QueueDisplay = lazy(() => import('./components/QueueDisplay'));
 const CheckIn = lazy(() => import('./components/CheckIn'));
 const NotFoundPage = lazy(() => import('./components/NotFoundPage'));
-
 const UserProfile = lazy(() => import('./components/UserProfile'));
 
 // ==================================================
@@ -41,7 +39,8 @@ const Loader = () => (
       height: '100vh',
       fontSize: '18px',
       color: '#64748b',
-      fontFamily: "'Hind Siliguri', 'Noto Sans Bengali', system-ui, sans-serif",
+      fontFamily:
+        "'Hind Siliguri', 'Noto Sans Bengali', system-ui, sans-serif",
     }}
   >
     <div style={{ textAlign: 'center' }}>
@@ -88,7 +87,10 @@ function App() {
               📅 Booking Routes
               ================================================== */}
           {/* ✅ Doctor-specific booking — MUST come BEFORE /booking */}
-          <Route path="/booking/:doctorId" element={<DoctorPanelBuilder />} />
+          <Route
+            path="/booking/:doctorId"
+            element={<DoctorPanelBuilder />}
+          />
           {/* Generic booking */}
           <Route path="/booking" element={<DoctorPanelBuilder />} />
 
@@ -100,7 +102,8 @@ function App() {
           <Route path="/profile" element={<UserProfile />} />
 
           {/* ==================================================
-              📄 MOU Generator
+              📄 MOU Generator — Dynamic content (Firestore-driven)
+              Public route — login ছাড়াই দেখা যাবে
               ================================================== */}
           <Route path="/mou" element={<MOUGenerator />} />
 
@@ -113,8 +116,14 @@ function App() {
           {/* ==================================================
               🔄 Legacy Redirects
               ================================================== */}
-          <Route path="/bookings" element={<Navigate to="/my-bookings" replace />} />
-          <Route path="/signup" element={<Navigate to="/login" replace />} />
+          <Route
+            path="/bookings"
+            element={<Navigate to="/my-bookings" replace />}
+          />
+          <Route
+            path="/signup"
+            element={<Navigate to="/login" replace />}
+          />
 
           {/* ==================================================
               🚫 404 Catch-all (সবার শেষে থাকতে হবে)

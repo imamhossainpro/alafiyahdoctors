@@ -6,7 +6,7 @@ import { useHospital } from '../context/HospitalContext';
 import { useAuth } from '../context/AuthContext';
 import { usePermission } from '../context/PermissionContext';
 import { db, updateDoc, doc, collection, getDocs, getDoc, onSnapshot } from '../firebase';
-import { RefreshCw, Shield, FileText, Search } from 'lucide-react';
+import { RefreshCw, Shield, FileText, Search, FileSignature } from 'lucide-react';
 import {
   updateAppointmentStatus,
   archiveAppointment,
@@ -20,6 +20,9 @@ import {
   LOG_ACTIONS,
 } from '../services/activityLogService';
 
+// ==================================================
+// ✅ Lazy Load Components
+// ==================================================
 const AppointmentsTable = lazy(() => import('./admin/AppointmentsTable'));
 const Overview = lazy(() => import('./admin/Overview'));
 const MarketingTeamManager = lazy(() => import('./admin/MarketingTeamManager'));
@@ -29,7 +32,11 @@ const LocationManager = lazy(() => import('./admin/LocationManager'));
 const UserAccessManager = lazy(() => import('./admin/UserAccessManager'));
 const QueueControlPanel = lazy(() => import('./admin/QueueControlPanel'));
 const PromoManager = lazy(() => import('./admin/PromoManager'));
+const MouSettings = lazy(() => import('./admin/MouSettings'));   // ✅ NEW
 
+// ==================================================
+// ✅ Tab Loader
+// ==================================================
 const TabLoader = () => (
   <div style={{ padding: '60px 20px', textAlign: 'center', color: '#64748b', background: '#fff', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
     <div style={{ display: 'inline-block', width: '32px', height: '32px', border: '3px solid #e2e8f0', borderTopColor: '#1c5fa8', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
@@ -127,7 +134,6 @@ function AdminPanel({ users = [], onApprove, onSetRole, onDeleteUser }) {
                     {u.name || u.displayName || 'নাম নেই'}
                   </td>
 
-                  {/* ✅ ইমেইল কলাম */}
                   <td style={{ padding: '12px 10px', color: '#475569', fontSize: '12.5px' }}>
                     {u.email ? (
                       <a href={`mailto:${u.email}`} style={{ color: '#1c5fa8', textDecoration: 'none' }}>
@@ -194,6 +200,9 @@ function AdminPanel({ users = [], onApprove, onSetRole, onDeleteUser }) {
   );
 }
 
+// ==================================================
+// ✅ MAIN COMPONENT
+// ==================================================
 export default function AdminDashboard({ user: propUser }) {
   const navigate = useNavigate();
   const { currentHospital } = useHospital();
@@ -218,6 +227,9 @@ export default function AdminDashboard({ user: propUser }) {
   const [departments, setDepartments] = useState([]);
   const [panels, setPanels] = useState([]);
 
+  // ==================================================
+  // ✅ Initial Load – Marketing Team
+  // ==================================================
   useEffect(() => {
     if (!hospitalId) return;
     let mounted = true;
@@ -243,6 +255,9 @@ export default function AdminDashboard({ user: propUser }) {
     };
   }, [hospitalId]);
 
+  // ==================================================
+  // ✅ Real-time Appointments
+  // ==================================================
   useEffect(() => {
     if (!hospitalId) return;
     const ref = collection(db, 'hospitals', hospitalId, 'appointments');
@@ -259,6 +274,9 @@ export default function AdminDashboard({ user: propUser }) {
     return () => unsub();
   }, [hospitalId]);
 
+  // ==================================================
+  // ✅ Real-time Departments + Panels
+  // ==================================================
   useEffect(() => {
     if (!hospitalId) return;
 
@@ -290,7 +308,9 @@ export default function AdminDashboard({ user: propUser }) {
     };
   }, [hospitalId]);
 
+  // ==================================================
   // ✅ Real-time users list (for AdminPanel)
+  // ==================================================
   useEffect(() => {
     if (!hospitalId || !can('user.view')) {
       setAllUsers([]);
@@ -310,7 +330,6 @@ export default function AdminDashboard({ user: propUser }) {
             email: data.email || '',
           };
         });
-        // sort by created date desc
         list.sort((a, b) => {
           const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
           const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -326,6 +345,9 @@ export default function AdminDashboard({ user: propUser }) {
     return () => unsub();
   }, [hospitalId, can]);
 
+  // ==================================================
+  // ✅ Silent Refresh
+  // ==================================================
   const refreshData = async () => {
     if (!hospitalId) return;
     try {
@@ -338,6 +360,9 @@ export default function AdminDashboard({ user: propUser }) {
     }
   };
 
+  // ==================================================
+  // ✅ Activity Logs
+  // ==================================================
   useEffect(() => {
     if (!hospitalId || tab !== 'logs' || !can('activity_log.view')) return;
     setLogsLoading(true);
@@ -358,6 +383,9 @@ export default function AdminDashboard({ user: propUser }) {
     };
   }, [hospitalId, tab, can]);
 
+  // ==================================================
+  // ✅ Status Change
+  // ==================================================
   const handleStatusChange = async (id, newStatus) => {
     if (!hospitalId) return;
     if (!can('booking.status_change')) {
@@ -391,6 +419,9 @@ export default function AdminDashboard({ user: propUser }) {
     }
   };
 
+  // ==================================================
+  // ✅ ARCHIVE
+  // ==================================================
   const handleArchive = async (appointmentId) => {
     if (!can('booking.archive')) {
       alert('❌ আপনার আর্কাইভ করার permission নেই।');
@@ -419,6 +450,9 @@ export default function AdminDashboard({ user: propUser }) {
     }
   };
 
+  // ==================================================
+  // ✅ RESTORE
+  // ==================================================
   const handleRestore = async (appointmentId) => {
     if (!can('archive.restore')) {
       alert('❌ আপনার restore permission নেই।');
@@ -448,6 +482,9 @@ export default function AdminDashboard({ user: propUser }) {
     }
   };
 
+  // ==================================================
+  // ✅ PERMANENT DELETE
+  // ==================================================
   const handlePermanentDelete = async (appointmentId) => {
     if (!can('archive.delete')) {
       alert('❌ আপনার permanent delete permission নেই।');
@@ -479,7 +516,9 @@ export default function AdminDashboard({ user: propUser }) {
     }
   };
 
+  // ==================================================
   // ✅ AdminPanel handlers
+  // ==================================================
   const handleApprove = async (userId) => {
     if (!hospitalId) return;
     try {
@@ -501,7 +540,7 @@ export default function AdminDashboard({ user: propUser }) {
     try {
       await updateDoc(doc(db, 'hospitals', hospitalId, 'users', userId), {
         role,
-        permissionOverrides: {}, // ✅ role পরিবর্তনে পুরনো override মুছে ফেলুন
+        permissionOverrides: {},
         roleUpdatedAt: new Date().toISOString(),
       });
       setAllUsers((users) =>
@@ -530,6 +569,9 @@ export default function AdminDashboard({ user: propUser }) {
     }
   };
 
+  // ==================================================
+  // ✅ Filter Presets
+  // ==================================================
   const applyPreset = (preset) => {
     setFilterPreset(preset);
     const now = new Date();
@@ -572,6 +614,9 @@ export default function AdminDashboard({ user: propUser }) {
     }
   };
 
+  // ==================================================
+  // ✅ Filtered Data
+  // ==================================================
   const filteredAppointments = useMemo(() => {
     if (!appointments || !Array.isArray(appointments)) return [];
     return appointments.filter((item) => {
@@ -617,12 +662,18 @@ export default function AdminDashboard({ user: propUser }) {
     });
   }, [activityLogs, startDate, endDate]);
 
+  // ==================================================
+  // ✅ Loading State
+  // ==================================================
   if (loading) return <OverviewSkeleton />;
 
   if (error) {
     return <div style={{ padding: '20px', color: '#dc2626' }}>❌ Error: {error}</div>;
   }
 
+  // ==================================================
+  // ✅ No Access Check
+  // ==================================================
   const hasAnyTab =
     can('dashboard.view') ||
     can('booking.view') ||
@@ -647,6 +698,9 @@ export default function AdminDashboard({ user: propUser }) {
     );
   }
 
+  // ==================================================
+  // ✅ RENDER
+  // ==================================================
   return (
     <div style={{ padding: '20px', width: '100%', boxSizing: 'border-box', background: '#f9fafb', color: '#1f2937' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
@@ -768,6 +822,27 @@ export default function AdminDashboard({ user: propUser }) {
               }}
             >
               📍 লোকেশন ম্যানেজার
+            </button>
+          )}
+
+          {/* ✅ NEW: MOU Settings Tab */}
+          {can('dashboard.view') && (
+            <button
+              onClick={() => { setShowArchived(false); setTab('mou'); }}
+              style={{
+                padding: '8px 16px',
+                background: tab === 'mou' ? '#1c5fa8' : '#ffffff',
+                color: tab === 'mou' ? '#ffffff' : '#333333',
+                border: '1px solid #e2e8f0',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                fontWeight: '600',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <FileSignature size={14} /> 📝 MOU Settings
             </button>
           )}
 
@@ -910,17 +985,23 @@ export default function AdminDashboard({ user: propUser }) {
         </SafeArea>
       )}
 
+      {/* ✅ NEW: MOU Settings Tab Content */}
+      {tab === 'mou' && can('dashboard.view') && (
+        <SafeArea>
+          <Suspense fallback={<TabLoader />}>
+            <MouSettings />
+          </Suspense>
+        </SafeArea>
+      )}
+
       {tab === 'user_access' && can('user.view') && (
         <SafeArea>
-          {/* ✅ AdminPanel — সহজ role/approve/delete ইমেইল সহ */}
           <AdminPanel
             users={allUsers}
             onApprove={handleApprove}
             onSetRole={handleSetRole}
             onDeleteUser={handleDeleteUser}
           />
-
-          {/* ✅ UserAccessManager — detailed permission matrix */}
           <Suspense fallback={<TabLoader />}>
             <UserAccessManager user={user} />
           </Suspense>

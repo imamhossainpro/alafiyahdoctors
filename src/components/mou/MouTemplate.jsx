@@ -7,6 +7,7 @@
 // ✅ 36pt margin
 // ✅ Dynamic placeholders {{key}}, **bold**, @@optional@@
 // ✅ Dynamic logo watermark (from Firebase Storage URL)
+// ✅ Dynamic beneficiary label (Employees & Students — editable)
 // ✅ Print CSS with page-break
 // ==================================================
 import React from 'react';
@@ -29,6 +30,26 @@ const getValue = (data, key) => {
   // Special: agreement_date_fmt → format date long
   if (key === 'agreement_date_fmt') {
     return formatDateLong(data.agreement_date);
+  }
+  // Special: beneficiary_label — fallback chain
+  if (key === 'beneficiary_label') {
+    return (
+      data.beneficiary_label ||
+      data.beneficiaryLabel ||
+      'Employees & Students'
+    )
+      .toString()
+      .trim();
+  }
+  // Special: beneficiary_member_text — fallback chain
+  if (key === 'beneficiary_member_text') {
+    return (
+      data.beneficiary_member_text ||
+      data.memberText ||
+      'along with their member'
+    )
+      .toString()
+      .trim();
   }
   return (data[key] || '').toString().trim();
 };
@@ -87,9 +108,9 @@ export const buildPages = (data) => {
 <div class="it"><span class="no">2.</span>${B1} may include ${B2} in its corporate client list.</div>`,
 
     // ==================================================
-    // PAGE 2
+    // PAGE 2  ← ✅ Dynamic beneficiary label here
     // ==================================================
-    `<div class="it" style="line-height:16.1pt"><span class="no">3.</span>${B1} will provide following Special discount rates &amp; facilities for the Employees &amp; Students of ${B2} along with their member.</div>
+    `<div class="it" style="line-height:16.1pt"><span class="no">3.</span>${B1} will provide following Special discount rates &amp; facilities for the **{{beneficiary_label}}** of ${B2} {{beneficiary_member_text}}.</div>
 <ul style="margin:17.2pt -24pt 0 0;line-height:17.1pt">
   <li>{{discount_pathology}}% discount on all pathological investigation (Blood, Urine, Sputum etc).</li>
   <li>{{discount_radiology}}% discount on Radiology &amp; Imaging (X-ray, ECHO, ECG &amp; Ultrasonography etc),</li>

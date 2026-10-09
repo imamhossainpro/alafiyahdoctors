@@ -54,6 +54,22 @@ export const MOU_GROUPS = [
     fields: orgFields(2, 'Institution 2'),
   },
   {
+    title: 'Beneficiary (Discounted Parties)',
+    fields: [
+      {
+        key: 'beneficiary_label',
+        label: 'Beneficiary Label',
+        type: 'text',
+        req: 1,
+      },
+      {
+        key: 'beneficiary_member_text',
+        label: 'Member Suffix (e.g. "along with their member")',
+        type: 'text',
+      },
+    ],
+  },
+  {
     title: 'Terms',
     fields: [
       { key: 'discount_pathology', label: 'Pathology Discount (%)', type: 'num' },
@@ -115,6 +131,10 @@ export const MOU_DEFAULTS = {
   org2_signatory_designation: '',
   org2_witness_name: '',
   org2_witness_designation: '',
+
+  // ✅ Beneficiary (dynamic)
+  beneficiary_label: 'Employees & Students',
+  beneficiary_member_text: 'along with their member',
 
   discount_pathology: '40',
   discount_radiology: '30',

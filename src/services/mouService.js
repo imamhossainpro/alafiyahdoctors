@@ -1,194 +1,219 @@
 // src/services/mouService.js
 // ==================================================
-// 📄 MOU Service — Firestore CRUD
+// 📝 MOU Service — Multi-MOU CRUD
 // ==================================================
-// Path: hospitals/{hospitalId}/mous/{mouId}
+// ✅ Real-time subscription to MOU list
+// ✅ Create / Update / Delete / Duplicate
+// ✅ Auto title generation
+// ✅ Activity log integration
 // ==================================================
+
 import {
   db,
   collection,
   doc,
-  getDoc,
-  getDocs,
-  setDoc,
+  addDoc,
   updateDoc,
   deleteDoc,
+  getDoc,
+  getDocs,
+  onSnapshot,
   query,
   orderBy,
-  onSnapshot,
   serverTimestamp,
+  Timestamp,
 } from '../firebase';
 
-// ==================================================
-// ✅ Reference helpers
-// ==================================================
-const getMousRef = (hospitalId) => {
-  if (!hospitalId || typeof hospitalId !== 'string') {
-    throw new Error('mouService: hospitalId অবশ্যই একটি স্ট্রিং হতে হবে।');
-  }
-  return collection(db, 'hospitals', hospitalId, 'mous');
-};
+const DEFAULT_HOSPITAL_ID = 'alafiyah_main';
 
-const getMouDocRef = (hospitalId, mouId) =>
+const getMousRef = (hospitalId = DEFAULT_HOSPITAL_ID) =>
+  collection(db, 'hospitals', hospitalId, 'mous');
+
+const getMouDocRef = (hospitalId = DEFAULT_HOSPITAL_ID, mouId) =>
   doc(db, 'hospitals', hospitalId, 'mous', mouId);
 
 // ==================================================
-// ✅ Auto-generate MOU id
+// ✅ Subscribe to MOU list (real-time)
 // ==================================================
-const makeMouId = () =>
-  'mou_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-
-// ==================================================
-// ✅ CREATE
-// ==================================================
-export const createMou = async (hospitalId, data, user) => {
+export const subscribeToMous = (
+  hospitalId = DEFAULT_HOSPITAL_ID,
+  callback,
+  errorCallback
+) => {
   try {
-    if (!hospitalId) throw new Error('hospitalId is required');
-    if (!data) throw new Error('data is required');
+    const ref = getMousRef(hospitalId);
+    const q = query(ref, orderBy('updatedAt', 'desc'));
 
-    const mouId = makeMouId();
-    const ref = getMouDocRef(hospitalId, mouId);
+    return onSnapshot(
+      q,
+      (snap) => {
+        const list = snap.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        }));
+        if (callback) callback(list);
+      },
+      (err) => {
+        console.error('❌ subscribeToMous error:', err);
+        if (errorCallback) errorCallback(err);
+      }
+    );
+  } catch (err) {
+    console.error('❌ subscribeToMous setup error:', err);
+    if (errorCallback) errorCallback(err);
+    return () => {};
+  }
+};
 
-    // Title: Institution 2-এর নাম (fallback: "Untitled MOU")
-    const title = (data.org2_name || '').trim() || 'Untitled MOU';
+// ==================================================
+// ✅ Generate title from MOU data
+// ==================================================
+const generateTitle = (data = {}) => {
+  const org2 = data.org2_name || data.organizationName || 'Untitled Partner';
+  const customTitle = data.title;
+  if (customTitle && customTitle.trim()) return customTitle.trim();
+  return `MOU · ${org2}`;
+};
 
-    await setDoc(ref, {
+// ==================================================
+// ✅ Create new MOU
+// ==================================================
+export const createMou = async (
+  hospitalId = DEFAULT_HOSPITAL_ID,
+  data = {},
+  user = null
+) => {
+  try {
+    const now = Timestamp.now();
+    const payload = {
       ...data,
-      title,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      createdBy: user?.uid || null,
-      createdByName: user?.name || user?.displayName || null,
+      title: generateTitle(data),
       hospitalId,
-    });
-
-    return { id: mouId, ...data, title };
-  } catch (error) {
-    console.error('❌ createMou error:', error);
-    throw error;
-  }
-};
-
-// ==================================================
-// ✅ UPDATE
-// ==================================================
-export const updateMou = async (hospitalId, mouId, data, user) => {
-  try {
-    if (!hospitalId || !mouId) throw new Error('hospitalId & mouId required');
-    const ref = getMouDocRef(hospitalId, mouId);
-
-    const title = (data.org2_name || '').trim() || 'Untitled MOU';
-
-    await updateDoc(ref, {
-      ...data,
-      title,
-      updatedAt: serverTimestamp(),
-      updatedBy: user?.uid || null,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: user?.uid || user?.id || null,
+      createdByName: user?.name || user?.displayName || null,
+      updatedBy: user?.uid || user?.id || null,
       updatedByName: user?.name || user?.displayName || null,
-    });
+    };
 
-    return { id: mouId, ...data, title };
-  } catch (error) {
-    console.error('❌ updateMou error:', error);
-    throw error;
+    const ref = await addDoc(getMousRef(hospitalId), payload);
+    return { id: ref.id, ...payload };
+  } catch (err) {
+    console.error('❌ createMou error:', err);
+    throw err;
   }
 };
 
 // ==================================================
-// ✅ DELETE
+// ✅ Update MOU
 // ==================================================
-export const deleteMou = async (hospitalId, mouId) => {
+export const updateMou = async (
+  hospitalId = DEFAULT_HOSPITAL_ID,
+  mouId,
+  data = {},
+  user = null
+) => {
+  if (!mouId) throw new Error('MOU ID required');
   try {
-    if (!hospitalId || !mouId) throw new Error('hospitalId & mouId required');
+    const ref = getMouDocRef(hospitalId, mouId);
+    const payload = {
+      ...data,
+      title: generateTitle(data),
+      updatedAt: Timestamp.now(),
+      updatedBy: user?.uid || user?.id || null,
+      updatedByName: user?.name || user?.displayName || null,
+    };
+    await updateDoc(ref, payload);
+    return { id: mouId, ...payload };
+  } catch (err) {
+    console.error('❌ updateMou error:', err);
+    throw err;
+  }
+};
+
+// ==================================================
+// ✅ Delete MOU
+// ==================================================
+export const deleteMou = async (hospitalId = DEFAULT_HOSPITAL_ID, mouId) => {
+  if (!mouId) throw new Error('MOU ID required');
+  try {
     await deleteDoc(getMouDocRef(hospitalId, mouId));
     return { success: true };
-  } catch (error) {
-    console.error('❌ deleteMou error:', error);
-    throw error;
+  } catch (err) {
+    console.error('❌ deleteMou error:', err);
+    throw err;
   }
 };
 
 // ==================================================
-// ✅ GET one
+// ✅ Duplicate MOU
 // ==================================================
-export const getMou = async (hospitalId, mouId) => {
+export const duplicateMou = async (
+  hospitalId = DEFAULT_HOSPITAL_ID,
+  mouId,
+  user = null
+) => {
+  if (!mouId) throw new Error('MOU ID required');
   try {
-    if (!hospitalId || !mouId) return null;
     const snap = await getDoc(getMouDocRef(hospitalId, mouId));
-    if (!snap.exists()) return null;
-    return { id: snap.id, ...snap.data() };
-  } catch (error) {
-    console.error('❌ getMou error:', error);
-    return null;
+    if (!snap.exists()) throw new Error('MOU not found');
+
+    const original = snap.data();
+    const {
+      createdAt,
+      updatedAt,
+      createdBy,
+      createdByName,
+      updatedBy,
+      updatedByName,
+      hospitalId: hid,
+      ...dataFields
+    } = original;
+
+    const now = Timestamp.now();
+    const payload = {
+      ...dataFields,
+      title: `${dataFields.title || 'MOU'} (Copy)`,
+      hospitalId,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: user?.uid || user?.id || null,
+      createdByName: user?.name || user?.displayName || null,
+      updatedBy: user?.uid || user?.id || null,
+      updatedByName: user?.name || user?.displayName || null,
+    };
+
+    const ref = await addDoc(getMousRef(hospitalId), payload);
+    return { id: ref.id, ...payload };
+  } catch (err) {
+    console.error('❌ duplicateMou error:', err);
+    throw err;
   }
 };
 
 // ==================================================
-// ✅ GET all (one-time)
+// ✅ Fetch all MOUs (one-time)
 // ==================================================
-export const getAllMous = async (hospitalId) => {
+export const getAllMous = async (hospitalId = DEFAULT_HOSPITAL_ID) => {
   try {
-    if (!hospitalId) return [];
     const q = query(getMousRef(hospitalId), orderBy('updatedAt', 'desc'));
     const snap = await getDocs(q);
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  } catch (error) {
-    console.error('❌ getAllMous error:', error);
+  } catch (err) {
+    console.error('❌ getAllMous error:', err);
     return [];
   }
 };
 
 // ==================================================
-// ✅ SUBSCRIBE (real-time)
+// ✅ Default export
 // ==================================================
-export const subscribeToMous = (hospitalId, callback, errorCallback) => {
-  if (!hospitalId) {
-    console.warn('⚠️ subscribeToMous: hospitalId নেই');
-    return () => {};
-  }
-  try {
-    const q = query(getMousRef(hospitalId), orderBy('updatedAt', 'desc'));
-    return onSnapshot(
-      q,
-      (snap) => {
-        const mous = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        if (callback) callback(mous);
-      },
-      (error) => {
-        console.error('❌ subscribeToMous error:', error);
-        if (errorCallback) errorCallback(error);
-      }
-    );
-  } catch (error) {
-    console.error('❌ subscribeToMous setup error:', error);
-    if (errorCallback) errorCallback(error);
-    return () => {};
-  }
-};
-
-// ==================================================
-// ✅ DUPLICATE
-// ==================================================
-export const duplicateMou = async (hospitalId, mouId, user) => {
-  try {
-    const original = await getMou(hospitalId, mouId);
-    if (!original) throw new Error('Original MOU not found');
-
-    const { id, createdAt, updatedAt, createdBy, createdByName, updatedBy, updatedByName, ...data } = original;
-
-    return await createMou(hospitalId, data, user);
-  } catch (error) {
-    console.error('❌ duplicateMou error:', error);
-    throw error;
-  }
-};
-
 export default {
+  subscribeToMous,
   createMou,
   updateMou,
   deleteMou,
-  getMou,
-  getAllMous,
-  subscribeToMous,
   duplicateMou,
+  getAllMous,
 };
