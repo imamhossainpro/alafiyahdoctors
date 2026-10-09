@@ -27,37 +27,439 @@ import { useHospital } from './context/HospitalContext';
 import { useAuth } from './context/AuthContext';
 import AuthPage from './components/AuthPage';
 
-// ✅ NEW IMPORTS — Refactored dpb/ modules
-import { DPB_CSS } from './dpb/dpb.css';
-import Header from './dpb/Header';
-import DoctorEntry from './dpb/DoctorEntry';
-import {
-  uid,
-  buildBookingUrl,
-  html2canvasIgnoreElements,
-  getOrderedDepartments,
-  validateTimeFormat,
-  standardizeTime,
-  timeToMinutes,
-  makeDoctor,
-  makeDepartment,
-} from './dpb/utils';
-import {
-  DAY_NAMES,
-  titleForName,
-  ICONS,
-  ICON_KEYS,
-  COLOR_THEMES,
-  RESTRICTED_ROLES,
-  DEFAULT_FOOTER,
-  DEFAULT_BRANDING,
-} from './dpb/constants';
+// ==================================================
+// ✅ Utilities
+// ==================================================
+const uid = () => Math.random().toString(36).slice(2, 10);
+
+const DAY_NAMES = [
+  'শনিবার', 'রবিবার', 'সোমবার', 'মঙ্গলবার',
+  'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার',
+];
+
+function titleForName(name) {
+  return DAY_NAMES.indexOf(name) !== -1
+    ? name + 'ের ডক্টরস প্যানেল'
+    : name;
+}
+
+const ICONS = {
+  Stethoscope, Scissors, Heart, Baby, Bone, Syringe, Pill, Activity, Brain,
+  Eye, Utensils, Smile, Sparkles, User, Droplet, Thermometer, Ear,
+};
+const ICON_KEYS = Object.keys(ICONS);
+const COLOR_THEMES = [
+  '#1c5fa8', '#2f9e52', '#9c3a9c', '#d1392f', '#0e8ca3',
+  '#e0653a', '#2b3f8f', '#159a72', '#8a6a2e', '#7a2d5c',
+  '#4438ab', '#475569',
+];
+
+const RESTRICTED_ROLES = ['viewer', 'patient', 'user'];
+
+// ==================================================
+// ✅ GA4 — Booking link builder
+// ==================================================
+const BOOKING_BASE_URL = 'https://doctors.alafiyahhospital.com';
+
+const buildBookingUrl = (doctorId, doctorName = '', source = 'qr') => {
+  if (!doctorId) return null;
+  const params = new URLSearchParams();
+
+  if (source === 'qr') {
+    params.set('utm_source', 'qr');
+    params.set('utm_medium', 'offline');
+    params.set('utm_campaign', `doctor_${doctorId}`);
+    if (doctorName) params.set('utm_content', encodeURIComponent(doctorName));
+  } else if (source === 'direct') {
+    params.set('utm_source', 'website');
+    params.set('utm_medium', 'web_button');
+    params.set('utm_campaign', `doctor_${doctorId}`);
+    if (doctorName) params.set('utm_content', encodeURIComponent(doctorName));
+  }
+
+  const queryString = params.toString();
+  return `${BOOKING_BASE_URL}/booking/${doctorId}${queryString ? `?${queryString}` : ''}`;
+};
+
+// ==================================================
+// ✅ html2canvas ignore helper
+// ==================================================
+const html2canvasIgnoreElements = (el) => {
+  if (!el || !el.classList) return false;
+  return (
+    el.classList.contains('serial-booking-button') ||
+    el.classList.contains('no-print')
+  );
+};
+
+// ==================================================
+// ✅ Per-day department ordering
+// ==================================================
+const getOrderedDepartments = (departments, panelDepartmentOrder) => {
+  if (!departments || departments.length === 0) return [];
+  if (!panelDepartmentOrder || panelDepartmentOrder.length === 0) {
+    return [...departments].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }
+  const orderMap = {};
+  panelDepartmentOrder.forEach((deptId, index) => {
+    orderMap[deptId] = index;
+  });
+  return [...departments].sort((a, b) => {
+    const aOrder = orderMap[a.id] ?? 9999;
+    const bOrder = orderMap[b.id] ?? 9999;
+    return aOrder - bOrder;
+  });
+};
+
+// ==================================================
+// ✅ Time Utilities
+// ==================================================
+const TIME_REGEX = /^(0?[1-9]|1[0-2]):([0-5][0-9])\s?(AM|PM|am|pm)$/;
+
+const validateTimeFormat = (timeStr) => {
+  if (!timeStr || !timeStr.trim()) return false;
+  return TIME_REGEX.test(timeStr.trim());
+};
+
+const standardizeTime = (timeStr) => {
+  if (!timeStr || !timeStr.trim()) return '';
+  const match = timeStr.trim().match(TIME_REGEX);
+  if (!match) return timeStr.trim();
+  const [, hour, minute, period] = match;
+  const h = hour.padStart(2, '0');
+  const p = period.toUpperCase();
+  return `${h}:${minute} ${p}`;
+};
+
+const timeToMinutes = (timeStr) => {
+  const match = timeStr?.trim().match(TIME_REGEX);
+  if (!match) return null;
+  let [, hour, minute, period] = match;
+  let h = parseInt(hour, 10);
+  const m = parseInt(minute, 10);
+  const p = period.toUpperCase();
+  if (p === 'PM' && h !== 12) h += 12;
+  if (p === 'AM' && h === 12) h = 0;
+  return h * 60 + m;
+};
+
+// ==================================================
+// ✅ Factory helpers
+// ==================================================
+function makeDoctor(overrides) {
+  return {
+    id: uid(),
+    name: '',
+    nameEn: '',
+    quals: '',
+    specialty: '',
+    workplace: '',
+    timeSlots: [],
+    imageUrl: '',
+    ...(overrides || {}),
+  };
+}
+
+function makeDepartment(overrides) {
+  return {
+    id: uid(),
+    name: '',
+    icon: 'Stethoscope',
+    color: COLOR_THEMES[0],
+    doctors: [],
+    ...(overrides || {}),
+  };
+}
+
+const DEFAULT_FOOTER = {
+  address: 'বাকলিয়া এক্সেস রোড,\nবাকলিয়া, চট্টগ্রাম।',
+  website: 'alafiyahhospital.com',
+  logo: '/logo.png',
+  contactLabel: 'সিরিয়ালের এবং তথ্যের জন্যে যোগাযোগ',
+  phones: ['01886 776 512', '01886 776 513'],
+  hospitalName: 'আল-আফিয়া হাসপাতাল',
+  hospitalSubtitle: 'স্বাস্থ্যসেবায় বিশ্বাস',
+};
 
 // ==================================================
 // ✅ CSS
 // ==================================================
+const CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700;800&display=swap');
 
-const CSS = DPB_CSS;
+.dpb{font-family:'Hind Siliguri','Noto Sans Bengali',Arial,sans-serif;background:#f4f6fa;color:#1f2937;min-height:100vh;width:100%;}
+.dpb *{box-sizing:border-box;}
+.dpb h1,.dpb h2,.dpb h3,.dpb p{margin:0;padding:0;}
+.dpb button{font-family:inherit;cursor:pointer;}
+
+.dpb .topbar{display:flex;align-items:center;justify-content:space-between;background:#ffffff;border-bottom:1px solid #e2e6ee;padding:14px 20px;position:sticky;top:0;z-index:20;flex-wrap:wrap;gap:10px;width:100%;}
+.dpb .topbar-title{display:flex;align-items:center;gap:8px;font-weight:700;font-size:17px;color:#154a82;}
+.dpb .topbar-right{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+.dpb .save-indicator{font-size:12.5px;color:#6b7280;white-space:nowrap;}
+
+.dpb .logout-btn{background:#dc2626;color:#fff;border:none;border-radius:12px;padding:8px 14px;font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:5px;cursor:pointer;box-shadow:0 3px 10px rgba(220,38,38,0.30);transition:all 0.2s ease;}
+.dpb .logout-btn:hover{background:#b91c1c;transform:translateY(-1px);box-shadow:0 5px 14px rgba(220,38,38,0.40);}
+
+.dpb .login-btn{background:#1c5fa8;color:#fff;border:none;border-radius:12px;padding:8px 14px;font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:5px;cursor:pointer;box-shadow:0 3px 10px rgba(28,95,168,0.30);transition:all 0.2s ease;}
+.dpb .login-btn:hover{background:#154a82;transform:translateY(-1px);box-shadow:0 5px 14px rgba(28,95,168,0.40);}
+
+/* ✅ Topbar action buttons — My Bookings + Doctor Dashboard */
+.dpb .topbar-action-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border:none;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.2s ease;white-space:nowrap;}
+.dpb .topbar-action-btn.my-bookings{background:linear-gradient(135deg,#8b5cf6,#a78bfa);color:#fff;box-shadow:0 4px 12px rgba(139,92,246,0.35);}
+.dpb .topbar-action-btn.my-bookings:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(139,92,246,0.45);}
+.dpb .topbar-action-btn.doctor-dashboard{background:linear-gradient(135deg,#1D4ED8,#1E40AF);color:#fff;box-shadow:0 4px 12px rgba(29,78,216,0.35);}
+.dpb .topbar-action-btn.doctor-dashboard:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(29,78,216,0.45);}
+
+.dpb .tabs{display:flex;background:transparent;border-radius:12px;padding:3px;gap:6px;flex-wrap:wrap;}
+.dpb .tab{border:none;background:#f1f5f9;padding:9px 16px;border-radius:12px;font-size:13.5px;font-weight:600;color:#64748b;cursor:pointer;transition:all 0.2s ease;box-shadow:0 1px 3px rgba(0,0,0,0.05);}
+.dpb .tab:hover{background:#e2e8f0;color:#334155;box-shadow:0 2px 6px rgba(0,0,0,0.08);}
+.dpb .tab.active{background:#1c5fa8;color:#fff;box-shadow:0 4px 12px rgba(28,95,168,0.35);}
+.dpb .tab.booking-tab{background:linear-gradient(45deg,#0d9488,#14b8a6);color:#fff;font-weight:700;display:flex;align-items:center;gap:6px;border-radius:12px;box-shadow:0 4px 12px rgba(13,148,136,0.35);transition:all 0.3s ease;}
+.dpb .tab.booking-tab:hover{background:linear-gradient(45deg,#0f766e,#0d9488);box-shadow:0 6px 16px rgba(13,148,136,0.45);transform:translateY(-1px);}
+.dpb .tab.booking-tab.active{background:linear-gradient(45deg,#0f766e,#14b8a6);box-shadow:0 6px 16px rgba(13,148,136,0.55);border:1px solid rgba(255,255,255,0.2);}
+.dpb .tab.booking-tab svg{animation:pulse-booking 2s infinite;}
+@keyframes pulse-booking{0%,100%{transform:scale(1);}50%{transform:scale(1.1);}}
+
+.dpb .panel-switcher{display:flex;align-items:center;gap:10px;padding:10px 20px;background:#fff;border-bottom:1px solid #e2e6ee;flex-wrap:wrap;position:relative;z-index:18;}
+.dpb .panel-switcher-scroll{display:flex;gap:6px;flex-wrap:wrap;flex:1;min-width:0;}
+
+.dpb .panel-pill{display:flex;align-items:center;border:1px solid #e2e6ee;background:#fff;padding:5px 10px;border-radius:20px;font-size:13px;font-weight:600;color:#1f2937;cursor:pointer;transition:all 0.2s ease;gap:4px;box-shadow:0 1px 3px rgba(0,0,0,0.04);}
+.dpb .panel-pill:hover{border-color:#1c5fa8;color:#1c5fa8;transform:translateY(-1px);box-shadow:0 3px 8px rgba(28,95,168,0.15);}
+.dpb .panel-pill.active{background:#1c5fa8;color:#fff;border-color:#1c5fa8;box-shadow:0 4px 10px rgba(28,95,168,0.35);}
+.dpb .panel-pill-label{background:transparent;border:none;font-weight:600;font-size:13px;color:inherit;cursor:pointer;}
+.dpb .panel-pill-icon{background:transparent;border:none;display:flex;align-items:center;gap:2px;color:inherit;cursor:pointer;font-size:11px;font-weight:600;padding:2px 4px;border-radius:8px;transition:background 0.2s;}
+.dpb .panel-pill-icon:hover{background:rgba(28,95,168,0.15);}
+.dpb .panel-pill-icon.danger-confirm{color:#dc2626;font-weight:700;}
+.dpb .panel-add-btn{padding:7px 14px;font-size:12.5px;border-radius:12px;}
+
+.dpb .loading-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:10px;color:#6b7280;}
+.dpb .spin{animation:dpb-spin 1s linear infinite;}
+@keyframes dpb-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+.dpb .edit-panel{max-width:880px;margin:0 auto;padding:20px;display:flex;flex-direction:column;gap:18px;}
+.dpb .panel-section{background:#fff;border:1px solid #e2e6ee;border-radius:14px;padding:18px 20px;}
+.dpb .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;}
+.dpb .panel-section > label{font-weight:700;font-size:14.5px;color:#1f2937;display:block;}
+.dpb .section-header label{font-weight:700;font-size:14.5px;color:#1f2937;}
+.dpb .section-hint{font-size:12.5px;color:#6b7280;margin:4px 0 10px;}
+
+.dpb .day-buttons{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 10px;}
+.dpb .day-btn{border:1px solid #e2e6ee;background:#fff;padding:7px 14px;border-radius:20px;font-size:12.5px;color:#1f2937;transition:all 0.2s ease;box-shadow:0 1px 2px rgba(0,0,0,0.04);}
+.dpb .day-btn:hover{border-color:#1c5fa8;color:#1c5fa8;transform:translateY(-1px);box-shadow:0 3px 8px rgba(28,95,168,0.15);}
+
+.dpb .input,.dpb .textarea{width:100%;border:1px solid #e2e6ee;border-radius:10px;padding:10px 14px;font-size:14px;font-family:inherit;color:#1f2937;background:#fff;transition:all 0.2s;}
+.dpb .input:focus,.dpb .textarea:focus{outline:none;border-color:#1c5fa8;box-shadow:0 0 0 3px rgba(28,95,168,0.14);}
+.dpb .textarea{resize:vertical;line-height:1.5;}
+.dpb .field{margin-bottom:12px;}
+.dpb .field label,.dpb .modal-body label{display:block;font-size:12.5px;font-weight:600;color:#6b7280;margin:0 0 5px;}
+
+.dpb .checkbox-row{display:flex;align-items:center;gap:8px;font-size:13px;color:#1f2937;cursor:pointer;font-weight:500;}
+.dpb .checkbox-row input{width:16px;height:16px;cursor:pointer;flex-shrink:0;}
+
+.dpb .btn{display:inline-flex;align-items:center;gap:6px;border:none;border-radius:12px;padding:9px 16px;font-size:13.5px;font-weight:600;white-space:nowrap;transition:all 0.2s ease;}
+.dpb .btn-primary{background:#1c5fa8;color:#fff;box-shadow:0 3px 10px rgba(28,95,168,0.30);}
+.dpb .btn-primary:hover{background:#154a82;transform:translateY(-1px);box-shadow:0 5px 14px rgba(28,95,168,0.40);}
+.dpb .btn-primary:disabled{background:#b9c9dd;cursor:not-allowed;box-shadow:none;transform:none;}
+.dpb .btn-secondary{background:#eef1f7;color:#1f2937;box-shadow:0 2px 6px rgba(0,0,0,0.06);}
+.dpb .btn-secondary:hover{background:#e2e6ee;transform:translateY(-1px);box-shadow:0 4px 10px rgba(0,0,0,0.10);}
+.dpb .btn-danger{background:#dc2626;color:#fff;box-shadow:0 3px 10px rgba(220,38,38,0.30);}
+.dpb .btn-danger:hover{background:#b91c1c;transform:translateY(-1px);box-shadow:0 5px 14px rgba(220,38,38,0.40);}
+.dpb .btn-outline{background:#fff;border:1px solid #e2e6ee;color:#1f2937;box-shadow:0 1px 3px rgba(0,0,0,0.04);}
+.dpb .btn-outline:hover{border-color:#cbd5e1;box-shadow:0 3px 8px rgba(0,0,0,0.08);transform:translateY(-1px);}
+
+.dpb .toggle-all-btn{background:#1c5fa8;color:#fff;border:none;border-radius:20px;padding:5px 16px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s ease;box-shadow:0 2px 8px rgba(28,95,168,0.30);}
+.dpb .toggle-all-btn:hover{background:#154a82;transform:translateY(-1px);box-shadow:0 4px 12px rgba(28,95,168,0.40);}
+
+.dpb .dept-toggle-btn{background:transparent;border:1.5px solid #1c5fa8;color:#1c5fa8;border-radius:20px;padding:3px 12px;font-size:11px;font-weight:600;cursor:pointer;transition:all 0.2s ease;}
+.dpb .dept-toggle-btn:hover{background:#eaf2fb;box-shadow:0 2px 6px rgba(28,95,168,0.15);}
+
+.dpb .dept-card{border:1px solid #e2e6ee;border-left:5px solid #ccc;border-radius:14px;margin-bottom:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.03);}
+.dpb .dept-card-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:#fafbfd;flex-wrap:wrap;gap:8px;}
+.dpb .dept-card-title{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+.dpb .dept-card-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.dpb .dept-card-title strong{font-size:14.5px;}
+.dpb .dept-doctor-count{font-size:11.5px;color:#6b7280;background:#eef1f7;padding:3px 10px;border-radius:20px;}
+.dpb .dept-card-actions{display:flex;gap:4px;}
+
+.dpb .icon-btn{background:transparent;border:1px solid transparent;border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#6b7280;flex-shrink:0;transition:all 0.2s ease;}
+.dpb .icon-btn:hover{background:#eef1f7;color:#1f2937;box-shadow:0 2px 6px rgba(0,0,0,0.08);}
+.dpb .icon-btn:disabled{opacity:0.35;cursor:not-allowed;box-shadow:none;}
+.dpb .icon-btn.danger-confirm{background:#dc2626;color:#fff;width:auto;padding:0 12px;font-size:11px;font-weight:700;box-shadow:0 2px 8px rgba(220,38,38,0.30);}
+.dpb .icon-btn.link-btn{color:#0891b2;}
+.dpb .icon-btn.link-btn:hover{background:#cffafe;color:#0e7490;}
+
+.dpb .doctor-mini-list{padding:4px 14px 12px;}
+.dpb .doctor-row{display:flex;align-items:center;justify-content:space-between;padding:9px 4px;border-top:1px dashed #e2e6ee;gap:10px;}
+.dpb .doctor-checkbox{width:18px;height:18px;flex-shrink:0;cursor:pointer;accent-color:#1c5fa8;margin-right:4px;}
+.dpb .doctor-row-info{min-width:0;flex:1;}
+.dpb .doctor-row-name{font-size:16px;font-weight:700;color:#1f2937;}
+.dpb .doctor-row-specialty{font-size:12px;color:#6b7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:280px;}
+.dpb .doctor-row-time-slots{font-size:12px;color:#b45309;margin-top:4px;display:flex;flex-direction:column;gap:2px;}
+.dpb .doctor-row-time-slot-item{background:#fef3c7;padding:3px 12px;border-radius:12px;display:inline-block;width:fit-content;}
+.dpb .doctor-row-actions{display:flex;gap:2px;flex-shrink:0;}
+
+.dpb .add-doctor-btn{display:flex;align-items:center;gap:6px;width:100%;justify-content:center;border:1.5px dashed #e2e6ee;background:transparent;border-radius:10px;padding:10px;font-size:12.5px;color:#6b7280;margin-top:6px;transition:all 0.2s ease;}
+.dpb .add-doctor-btn:hover{border-color:#1c5fa8;color:#1c5fa8;background:#f0f7ff;box-shadow:0 2px 8px rgba(28,95,168,0.10);}
+
+.dpb .empty-state{text-align:center;color:#6b7280;font-size:13px;padding:20px;}
+
+.dpb .footer-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;}
+@media (max-width:600px){.dpb .footer-form-grid{grid-template-columns:1fr;}}
+.dpb .danger-zone{border:1px dashed #f0b4b4;background:#fff8f8;border-radius:12px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+.dpb .danger-zone-title{font-weight:700;font-size:13.5px;margin-bottom:2px;}
+.dpb .danger-zone-text{font-size:12.5px;color:#8a3a3a;}
+
+.dpb .modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,0.5);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px;}
+.dpb .modal-box{background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.25);}
+.dpb .modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #e2e6ee;}
+.dpb .modal-header h3{font-size:16px;}
+.dpb .modal-body{padding:16px 20px;overflow-y:auto;}
+.dpb .modal-footer{display:flex;justify-content:flex-end;gap:8px;padding:14px 20px;border-top:1px solid #e2e6ee;}
+
+.dpb .icon-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;}
+.dpb .icon-choice{border:1.5px solid #e2e6ee;background:#fff;border-radius:10px;height:38px;display:flex;align-items:center;justify-content:center;transition:all 0.2s ease;}
+.dpb .icon-choice:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,0.08);}
+.dpb .color-grid{display:flex;flex-wrap:wrap;gap:8px;}
+.dpb .color-choice{width:34px;height:34px;border-radius:50%;border:2px solid transparent;padding:0;transition:all 0.2s ease;}
+.dpb .color-choice:hover{transform:scale(1.08);}
+.dpb .color-choice.selected{border-color:#1f2937;box-shadow:0 0 0 2px #fff inset;}
+
+.dpb .preview-wrap{max-width:1000px;margin:0 auto;padding:20px;}
+.dpb .preview-toolbar{display:flex;justify-content:flex-end;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.dpb .preview-toolbar .btn{font-size:13px;padding:9px 18px;border-radius:12px;}
+.dpb .poster-page{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 18px rgba(15,23,42,0.08);border:1px solid #e2e6ee;}
+.dpb .poster-header{background:linear-gradient(120deg,#4fa3d1,#1c5fa8);padding:22px 20px;text-align:center;}
+.dpb .poster-header h1{color:#fff;font-size:30px;font-weight:800;letter-spacing:0.3px;font-family:'Hind Siliguri','Noto Sans Bengali',Arial,sans-serif;}
+.dpb .poster-body{column-count:3;column-gap:26px;padding:22px;text-align:left;}
+@media (max-width:820px){.dpb .poster-body{column-count:2;}.dpb .poster-header h1{font-size:20px;}}
+@media (max-width:560px){.dpb .poster-body{column-count:1;}}
+
+.dpb .dept-block{break-inside:avoid;-webkit-column-break-inside:avoid;page-break-inside:avoid;margin-bottom:0;display:inline-block;width:100%;height:auto;}
+.dpb .dept-header-wrap{display:flex;align-items:center;margin-bottom:10px;}
+.dpb .dept-icon-box{width:34px;height:34px;background:#fff;border:2px solid;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;position:relative;z-index:2;box-shadow:0 1px 3px rgba(0,0,0,0.15);}
+.dpb .dept-ribbon{flex:1;margin-left:-12px;padding:7px 14px 7px 22px;color:#fff;font-weight:700;font-size:18px;clip-path:polygon(0 0,94% 0,100% 50%,94% 100%,0 100%);min-height:34px;display:flex;align-items:center;}
+
+.dpb .doctor-entry{margin-bottom:18px;padding:1px 0 1px 10px;border-left:3px solid #ccc;text-align:left;}
+.dpb .doctor-name{color:#1c5fa8;font-weight:700;font-size:22px;margin-bottom:1px;}
+.dpb .doctor-quals{color:#333;font-size:12px;line-height:1.45;white-space:pre-line;}
+.dpb .doctor-specialty{color:#9c2a7e;font-weight:700;font-size:15px;white-space:pre-line;margin-top:2px;}
+.dpb .doctor-workplace{color:#333;font-size:12px;line-height:1.4;white-space:pre-line;margin-top:1px;}
+.dpb .doctor-time-slots{margin-top:6px;display:flex;flex-direction:column;gap:4px;}
+.dpb .doctor-time-slot-item{background:#fef3c7;padding:4px 16px;border-radius:20px;font-size:13px;color:#b45309;font-weight:600;display:inline-block;width:fit-content;}
+.dpb .doctor-time-label{font-weight:700;color:#b45309;font-size:13px;margin-right:2px;white-space:nowrap;}
+.dpb .empty-dept-note{font-size:11.5px;color:#6b7280;font-style:italic;}
+
+.dpb .serial-booking-button{display:inline-flex;align-items:center;justify-content:center;gap:6px;margin-top:10px;padding:8px 18px;background:linear-gradient(135deg,#0d9488,#0f766e);color:#ffffff !important;font-size:13px;font-weight:700;font-family:'Hind Siliguri','Noto Sans Bengali',Arial,sans-serif;text-decoration:none;border:none;border-radius:8px;cursor:pointer;transition:all 0.2s ease;box-shadow:0 2px 8px rgba(13,148,136,0.25);letter-spacing:0.3px;width:fit-content;max-width:100%;}
+.dpb .serial-booking-button:hover{background:linear-gradient(135deg,#0f766e,#115e59);transform:translateY(-1px);box-shadow:0 4px 12px rgba(13,148,136,0.35);}
+.dpb .serial-booking-button:active{transform:translateY(0);box-shadow:0 2px 6px rgba(13,148,136,0.25);}
+.dpb .serial-booking-button:focus-visible{outline:2px solid #0f766e;outline-offset:2px;}
+
+@media (max-width: 480px) {
+  .dpb .serial-booking-button { width: 100%; padding: 10px 18px; font-size: 13.5px; }
+}
+
+.dpb .poster-footer{display:flex;align-items:center;justify-content:space-between;background:#eef4fb;padding:16px 22px;flex-wrap:wrap;gap:14px;border-top:3px solid #1c5fa8;}
+.dpb .footer-col{display:flex;flex-direction:column;gap:5px;font-size:11.5px;color:#333;}
+.dpb .footer-line{display:flex;align-items:center;gap:6px;white-space:pre-line;font-size:16px;}
+.dpb .footer-center{align-items:center;text-align:center;}
+.dpb .hospital-name{font-size:19px;font-weight:800;color:#1c5fa8;letter-spacing:0.5px;}
+.dpb .hospital-subtitle{font-size:20.5px;color:#555;font-weight:600;letter-spacing:0.5px;}
+.dpb .footer-right{align-items:flex-end;text-align:right;}
+.dpb .footer-contact-label{font-weight:700;color:#1c5fa8;font-size:16px;}
+.dpb .footer-phone{display:flex;align-items:center;gap:6px;font-weight:700;font-size:20px;}
+
+.dpb .doctor-entry,.dpb .doctor-row,.dpb .doctor-name,.dpb .doctor-quals,.dpb .doctor-specialty,.dpb .doctor-workplace,.dpb .doctor-time-slots,.dpb .doctor-row-name,.dpb .doctor-row-specialty{text-align:left !important;}
+
+.dpb .link-modal-input{display:flex;gap:8px;align-items:center;background:#f8fafc;border:1.5px solid #e2e6ee;border-radius:10px;padding:8px 12px;font-size:13px;}
+.dpb .link-modal-input input{flex:1;border:none;background:transparent;outline:none;font-family:monospace;font-size:13px;color:#1e293b;padding:6px 0;}
+.dpb .qr-container{text-align:center;padding:20px;background:#f8fafc;border-radius:12px;border:1px dashed #cbd5e1;margin-top:16px;}
+.dpb .qr-container canvas,.dpb .qr-container img{max-width:220px;height:auto;border-radius:8px;}
+
+.dpb .doctor-image-upload{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.dpb .doctor-image-preview{width:90px;height:90px;border-radius:50%;border:2px solid #e2e6ee;overflow:hidden;background:#f8fafc;display:flex;align-items:center;justify-content:center;flex-shrink:0;position:relative;}
+.dpb .doctor-image-preview img{width:100%;height:100%;object-fit:cover;}
+.dpb .doctor-image-preview .placeholder{color:#cbd5e1;}
+.dpb .doctor-thumb{width:42px;height:42px;border-radius:50%;overflow:hidden;flex-shrink:0;background:#f1f5f9;border:2px solid #e2e6ee;display:flex;align-items:center;justify-content:center;}
+.dpb .doctor-thumb img{width:100%;height:100%;object-fit:cover;}
+.dpb .doctor-thumb .placeholder{color:#94a3b8;}
+
+@media (max-width: 900px) {
+  .dpb .topbar { padding: 12px 16px; gap: 10px; flex-wrap: wrap; align-items: center; position: sticky; }
+  .dpb .topbar-title { font-size: 16px; gap: 6px; flex: 1; min-width: 0; }
+  .dpb .topbar-title svg { width: 20px; height: 20px; }
+  .dpb .topbar-right { width: 100%; gap: 10px; flex-wrap: wrap; justify-content: flex-start; }
+  .dpb .tabs { background: transparent; padding: 0; gap: 8px; flex-wrap: wrap; flex: 1; width: 100%; overflow: visible; }
+  .dpb .tab { padding: 10px 18px; font-size: 14px; font-weight: 600; background: #f1f5f9; border: none; border-radius: 12px; white-space: nowrap; flex-shrink: 0; color: #64748b; transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .dpb .tab:hover { background: #e2e8f0; color: #334155; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+  .dpb .tab.active { background: #1c5fa8; color: #ffffff; box-shadow: 0 4px 12px rgba(28,95,168,0.35); }
+  .dpb .tab.booking-tab { background: linear-gradient(45deg, #0d9488, #14b8a6); color: #ffffff; border: none; padding: 10px 18px; font-size: 14px; border-radius: 12px; box-shadow: 0 4px 12px rgba(13,148,136,0.35); }
+  .dpb .tab.booking-tab.active { background: linear-gradient(45deg, #0f766e, #14b8a6); box-shadow: 0 6px 16px rgba(13,148,136,0.55); }
+  .dpb .tab.booking-tab svg { width: 15px; height: 15px; }
+  .dpb .logout-btn { padding: 10px 16px; font-size: 13px; gap: 5px; flex-shrink: 0; border-radius: 12px; }
+  .dpb .logout-btn svg { width: 14px; height: 14px; }
+  .dpb .panel-switcher { padding: 10px 16px; position: relative; top: auto; gap: 8px; flex-wrap: wrap; }
+  .dpb .panel-switcher-scroll { flex-wrap: wrap; gap: 8px; }
+  .dpb .panel-pill { font-size: 13px; padding: 6px 12px; flex-shrink: 0; }
+  .dpb .panel-pill-label { font-size: 13px; }
+  .dpb .panel-pill-icon { font-size: 11px; padding: 2px 5px; }
+  .dpb .panel-add-btn { padding: 8px 12px; font-size: 12.5px; }
+}
+
+@media (max-width: 640px) {
+  .dpb .topbar { padding: 12px 14px; gap: 10px; }
+  .dpb .topbar-title { font-size: 15px; gap: 6px; }
+  .dpb .topbar-title svg { width: 18px; height: 18px; }
+  .dpb .topbar-right { gap: 8px; }
+  .dpb .tabs { gap: 6px; padding: 0; }
+  .dpb .tab { padding: 9px 14px; font-size: 13px; border-radius: 12px; }
+  .dpb .tab.booking-tab { padding: 9px 14px; font-size: 13px; }
+  .dpb .tab.booking-tab svg { width: 14px; height: 14px; }
+  .dpb .logout-btn { padding: 9px 14px; font-size: 12.5px; border-radius: 12px; }
+  .dpb .logout-btn svg { width: 13px; height: 13px; }
+  .dpb .panel-switcher { padding: 8px 14px; gap: 6px; }
+  .dpb .panel-pill { font-size: 12px; padding: 5px 10px; }
+  .dpb .panel-pill-label { font-size: 12px; }
+  .dpb .panel-pill-icon { font-size: 10px; padding: 1px 4px; }
+  .dpb .panel-add-btn { padding: 7px 10px; font-size: 12px; }
+  .dpb .edit-panel { padding: 12px; gap: 12px; }
+  .dpb .panel-section { padding: 14px; }
+  .dpb .preview-wrap { padding: 10px; }
+  .dpb .preview-toolbar { gap: 6px; }
+  .dpb .preview-toolbar .btn { padding: 8px 12px; font-size: 12px; }
+}
+
+@media (max-width: 420px) {
+  .dpb .topbar { padding: 10px 12px; gap: 8px; }
+  .dpb .topbar-title { font-size: 14px; }
+  .dpb .tab { padding: 8px 12px; font-size: 12px; border-radius: 12px; }
+  .dpb .tab.booking-tab { padding: 8px 12px; font-size: 12px; }
+  .dpb .logout-btn { padding: 8px 12px; font-size: 12px; }
+  .dpb .panel-pill { font-size: 11px; padding: 4px 9px; }
+  .dpb .panel-pill-label { font-size: 11px; }
+  .dpb .edit-panel { padding: 10px; gap: 10px; }
+  .dpb .panel-section { padding: 12px; }
+}
+
+@media print {
+  .no-print { display: none !important; }
+  .serial-booking-button { display: none !important; }
+  .dpb { background: #fff; }
+  .dpb .preview-wrap { max-width: 100%; padding: 0; margin: 0; }
+  .dpb .poster-page { box-shadow: none; border: none; border-radius: 0; }
+  .dpb .poster-body { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; }
+  .dpb * { -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+}
+@page { margin: 10mm; }
+
+body.generating-poster .dpb .serial-booking-button { display: none !important; }
+`;
 
 // ==================================================
 // ✅ Save Indicator
@@ -1467,6 +1869,56 @@ function DeptHeader({ dept }) {
 }
 
 // ==================================================
+// ✅ DoctorEntry — REVERTED to original (siriyal nin only)
+// ==================================================
+function DoctorEntry({ doc, accentColor }) {
+  const hasValidId = doc.id && typeof doc.id === 'string' && doc.id.trim() !== '';
+
+  const bookingUrl = hasValidId
+    ? buildBookingUrl(doc.id, doc.nameEn || doc.name || '', 'direct')
+    : null;
+
+  return (
+    <div className="doctor-entry" style={{ borderLeftColor: accentColor }}>
+      <div className="doctor-name">{doc.name}</div>
+      {doc.quals ? <div className="doctor-quals">{doc.quals}</div> : null}
+      {doc.specialty ? <div className="doctor-specialty">{doc.specialty}</div> : null}
+      {doc.workplace ? <div className="doctor-workplace">{doc.workplace}</div> : null}
+      {doc.timeSlots && doc.timeSlots.length > 0 && (
+        <div className="doctor-time-slots">
+          {doc.timeSlots.map((slot, idx) => (
+            <span key={idx} className="doctor-time-slot-item">
+              <span className="doctor-time-label">⏱ সাক্ষাতের সময়ঃ</span>{' '}
+              {slot.start} - {slot.end}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {hasValidId && (
+        <a
+          href={bookingUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="serial-booking-button"
+          aria-label={`${doc.name} এর সিরিয়াল নিন`}
+          onClick={() => {
+            trackEvent('booking_button_click', {
+              doctor_id: doc.id,
+              doctor_name: doc.name,
+              department: doc.deptName || 'unknown',
+              source: 'website_button',
+            });
+          }}
+        >
+          সিরিয়াল নিন
+        </a>
+      )}
+    </div>
+  );
+}
+
+// ==================================================
 // ✅ PreviewPanel
 // ==================================================
 function PreviewPanel({ panel, departments, checkedIds, footer, onBack, user }) {
@@ -1756,12 +2208,6 @@ export default function DoctorPanelBuilder() {
     else navigate(`/${view}`);
   };
 
-    // ✅ NEW: Mobile menu state
-    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-    // ✅ NEW: Hospital branding
-    const [branding, setBranding] = useState(DEFAULT_BRANDING);
-
   const [showAuth, setShowAuth] = useState(false);
   const [allUsers, setAllUsers] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -1871,56 +2317,6 @@ export default function DoctorPanelBuilder() {
     };
     loadData();
   }, [hospitalId, reloadKey]);
-
-    // ==================================================
-  // ✅ Load hospital branding (name + logo)
-  // ==================================================
-  useEffect(() => {
-    if (!hospitalId) return;
-    let mounted = true;
-
-    (async () => {
-      try {
-        const ref = doc(db, 'hospitals', hospitalId, 'footer', 'data');
-        const snap = await getDoc(ref);
-        if (!mounted) return;
-
-        if (snap.exists()) {
-          const data = snap.data();
-          setBranding({
-            name: data.hospitalName || 'আল আফিয়াহ হাসপাতাল',
-            logo: data.logo || '/logo.png',
-          });
-        }
-      } catch (err) {
-        console.warn('Hospital branding load failed:', err.message);
-      }
-    })();
-
-    return () => {
-      mounted = false;
-    };
-  }, [hospitalId]);
-
-  // ✅ Close mobile menu on route change
-  useEffect(() => {
-    setMobileMenuOpen(false);
-  }, [path]);
-
-  // ✅ ESC key + body scroll lock
-  useEffect(() => {
-    if (!mobileMenuOpen) return;
-    const onKey = (e) => {
-      if (e.key === 'Escape') setMobileMenuOpen(false);
-    };
-    window.addEventListener('keydown', onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [mobileMenuOpen]);
 
   useEffect(() => {
     if (!isAdmin || !hospitalId) {
@@ -2375,28 +2771,132 @@ export default function DoctorPanelBuilder() {
     <div className="dpb">
       <style>{CSS}</style>
 
-            {!isDirectBookingView && (
-              <Header
-                branding={branding}
-                user={user}
-                isGuest={isGuest}
-                isAdmin={isAdmin}
-                isSubAdmin={isSubAdmin}
-                isEditor={isEditor}
-                isModerator={isModerator}
-                isDoctorLoggedIn={isDoctorLoggedIn}
-                activeView={activeView}
-                onSetView={setActiveView}
-                onGoLogin={() => navigate('/login')}
-                onLogout={handleLogout}
-                onGoHome={() => navigate('/')}
-                onGoDoctorDashboard={() => navigate('/doctor')}
-                onGoMyBookings={() => navigate('/my-bookings')}
-                onGoMou={() => navigate('/mou')}
-                mobileMenuOpen={mobileMenuOpen}
-                setMobileMenuOpen={setMobileMenuOpen}
-              />
+      {!isDirectBookingView && (
+        <div className="topbar no-print">
+          <div className="topbar-title">
+            <Stethoscope size={20} />
+            <span>ডাক্তার প্যানেল</span>
+          </div>
+
+          <div className="topbar-right">
+            <div className="tabs">
+              <button
+                className={activeView === 'booking' ? 'tab booking-tab active' : 'tab booking-tab'}
+                onClick={() => setActiveView('booking')}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                  <path d="M8 14h.01" /><path d="M12 14h.01" /><path d="M16 14h.01" />
+                  <path d="M8 18h.01" /><path d="M12 18h.01" /><path d="M16 18h.01" />
+                </svg>
+                সিরিয়াল নিশ্চিত করুন
+              </button>
+
+              <button
+                className={activeView === 'preview' ? 'tab active' : 'tab'}
+                onClick={() => setActiveView('preview')}
+              >
+                আজকের ডাক্তার সময়সূচি
+              </button>
+
+              {!isGuest && (isEditor || isModerator || isSubAdmin || isAdmin) && (
+                <button
+                  className={activeView === 'edit' ? 'tab active' : 'tab'}
+                  onClick={() => setActiveView('edit')}
+                >
+                  প্যানেল বিল্ডার
+                </button>
+              )}
+
+              {isAdmin && (
+                <button
+                  className={activeView === 'mou' ? 'tab active' : 'tab'}
+                  onClick={() => navigate('/mou')}
+                  style={{
+                    background: 'linear-gradient(45deg, #7c3aed, #a78bfa)',
+                    color: '#fff',
+                    fontWeight: '700',
+                  }}
+                >
+                  📄 MOU
+                </button>
+              )}
+
+              {!isGuest && (isSubAdmin || isAdmin) && (
+                <button
+                  className={activeView === 'doctors' ? 'tab active' : 'tab'}
+                  onClick={() => setActiveView('doctors')}
+                >
+                  ডাক্তার লিস্ট
+                </button>
+              )}
+
+              {!isGuest && (isEditor || isModerator || isSubAdmin || isAdmin) && (
+                <button
+                  className={activeView === 'dashboard' ? 'tab active' : 'tab'}
+                  onClick={() => setActiveView('dashboard')}
+                >
+                  ড্যাশবোর্ড
+                </button>
+              )}
+
+              {isAdmin && (
+                <button
+                  className={activeView === 'admin' ? 'tab active' : 'tab'}
+                  onClick={() => setActiveView('admin')}
+                >
+                  অ্যাডমিন প্যানেল
+                </button>
+              )}
+            </div>
+
+            <NotificationBell user={user} />
+
+            {/* ============================================
+                ✅ Top-bar Action Button
+                Doctor logged in → "🏥 ডাক্তার ড্যাশবোর্ড"
+                Others         → "🎫 আমার সিরিয়াল"
+                ============================================ */}
+            {!isGuest && isDoctorLoggedIn && (
+              <button
+                className="topbar-action-btn doctor-dashboard"
+                onClick={() => navigate('/doctor')}
+                aria-label="ডাক্তার ড্যাশবোর্ডে যান"
+              >
+                <Stethoscope size={14} />
+                ডাক্তার ড্যাশবোর্ড
+              </button>
             )}
+
+            {!isGuest && !isDoctorLoggedIn && (
+              <button
+                className="topbar-action-btn my-bookings"
+                onClick={() => navigate('/my-bookings')}
+                aria-label="আমার সিরিয়াল দেখুন"
+              >
+                <Ticket size={14} />
+                আমার সিরিয়াল
+              </button>
+            )}
+
+            {!isGuest && (
+              <button className="logout-btn" onClick={handleLogout}>
+                <LogOut size={14} /> লগআউট
+              </button>
+            )}
+
+            {isGuest && (
+              <button className="login-btn" onClick={() => navigate('/login')}>
+                লগইন
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {!isDirectBookingView && (activeView === 'preview' || activeView === 'edit') && (
         <PanelSwitcher
           panels={panels}
