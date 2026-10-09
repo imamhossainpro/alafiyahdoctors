@@ -4,12 +4,13 @@
 // ==================================================
 // ✅ Uses appointment.nameEn / doctorNameEn (no transliteration)
 // ✅ No emoji, English only
+// ✅ Backend: https://api.alafiyahhospital.com
 // ==================================================
 import React, { useState, useEffect } from 'react';
 import { X, Send, Loader2, Edit3, AlertCircle, Clock } from 'lucide-react';
 
-const RAILWAY_API_URL =
-  'https://api.alafiyahhospital.com';
+// ✅ Backend API base URL
+const API_BASE_URL = 'https://api.alafiyahhospital.com';
 
 // ==================================================
 // ✅ Quick Time Preset Options
@@ -69,7 +70,8 @@ export default function ConfirmMessageModal({
       // Default arrival time — বর্তমান সময়ের পরবর্তী ঘন্টা
       const now = new Date();
       const nextHour = now.getHours() + 1;
-      const hour12 = nextHour > 12 ? nextHour - 12 : nextHour === 0 ? 12 : nextHour;
+      const hour12 =
+        nextHour > 12 ? nextHour - 12 : nextHour === 0 ? 12 : nextHour;
       const period = nextHour < 12 ? 'AM' : 'PM';
       setArrivalTime(`${String(hour12).padStart(2, '0')}:00 ${period}`);
     }
@@ -81,7 +83,8 @@ export default function ConfirmMessageModal({
   // ✅ Direct English fields (no transliteration)
   // ==================================================
   const englishPatientName = appointment.nameEn || appointment.name || '';
-  const englishDoctorName = appointment.doctorNameEn || appointment.doctorName || '';
+  const englishDoctorName =
+    appointment.doctorNameEn || appointment.doctorName || '';
 
   // ==================================================
   // ✅ Preview Message
@@ -111,7 +114,7 @@ Booking Confirmed. Thank you.`;
 
     try {
       const response = await fetch(
-        `${RAILWAY_API_URL}/api/appointment/confirm-with-message`,
+        `${API_BASE_URL}/api/appointment/confirm-with-message`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -330,7 +333,8 @@ Booking Confirmed. Thank you.`;
                   onClick={() => setArrivalTime(preset.value)}
                   style={{
                     padding: '6px 12px',
-                    background: arrivalTime === preset.value ? '#1c5fa8' : '#fff',
+                    background:
+                      arrivalTime === preset.value ? '#1c5fa8' : '#fff',
                     color: arrivalTime === preset.value ? '#fff' : '#475569',
                     border:
                       '1px solid ' +
@@ -375,7 +379,8 @@ Booking Confirmed. Thank you.`;
                 fontSize: '14px',
                 color: '#1e293b',
                 whiteSpace: 'pre-wrap',
-                fontFamily: "'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif",
+                fontFamily:
+                  "'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif",
                 lineHeight: '1.7',
               }}
             >

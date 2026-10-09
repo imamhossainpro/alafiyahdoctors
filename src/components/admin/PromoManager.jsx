@@ -1,8 +1,17 @@
 // src/components/admin/PromoManager.jsx
+// ==================================================
+// 📢 PromoManager — Send promotional notifications
+// ==================================================
+// ✅ Backend: https://api.alafiyahhospital.com
+// ✅ Sends push + in-app notifications to all approved users
+// ==================================================
 import React, { useState } from 'react';
 import { Send, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 
-const RAILWAY_API_URL = 'https://api.alafiyahhospital.com';
+// ==================================================
+// ✅ Backend API base URL
+// ==================================================
+const API_BASE_URL = 'https://api.alafiyahhospital.com';
 
 export default function PromoManager() {
   const [title, setTitle] = useState('');
@@ -10,6 +19,9 @@ export default function PromoManager() {
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState(null);
 
+  // ==================================================
+  // ✅ Handle Send
+  // ==================================================
   const handleSend = async () => {
     if (!title.trim() || !body.trim()) {
       alert('Title ও Body উভয়ই লিখুন');
@@ -22,7 +34,7 @@ export default function PromoManager() {
     setResult(null);
 
     try {
-      const response = await fetch(`${RAILWAY_API_URL}/api/notification/send-promo`, {
+      const response = await fetch(`${API_BASE_URL}/api/notification/send-promo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: title.trim(), body: body.trim() }),
@@ -31,7 +43,10 @@ export default function PromoManager() {
       const data = await response.json();
 
       if (data.success) {
-        setResult({ type: 'success', message: `✅ ${data.sent} জনকে পাঠানো হয়েছে` });
+        setResult({
+          type: 'success',
+          message: `✅ ${data.sent} জনকে পাঠানো হয়েছে`,
+        });
         setTitle('');
         setBody('');
       } else {
@@ -45,16 +60,39 @@ export default function PromoManager() {
   };
 
   return (
-    <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-      <h3 style={{ margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+    <div
+      style={{
+        background: '#fff',
+        padding: '24px',
+        borderRadius: '12px',
+        border: '1px solid #e2e8f0',
+      }}
+    >
+      <h3
+        style={{
+          margin: '0 0 8px 0',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}
+      >
         📢 Promotional Notification
       </h3>
       <p style={{ color: '#64748b', fontSize: '13px', marginBottom: '20px' }}>
         সব approved ইউজারকে push + in-app notification পাঠান।
       </p>
 
+      {/* Title Input */}
       <div style={{ marginBottom: '16px' }}>
-        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
+        <label
+          style={{
+            display: 'block',
+            fontSize: '13px',
+            fontWeight: '600',
+            color: '#475569',
+            marginBottom: '6px',
+          }}
+        >
           Title *
         </label>
         <input
@@ -68,12 +106,23 @@ export default function PromoManager() {
             border: '1.5px solid #cbd5e1',
             borderRadius: '8px',
             fontSize: '14px',
+            boxSizing: 'border-box',
+            fontFamily: 'inherit',
           }}
         />
       </div>
 
+      {/* Body Input */}
       <div style={{ marginBottom: '20px' }}>
-        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
+        <label
+          style={{
+            display: 'block',
+            fontSize: '13px',
+            fontWeight: '600',
+            color: '#475569',
+            marginBottom: '6px',
+          }}
+        >
           Body *
         </label>
         <textarea
@@ -89,10 +138,12 @@ export default function PromoManager() {
             fontSize: '14px',
             fontFamily: 'inherit',
             resize: 'vertical',
+            boxSizing: 'border-box',
           }}
         />
       </div>
 
+      {/* Result Message */}
       {result && (
         <div
           style={{
@@ -107,11 +158,16 @@ export default function PromoManager() {
             gap: 8,
           }}
         >
-          {result.type === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
+          {result.type === 'success' ? (
+            <CheckCircle size={18} />
+          ) : (
+            <AlertCircle size={18} />
+          )}
           {result.message}
         </div>
       )}
 
+      {/* Send Button */}
       <button
         onClick={handleSend}
         disabled={sending}
@@ -132,6 +188,11 @@ export default function PromoManager() {
         {sending ? <Loader2 size={18} className="spin" /> : <Send size={18} />}
         {sending ? 'পাঠানো হচ্ছে...' : 'Notification পাঠান'}
       </button>
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spin { animation: spin 1s linear infinite; }
+      `}</style>
     </div>
   );
 }

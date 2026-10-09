@@ -1,6 +1,11 @@
-// components/admin/QueueControlPanel.jsx
+// src/components/admin/QueueControlPanel.jsx
 // ==================================================
 // 📺 Queue Control Panel — Staff queue management
+// ==================================================
+// ✅ Backend: https://api.alafiyahhospital.com
+// ✅ Real-time counter subscription
+// ✅ Call Next / Reset / Pause / Resume
+// ✅ FCM notification on call next
 // ==================================================
 import React, { useState, useEffect, useMemo } from 'react';
 import { db, doc, onSnapshot } from '../../firebase';
@@ -13,13 +18,17 @@ import {
   pauseQueue,
   resumeQueue,
 } from '../../services/queueService';
-import { logActivity, LOG_MODULES, LOG_ACTIONS } from '../../services/activityLogService';
+import {
+  logActivity,
+  LOG_MODULES,
+  LOG_ACTIONS,
+} from '../../services/activityLogService';
 import { Bell, RefreshCw, Pause, Play, Users, Clock } from 'lucide-react';
 
 // ==================================================
-// ✅ Railway Backend URL — FCM Notification API
+// ✅ Backend API base URL
 // ==================================================
-const RAILWAY_API_URL = 'https://api.alafiyahhospital.com';
+const API_BASE_URL = 'https://api.alafiyahhospital.com';
 
 const getTodayString = () => {
   const d = new Date();
@@ -41,7 +50,9 @@ export default function QueueControlPanel({ user }) {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Load departments
+  // ==================================================
+  // ✅ Load departments
+  // ==================================================
   useEffect(() => {
     if (!hospitalId) return;
     const load = async () => {
@@ -60,7 +71,9 @@ export default function QueueControlPanel({ user }) {
     load();
   }, [hospitalId]);
 
-  // Flatten doctors
+  // ==================================================
+  // ✅ Flatten doctors
+  // ==================================================
   const allDoctors = useMemo(() => {
     const list = [];
     departments.forEach((dept) => {
@@ -76,7 +89,9 @@ export default function QueueControlPanel({ user }) {
     return list;
   }, [departments]);
 
-  // Real-time counter subscription
+  // ==================================================
+  // ✅ Real-time counter subscription
+  // ==================================================
   useEffect(() => {
     if (!hospitalId || !selectedDoctor || !selectedDate) {
       setCounterData(null);
@@ -116,7 +131,7 @@ export default function QueueControlPanel({ user }) {
       // ✅ FCM Notification পাঠান
       if (result.success && result.currentSerial) {
         try {
-          const response = await fetch(`${RAILWAY_API_URL}/api/queue/next`, {
+          const response = await fetch(`${API_BASE_URL}/api/queue/next`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -145,11 +160,19 @@ export default function QueueControlPanel({ user }) {
     }
   };
 
+  // ==================================================
+  // ✅ Handle Reset
+  // ==================================================
   const handleReset = async () => {
     if (!window.confirm('Queue reset করতে চান? Current serial 0 হবে।')) return;
     setActionLoading(true);
     try {
-      await resetQueue(hospitalId, selectedDoctor, selectedDate, authUser || user);
+      await resetQueue(
+        hospitalId,
+        selectedDoctor,
+        selectedDate,
+        authUser || user
+      );
     } catch (err) {
       setError(err.message);
     } finally {
@@ -157,13 +180,26 @@ export default function QueueControlPanel({ user }) {
     }
   };
 
+  // ==================================================
+  // ✅ Handle Pause/Resume
+  // ==================================================
   const handlePauseToggle = async () => {
     setActionLoading(true);
     try {
       if (counterData?.status === 'paused') {
-        await resumeQueue(hospitalId, selectedDoctor, selectedDate, authUser || user);
+        await resumeQueue(
+          hospitalId,
+          selectedDoctor,
+          selectedDate,
+          authUser || user
+        );
       } else {
-        await pauseQueue(hospitalId, selectedDoctor, selectedDate, authUser || user);
+        await pauseQueue(
+          hospitalId,
+          selectedDoctor,
+          selectedDate,
+          authUser || user
+        );
       }
     } catch (err) {
       setError(err.message);
@@ -208,11 +244,7 @@ export default function QueueControlPanel({ user }) {
       </div>
 
       {/* Error */}
-      {error && (
-        <div style={styles.errorBox}>
-          ⚠️ {error}
-        </div>
-      )}
+      {error && <div style={styles.errorBox}>⚠️ {error}</div>}
 
       {/* Counter Display */}
       {selectedDoctor && counterData ? (
@@ -325,9 +357,7 @@ export default function QueueControlPanel({ user }) {
           </div>
         </>
       ) : (
-        <div style={styles.emptyBox}>
-          Doctor ও Date select করুন
-        </div>
+        <div style={styles.emptyBox}>Doctor ও Date select করুন</div>
       )}
     </div>
   );
