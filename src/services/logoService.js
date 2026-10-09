@@ -1,10 +1,11 @@
 // src/services/logoService.js
 // ==================================================
-// 🖼️ Logo Service — Hospital MOU logo management
+// 🖼️ Logo Service — Vercel Blob Storage
 // ==================================================
-// ✅ Upload / delete logo to Firebase Storage
-// ✅ Real-time metadata subscription
+// ✅ Upload / delete logo via /api/upload (Vercel Blob)
+// ✅ Real-time metadata subscription from Firestore
 // ✅ URL persistence in Firestore
+// ✅ NO Firebase Storage dependency
 // ==================================================
 
 import {
@@ -14,15 +15,11 @@ import {
   setDoc,
   onSnapshot,
 } from '../firebase';
-import {
-  storage,
-  ref as storageRef,
-  uploadBytes,
-  getDownloadURL,
-  deleteObject,
-} from '../firebase';
 
 const DEFAULT_HOSPITAL_ID = 'alafiyah_main';
+
+// ✅ Vercel Blob upload endpoint (relative path)
+const UPLOAD_API = '/api/upload';
 
 const getLogoMetaRef = (hospitalId = DEFAULT_HOSPITAL_ID) =>
   doc(db, 'hospitals', hospitalId, 'settings', 'mouLogo');
@@ -69,7 +66,7 @@ export const getLogo = async (hospitalId = DEFAULT_HOSPITAL_ID) => {
 };
 
 // ==================================================
-// ✅ Upload new logo
+// ✅ Upload logo via Vercel Blob (/api/upload)
 // ==================================================
 export const uploadLogo = async (
   hospitalId = DEFAULT_HOSPITAL_ID,
@@ -78,63 +75,71 @@ export const uploadLogo = async (
 ) => {
   if (!file) throw new Error('File required');
 
-  // Validation
+  // ✅ Validation
   if (!file.type.startsWith('image/')) {
     throw new Error('শুধু ছবি ফাইল আপলোড করুন');
   }
-  if (file.size > 2 * 1024 * 1024) {
-    throw new Error('লোগো সাইজ সর্বোচ্চ 2MB');
+  if (file.size > 3 * 1024 * 1024) {
+    throw new Error('লোগো সাইজ সর্বোচ্চ 3MB');
   }
 
-  const ext = (file.name.split('.').pop() || 'png').toLowerCase();
-  const path = `hospitals/${hospitalId}/mou-logo/logo_${Date.now()}.${ext}`;
+  try {
+    // ✅ FormData তৈরি
+    const formData = new FormData();
+    formData.append('file', file);
 
-  const sRef = storageRef(storage, path);
-  await uploadBytes(sRef, file, {
-    contentType: file.type,
-    cacheControl: 'public, max-age=31536000',
-  });
+    // ✅ Vercel Blob-এ upload
+    const res = await fetch(UPLOAD_API, {
+      method: 'POST',
+      body: formData,
+    });
 
-  const url = await getDownloadURL(sRef);
+    const data = await res.json();
 
-  // Save metadata
-  const metaRef = getLogoMetaRef(hospitalId);
-  await setDoc(
-    metaRef,
-    {
-      url,
-      path,
-      fileName: file.name,
-      uploadedAt: new Date().toISOString(),
-      uploadedBy: user?.uid || user?.id || null,
-      uploadedByName: user?.name || user?.displayName || null,
-    },
-    { merge: true }
-  );
+    if (!res.ok) {
+      throw new Error(data.error || 'Upload failed');
+    }
 
-  return { url, path };
+    const url = data.url;
+    const pathname = data.pathname;
+
+    if (!url) {
+      throw new Error('Upload response-এ URL নেই');
+    }
+
+    // ✅ Metadata Firestore-এ save
+    const metaRef = getLogoMetaRef(hospitalId);
+    await setDoc(
+      metaRef,
+      {
+        url,
+        path: pathname || '',
+        storage: 'vercel-blob',
+        fileName: file.name,
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: user?.uid || user?.id || null,
+        uploadedByName: user?.name || user?.displayName || null,
+      },
+      { merge: true }
+    );
+
+    return { url, path: pathname };
+  } catch (err) {
+    console.error('❌ uploadLogo error:', err);
+    throw err;
+  }
 };
 
 // ==================================================
-// ✅ Delete logo
+// ✅ Delete logo metadata
+// ==================================================
+// Note: Vercel Blob delete করতে হলে server-side API লাগে।
+// আপাতত শুধু Firestore থেকে URL remove করা হচ্ছে।
 // ==================================================
 export const deleteLogo = async (hospitalId = DEFAULT_HOSPITAL_ID) => {
   try {
     const snap = await getDoc(getLogoMetaRef(hospitalId));
     if (!snap.exists()) return;
-
-    const { path } = snap.data();
-
-    if (path) {
-      try {
-        const sRef = storageRef(storage, path);
-        await deleteObject(sRef);
-      } catch (err) {
-        if (err.code !== 'storage/object-not-found') {
-          console.warn('⚠️ deleteLogo storage error:', err.message);
-        }
-      }
-    }
 
     await setDoc(
       getLogoMetaRef(hospitalId),
