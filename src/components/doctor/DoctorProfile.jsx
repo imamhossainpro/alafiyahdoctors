@@ -1,11 +1,14 @@
 // src/components/doctor/DoctorProfile.jsx
 // ==================================================
-// 👤 Doctor Profile — From departments collection
+// 👤 Doctor Profile — Modern Enterprise Redesign
 // ==================================================
-// ✅ Read-only profile display
-// ✅ Edit button → sends request to admin
-// ✅ Real data from Firestore
-// ✅ FIXED: Avatar layering (z-index) + proper spacing
+// ✅ Compact header (no oversized gradient banner)
+// ✅ No avatar overlap — clean left alignment
+// ✅ Card-based responsive grid (3/2/1 col)
+// ✅ Consistent color palette + typography
+// ✅ Empty fields auto-hidden
+// ✅ Edit Profile + admin approval flow preserved
+// ✅ Existing services + modal reused (nothing new)
 // ==================================================
 
 import React, { useEffect, useState } from 'react';
@@ -23,6 +26,8 @@ import {
   XCircle,
   Hourglass,
   AlertCircle,
+  Briefcase,
+  BadgeCheck,
 } from 'lucide-react';
 import { useHospital } from '../../context/HospitalContext';
 import {
@@ -34,247 +39,444 @@ import {
 } from '../../services/doctorProfileRequestService';
 import DoctorProfileEditModal from './DoctorProfileEditModal';
 
+// ==================================================
+// ✅ Design Tokens (from spec)
+// ==================================================
 const CSS = `
-  .dpf-container {
-    background: #fff;
-    border-radius: 14px;
-    border: 1px solid #e2e8f0;
-    overflow: hidden;
+  .dp-page {
+    background: #F8FAFC;
+    min-height: 100%;
+    font-family: 'Hind Siliguri', 'Noto Sans Bengali', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #0F172A;
+    box-sizing: border-box;
   }
+  .dp-page * { box-sizing: border-box; }
 
   /* ============================================
-     Banner + Avatar — properly layered
+     Compact Profile Header
      ============================================ */
-  .dpf-banner {
-    height: 130px;
-    background: linear-gradient(135deg, #1c5fa8, #0d9488);
-    position: relative;
-    z-index: 1;
-  }
-
-  .dpf-avatar-wrap {
-    padding: 0 24px;
-    margin-top: -70px;
+  .dp-header {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 22px 24px;
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     gap: 20px;
     flex-wrap: wrap;
-    position: relative;
-    z-index: 10;
-    min-height: 100px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   }
 
-  .dpf-avatar {
-    width: 130px;
-    height: 130px;
+  .dp-avatar {
+    width: 88px;
+    height: 88px;
     border-radius: 50%;
-    border: 5px solid #fff;
-    background: #f1f5f9;
+    background: #F1F5F9;
+    border: 3px solid #FFFFFF;
+    outline: 1px solid #E2E8F0;
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
     flex-shrink: 0;
-    position: relative;
-    z-index: 11;
   }
-  .dpf-avatar img {
+  .dp-avatar img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
   }
 
-  .dpf-info {
-    padding-bottom: 6px;
+  .dp-identity {
     flex: 1;
-    min-width: 200px;
-    margin-top: 10px;
-  }
-  .dpf-name {
-    margin: 0 0 4px 0;
-    font-size: 22px;
-    font-weight: 800;
-    color: #1e293b;
-    line-height: 1.2;
-  }
-  .dpf-name-en {
-    font-size: 13px;
-    color: #64748b;
-    font-style: italic;
-    margin-bottom: 4px;
-  }
-  .dpf-dept {
-    display: inline-block;
-    margin-top: 4px;
-    padding: 3px 12px;
-    background: #eff6ff;
-    color: #1c5fa8;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 700;
+    min-width: 220px;
+    overflow-wrap: anywhere;
   }
 
-  /* ============================================
-     Edit Button
-     ============================================ */
-  .dpf-edit-btn {
-    padding: 10px 20px;
-    background: #1c5fa8;
-    color: #fff;
+  .dp-name-bn {
+    font-size: 22px;
+    font-weight: 800;
+    color: #0F172A;
+    margin: 0 0 3px 0;
+    line-height: 1.3;
+    letter-spacing: -0.2px;
+  }
+
+  .dp-name-en {
+    font-size: 13.5px;
+    color: #64748B;
+    margin: 0 0 10px 0;
+    font-weight: 500;
+    line-height: 1.4;
+  }
+
+  .dp-badge-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .dp-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+  .dp-badge-primary {
+    background: #EFF6FF;
+    color: #1D4ED8;
+  }
+  .dp-badge-teal {
+    background: #F0FDFA;
+    color: #0F9488;
+  }
+
+  .dp-edit-btn {
+    padding: 10px 18px;
+    background: #1D4ED8;
+    color: #FFFFFF;
     border: none;
-    border-radius: 10px;
+    border-radius: 8px;
     cursor: pointer;
     font-size: 13.5px;
-    font-weight: 700;
+    font-weight: 600;
     display: inline-flex;
     align-items: center;
     gap: 6px;
     font-family: inherit;
-    transition: all 0.2s;
-    margin-bottom: 8px;
+    transition: background 0.15s ease;
     flex-shrink: 0;
-    box-shadow: 0 3px 10px rgba(28, 95, 168, 0.3);
+    white-space: nowrap;
   }
-  .dpf-edit-btn:hover {
-    background: #154a82;
-    transform: translateY(-1px);
-    box-shadow: 0 5px 14px rgba(28, 95, 168, 0.4);
-  }
+  .dp-edit-btn:hover { background: #1E40AF; }
+  .dp-edit-btn:active { background: #1E3A8A; }
 
   /* ============================================
-     Body content
+     Sections (cards)
      ============================================ */
-  .dpf-body {
-    padding: 24px;
-    display: grid;
-    gap: 20px;
+  .dp-section {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   }
-  .dpf-section {
-    border-top: 1px solid #f1f5f9;
-    padding-top: 20px;
-  }
-  .dpf-section:first-child {
-    border-top: none;
-    padding-top: 0;
-  }
-  .dpf-section-title {
+
+  .dp-section-title {
     display: flex;
     align-items: center;
     gap: 8px;
     font-size: 13px;
-    font-weight: 800;
-    color: #1c5fa8;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 12px;
-  }
-  .dpf-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 14px;
-  }
-  .dpf-field {
-    background: #f8fafc;
-    padding: 12px 14px;
-    border-radius: 10px;
-    border: 1px solid #e2e8f0;
-  }
-  .dpf-label {
-    font-size: 11px;
     font-weight: 700;
-    color: #64748b;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-    margin-bottom: 4px;
+    color: #0F172A;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #F1F5F9;
+    text-transform: none;
+    letter-spacing: 0.1px;
+  }
+  .dp-section-title svg { color: #1D4ED8; flex-shrink: 0; }
+
+  /* ============================================
+     Info Grid — responsive 3 / 2 / 1
+     ============================================ */
+  .dp-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .dp-info-card {
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    padding: 12px 14px;
+    min-width: 0;
+  }
+
+  .dp-info-label {
     display: flex;
     align-items: center;
     gap: 5px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #64748B;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    line-height: 1.3;
   }
-  .dpf-value {
+  .dp-info-label svg { color: #64748B; flex-shrink: 0; }
+
+  .dp-info-value {
     font-size: 14px;
-    color: #1e293b;
     font-weight: 600;
-    line-height: 1.5;
+    color: #0F172A;
+    line-height: 1.55;
+    word-break: break-word;
+    overflow-wrap: anywhere;
     white-space: pre-line;
   }
-  .dpf-schedule-item {
+
+  /* ============================================
+     Schedule / Time chips
+     ============================================ */
+  .dp-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .dp-chip {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 6px 14px;
-    background: #f0fdfa;
-    border: 1px solid #99f6e4;
-    color: #115e59;
-    border-radius: 20px;
+    padding: 7px 14px;
+    border-radius: 999px;
     font-size: 13px;
     font-weight: 600;
-    margin: 4px 6px 4px 0;
+    background: #F0FDFA;
+    color: #0F9488;
+    border: 1px solid #CCFBF1;
+    line-height: 1.4;
+    max-width: 100%;
+    overflow-wrap: anywhere;
   }
-  .dpf-empty {
-    color: #94a3b8;
-    font-size: 13px;
-    font-style: italic;
-  }
-  .dpf-loading {
-    padding: 40px;
-    text-align: center;
-    color: #64748b;
-  }
+  .dp-chip svg { flex-shrink: 0; }
 
   /* ============================================
      Pending request banner
      ============================================ */
-  .dpf-pending-banner {
-    margin: 0 24px 12px 24px;
-    padding: 12px 16px;
-    background: #fef3c7;
-    border: 1px solid #fcd34d;
-    border-radius: 10px;
+  .dp-pending {
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    font-size: 13px;
-    color: #92400e;
-    line-height: 1.5;
+    padding: 14px 16px;
+    background: #FFFBEB;
+    border: 1px solid #FDE68A;
+    border-radius: 10px;
+    margin-bottom: 16px;
+    font-size: 13.5px;
+    color: #92400E;
+    line-height: 1.55;
   }
-  .dpf-pending-banner strong {
-    color: #78350f;
+  .dp-pending svg { color: #D97706; flex-shrink: 0; margin-top: 1px; }
+  .dp-pending strong {
+    display: block;
+    color: #78350F;
+    margin-bottom: 3px;
+    font-weight: 700;
+  }
+  .dp-pending-sub {
+    font-size: 12.5px;
+    color: #A16207;
   }
 
   /* ============================================
-     Mobile responsive
+     Request history rows
      ============================================ */
+  .dp-req-row {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .dp-req-left { min-width: 0; flex: 1; }
+  .dp-req-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #0F172A;
+    margin-bottom: 3px;
+  }
+  .dp-req-meta {
+    font-size: 11.5px;
+    color: #64748B;
+    line-height: 1.4;
+  }
+  .dp-req-note {
+    font-size: 11.5px;
+    color: #64748B;
+    font-style: italic;
+    margin-top: 3px;
+  }
+
+  .dp-status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 700;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .dp-status-pending { background: #FEF3C7; color: #92400E; }
+  .dp-status-approved { background: #DCFCE7; color: #166534; }
+  .dp-status-rejected { background: #FEE2E2; color: #991B1B; }
+  .dp-status-cancelled { background: #F1F5F9; color: #64748B; }
+
+  /* ============================================
+     Empty / Loading states
+     ============================================ */
+  .dp-empty {
+    color: #94A3B8;
+    font-size: 13.5px;
+    font-style: italic;
+    margin: 0;
+  }
+
+  .dp-loading {
+    padding: 60px 20px;
+    text-align: center;
+    color: #64748B;
+  }
+  .dp-loading-spin {
+    display: inline-block;
+    animation: dp-spin 1s linear infinite;
+  }
+  @keyframes dp-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  /* ============================================
+     Responsive breakpoints
+     ============================================ */
+  @media (max-width: 900px) {
+    .dp-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
   @media (max-width: 640px) {
-    .dpf-banner {
-      height: 100px;
+    .dp-header {
+      padding: 18px;
+      gap: 14px;
     }
-    .dpf-avatar-wrap {
-      margin-top: -50px;
-      gap: 12px;
+    .dp-avatar {
+      width: 72px;
+      height: 72px;
     }
-    .dpf-avatar {
-      width: 90px;
-      height: 90px;
-      border-width: 4px;
-    }
-    .dpf-name {
+    .dp-name-bn {
       font-size: 18px;
     }
-    .dpf-edit-btn {
-      padding: 8px 14px;
+    .dp-name-en {
       font-size: 12.5px;
+    }
+    .dp-section {
+      padding: 16px 18px;
+      border-radius: 10px;
+    }
+    .dp-section-title {
+      font-size: 12.5px;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+    }
+    .dp-edit-btn {
+      padding: 9px 14px;
+      font-size: 12.5px;
+    }
+    .dp-info-card {
+      padding: 11px 12px;
+    }
+    .dp-info-value {
+      font-size: 13.5px;
+    }
+  }
+
+  @media (max-width: 600px) {
+    .dp-grid {
+      grid-template-columns: 1fr;
     }
   }
 `;
 
+// ==================================================
+// ✅ Helper — format Firestore timestamp
+// ==================================================
 const formatTime = (ts) => {
   if (!ts) return '';
-  const d = ts.toDate ? ts.toDate() : new Date(ts.seconds * 1000);
-  return d.toLocaleString('bn-BD');
+  try {
+    const d = ts.toDate ? ts.toDate() : new Date(ts.seconds * 1000);
+    return d.toLocaleString('bn-BD');
+  } catch {
+    return '';
+  }
 };
 
+// ==================================================
+// ✅ Helper — Info Card (renders only if value exists)
+// ==================================================
+function InfoCard({ icon: Icon, label, value }) {
+  const hasValue =
+    value !== null &&
+    value !== undefined &&
+    String(value).trim() !== '' &&
+    String(value).trim() !== '—';
+
+  if (!hasValue) return null;
+
+  return (
+    <div className="dp-info-card">
+      <div className="dp-info-label">
+        {Icon && <Icon size={12} />} {label}
+      </div>
+      <div className="dp-info-value">{value}</div>
+    </div>
+  );
+}
+
+// ==================================================
+// ✅ Helper — Request Row
+// ==================================================
+function RequestRow({ req }) {
+  const meta = {
+    pending: { icon: Hourglass, label: 'Pending', cls: 'dp-status-pending' },
+    approved: { icon: CheckCircle2, label: 'Approved', cls: 'dp-status-approved' },
+    rejected: { icon: XCircle, label: 'Rejected', cls: 'dp-status-rejected' },
+    cancelled: { icon: AlertCircle, label: 'Cancelled', cls: 'dp-status-cancelled' },
+  }[req.status] || { icon: Hourglass, label: 'Pending', cls: 'dp-status-pending' };
+
+  const Icon = meta.icon;
+  const fieldCount = Object.keys(req.changes || {}).length;
+
+  return (
+    <div className="dp-req-row">
+      <div className="dp-req-left">
+        <div className="dp-req-title">
+          {fieldCount} টি field পরিবর্তনের রিকোয়েস্ট
+        </div>
+        <div className="dp-req-meta">
+          {formatTime(req.submittedAt) || '—'}
+        </div>
+        {req.reviewNote && (
+          <div className="dp-req-note">নোট: {req.reviewNote}</div>
+        )}
+      </div>
+      <span className={`dp-status-chip ${meta.cls}`}>
+        <Icon size={12} /> {meta.label}
+      </span>
+    </div>
+  );
+}
+
+// ==================================================
+// ✅ MAIN COMPONENT
+// ==================================================
 export default function DoctorProfile({ user }) {
   const { currentHospital } = useHospital();
   const hospitalId = currentHospital?.id || 'alafiyah_main';
@@ -286,7 +488,7 @@ export default function DoctorProfile({ user }) {
   const [myRequests, setMyRequests] = useState([]);
 
   // ==================================================
-  // ✅ Load doctor info + schedule
+  // ✅ Load profile (reused by refresh)
   // ==================================================
   const loadProfile = async () => {
     if (!user?.doctorId) {
@@ -335,14 +537,14 @@ export default function DoctorProfile({ user }) {
   }, [hospitalId, user?.doctorId]);
 
   // ==================================================
-  // ✅ Subscribe to my requests (to show pending banner)
+  // ✅ Subscribe to own requests
   // ==================================================
   useEffect(() => {
     if (!user?.doctorId) return;
     const unsub = subscribeToMyRequests(
       hospitalId,
       user.doctorId,
-      (list) => setMyRequests(list),
+      (list) => setMyRequests(list || []),
       (err) => console.warn('subscribeToMyRequests error:', err.message)
     );
     return () => {
@@ -352,170 +554,208 @@ export default function DoctorProfile({ user }) {
 
   const pendingRequest = myRequests.find((r) => r.status === 'pending');
 
+  // ==================================================
+  // ✅ Loading
+  // ==================================================
   if (loading) {
     return (
       <>
         <style>{CSS}</style>
-        <div className="dpf-container">
-          <div className="dpf-loading">
-            <Loader2 size={24} className="spin" />
-            <p style={{ marginTop: 12 }}>লোড হচ্ছে...</p>
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } } .spin { animation: spin 1s linear infinite; }`}</style>
+        <div className="dp-page">
+          <div className="dp-loading">
+            <Loader2 size={28} className="dp-loading-spin" />
+            <p style={{ marginTop: 14, fontSize: 14 }}>লোড হচ্ছে...</p>
           </div>
         </div>
       </>
     );
   }
 
+  // ==================================================
+  // ✅ Data prep
+  // ==================================================
+  const displayNameBn = doctor?.name || user?.name || 'Doctor';
+  const displayNameEn = doctor?.nameEn || user?.nameEn || null;
+  const deptName = doctor?.deptName || null;
+  const designation = user?.designation || 'Doctor';
+
+  const hasProfessionalInfo =
+    (doctor?.quals && String(doctor.quals).trim()) ||
+    (doctor?.specialty && String(doctor.specialty).trim()) ||
+    (doctor?.workplace && String(doctor.workplace).trim());
+
+  const hasSchedule = Array.isArray(schedule) && schedule.length > 0;
+  const hasTimeSlots =
+    Array.isArray(doctor?.timeSlots) && doctor.timeSlots.length > 0;
+  const hasAccount = user?.email || designation;
+  const hasRequests = myRequests.length > 0;
+
+  // ==================================================
+  // ✅ Render
+  // ==================================================
   return (
     <>
       <style>{CSS}</style>
-      <div className="dpf-container">
-        {/* Banner */}
-        <div className="dpf-banner" />
+      <div className="dp-page">
 
-        {/* Avatar + Name + Edit Button */}
-        <div className="dpf-avatar-wrap">
-          <div className="dpf-avatar">
+        {/* ============ Compact Profile Header ============ */}
+        <div className="dp-header">
+          <div className="dp-avatar">
             {doctor?.imageUrl ? (
-              <img src={doctor.imageUrl} alt={doctor.name} />
+              <img
+                src={doctor.imageUrl}
+                alt={displayNameBn}
+                loading="lazy"
+              />
             ) : (
-              <User size={46} color="#94a3b8" />
+              <User size={38} color="#94A3B8" strokeWidth={1.5} />
             )}
           </div>
-          <div className="dpf-info">
-            <h2 className="dpf-name">
-              {doctor?.name || user?.name || 'Doctor'}
-            </h2>
-            {doctor?.nameEn && (
-              <div className="dpf-name-en">{doctor.nameEn}</div>
+
+          <div className="dp-identity">
+            <h1 className="dp-name-bn">{displayNameBn}</h1>
+            {displayNameEn && (
+              <p className="dp-name-en">{displayNameEn}</p>
             )}
-            {doctor?.deptName && (
-              <span className="dpf-dept">{doctor.deptName}</span>
-            )}
+            <div className="dp-badge-row">
+              {deptName && (
+                <span className="dp-badge dp-badge-primary">
+                  <Building2 size={11} /> {deptName}
+                </span>
+              )}
+              {designation && (
+                <span className="dp-badge dp-badge-teal">
+                  <BadgeCheck size={11} /> {designation}
+                </span>
+              )}
+            </div>
           </div>
+
           <button
-            className="dpf-edit-btn"
+            className="dp-edit-btn"
             onClick={() => setShowEditModal(true)}
+            type="button"
           >
             <Edit3 size={15} /> Edit Profile
           </button>
         </div>
 
-        {/* Pending Request Banner */}
+        {/* ============ Pending Request Banner ============ */}
         {pendingRequest && (
-          <div className="dpf-pending-banner">
-            <Hourglass size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+          <div className="dp-pending">
+            <Hourglass size={18} />
             <div>
-              <strong>⏳ আপনার একটি এডিট রিকোয়েস্ট pending আছে</strong>
-              <div style={{ marginTop: 4 }}>
-                পাঠানো হয়েছে: {formatTime(pendingRequest.submittedAt)}
-              </div>
-              <div style={{ marginTop: 2, fontSize: 12 }}>
+              <strong>আপনার একটি এডিট রিকোয়েস্ট pending আছে</strong>
+              পাঠানো হয়েছে: {formatTime(pendingRequest.submittedAt)}
+              <div className="dp-pending-sub">
                 অ্যাডমিন এপ্রুভ করলে পরিবর্তন প্রোফাইলে দেখাবে।
               </div>
             </div>
           </div>
         )}
 
-        {/* Body */}
-        <div className="dpf-body">
-          {/* Professional Info */}
-          <div className="dpf-section">
-            <div className="dpf-section-title">
-              <Stethoscope size={14} /> Professional Information
+        {/* ============ Professional Information ============ */}
+        {hasProfessionalInfo && (
+          <div className="dp-section">
+            <div className="dp-section-title">
+              <Stethoscope size={15} /> Professional Information
             </div>
-            <div className="dpf-row">
-              <Field
+            <div className="dp-grid">
+              <InfoCard
                 icon={Award}
                 label="Qualifications"
                 value={doctor?.quals}
               />
-              <Field
+              <InfoCard
                 icon={Stethoscope}
                 label="Specialty"
                 value={doctor?.specialty}
               />
-              <Field
+              <InfoCard
                 icon={Building2}
                 label="Workplace"
                 value={doctor?.workplace}
               />
             </div>
           </div>
+        )}
 
-          {/* Schedule */}
-          <div className="dpf-section">
-            <div className="dpf-section-title">
-              <Calendar size={14} /> Assigned Schedule
+        {/* ============ Assigned Schedule ============ */}
+        {hasSchedule && (
+          <div className="dp-section">
+            <div className="dp-section-title">
+              <Calendar size={15} /> Assigned Schedule
             </div>
-            {schedule.length === 0 ? (
-              <p className="dpf-empty">কোনো schedule assign করা হয়নি।</p>
-            ) : (
-              <div>
-                {schedule.map((s) => (
-                  <span key={s.id} className="dpf-schedule-item">
-                    <Calendar size={12} /> {s.name}
-                  </span>
-                ))}
-              </div>
-            )}
+            <div className="dp-chips">
+              {schedule.map((s, idx) => (
+                <span key={s.id || idx} className="dp-chip">
+                  <Calendar size={12} /> {s.name}
+                </span>
+              ))}
+            </div>
           </div>
+        )}
 
-          {/* Time Slots */}
-          {doctor?.timeSlots && doctor.timeSlots.length > 0 && (
-            <div className="dpf-section">
-              <div className="dpf-section-title">
-                <Clock size={14} /> Chamber Time
-              </div>
-              <div>
-                {doctor.timeSlots.map((slot, i) => (
-                  <span key={i} className="dpf-schedule-item">
-                    <Clock size={12} /> {slot.start} – {slot.end}
-                  </span>
-                ))}
-              </div>
+        {/* ============ Chamber Time ============ */}
+        {hasTimeSlots && (
+          <div className="dp-section">
+            <div className="dp-section-title">
+              <Clock size={15} /> Chamber Time
             </div>
-          )}
+            <div className="dp-chips">
+              {doctor.timeSlots.map((slot, i) => (
+                <span key={i} className="dp-chip">
+                  <Clock size={12} /> {slot.start} – {slot.end}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
-          {/* Account */}
-          <div className="dpf-section">
-            <div className="dpf-section-title">
-              <User size={14} /> Account
+        {/* ============ Account ============ */}
+        {hasAccount && (
+          <div className="dp-section">
+            <div className="dp-section-title">
+              <User size={15} /> Account
             </div>
-            <div className="dpf-row">
-              <Field icon={Mail} label="Email" value={user?.email} />
-              <Field
-                icon={User}
+            <div className="dp-grid">
+              <InfoCard
+                icon={Mail}
+                label="Email"
+                value={user?.email}
+              />
+              <InfoCard
+                icon={Briefcase}
                 label="Designation"
-                value={user?.designation}
+                value={designation}
               />
             </div>
           </div>
+        )}
 
-          {/* Request History */}
-          {myRequests.length > 0 && (
-            <div className="dpf-section">
-              <div className="dpf-section-title">
-                <Hourglass size={14} /> My Edit Requests
-              </div>
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 10,
-                }}
-              >
-                {myRequests.slice(0, 5).map((req) => (
-                  <RequestRow key={req.id} req={req} />
-                ))}
-              </div>
+        {/* ============ My Edit Requests ============ */}
+        {hasRequests && (
+          <div className="dp-section">
+            <div className="dp-section-title">
+              <Hourglass size={15} /> My Edit Requests
             </div>
-          )}
-        </div>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+              }}
+            >
+              {myRequests.slice(0, 5).map((req) => (
+                <RequestRow key={req.id} req={req} />
+              ))}
+            </div>
+          </div>
+        )}
+
       </div>
 
-      {/* Edit Modal */}
+      {/* ============ Edit Modal (functionality unchanged) ============ */}
       {showEditModal && (
         <DoctorProfileEditModal
           currentProfile={{
@@ -532,126 +772,5 @@ export default function DoctorProfile({ user }) {
         />
       )}
     </>
-  );
-}
-
-// ==================================================
-// ✅ Helper — Field
-// ==================================================
-function Field({ icon: Icon, label, value }) {
-  return (
-    <div className="dpf-field">
-      <div className="dpf-label">
-        <Icon size={11} /> {label}
-      </div>
-      <div className="dpf-value">
-        {value || <span className="dpf-empty">—</span>}
-      </div>
-    </div>
-  );
-}
-
-// ==================================================
-// ✅ Helper — RequestRow
-// ==================================================
-function RequestRow({ req }) {
-  const statusMeta = {
-    pending: {
-      icon: Hourglass,
-      label: 'Pending',
-      bg: '#fef3c7',
-      color: '#92400e',
-    },
-    approved: {
-      icon: CheckCircle2,
-      label: 'Approved',
-      bg: '#dcfce7',
-      color: '#166534',
-    },
-    rejected: {
-      icon: XCircle,
-      label: 'Rejected',
-      bg: '#fee2e2',
-      color: '#991b1b',
-    },
-    cancelled: {
-      icon: AlertCircle,
-      label: 'Cancelled',
-      bg: '#f1f5f9',
-      color: '#64748b',
-    },
-  };
-  const meta = statusMeta[req.status] || statusMeta.pending;
-  const Icon = meta.icon;
-
-  const fieldCount = Object.keys(req.changes || {}).length;
-
-  return (
-    <div
-      style={{
-        background: '#fff',
-        border: '1px solid #e2e8f0',
-        borderRadius: 10,
-        padding: '10px 14px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: 8,
-      }}
-    >
-      <div>
-        <div
-          style={{
-            fontSize: 13,
-            fontWeight: 700,
-            color: '#1e293b',
-          }}
-        >
-          {fieldCount} টি field পরিবর্তনের রিকোয়েস্ট
-        </div>
-        <div
-          style={{
-            fontSize: 11.5,
-            color: '#64748b',
-            marginTop: 2,
-          }}
-        >
-          {req.submittedAt
-            ? (req.submittedAt.toDate
-                ? req.submittedAt.toDate()
-                : new Date(req.submittedAt.seconds * 1000)
-              ).toLocaleString('bn-BD')
-            : '—'}
-        </div>
-        {req.reviewNote && (
-          <div
-            style={{
-              fontSize: 11.5,
-              color: '#64748b',
-              marginTop: 2,
-              fontStyle: 'italic',
-            }}
-          >
-            নোট: {req.reviewNote}
-          </div>
-        )}
-      </div>
-      <span
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 5,
-          padding: '4px 12px',
-          background: meta.bg,
-          color: meta.color,
-          borderRadius: 20,
-          fontSize: 11.5,
-          fontWeight: 700,
-        }}
-      >
-        <Icon size={12} /> {meta.label}
-      </span>
-    </div>
   );
 }
