@@ -4,10 +4,11 @@
 // ==================================================
 // ✅ Exact A4 size (595.32pt × 841.92pt)
 // ✅ Times New Roman 14pt / 18.5pt line height
+// ✅ 36pt margin
 // ✅ Dynamic placeholders {{key}}, **bold**, @@optional@@
 // ✅ Dynamic logo watermark (from Vercel Blob URL)
 // ✅ Dynamic beneficiary label — FULL BOLD
-// ✅ Footer fixed at page bottom — NO overlap, NO cut-off in print
+// ✅ Footer fixed at page bottom — NO overlap
 // ==================================================
 import React from 'react';
 import { formatDateLong } from '../../utils/mouFields';
@@ -94,7 +95,7 @@ const processTemplate = (templateStr, data) => {
 };
 
 // ==================================================
-// ✅ Template builder
+// ✅ Template builder — ORIGINAL layout
 // ==================================================
 export const buildPages = (data) => {
   const B1 = '**{{org1_name}}**';
@@ -156,9 +157,9 @@ export const buildPages = (data) => {
 <p>This agreement is being executed in 2(two) identical originals, one to be retained by ${B1} Authority and other copy ${B2}.</p>`,
 
     // ==================================================
-    // PAGE 3
+    // PAGE 3 — ORIGINAL margins restored
     // ==================================================
-    `<p style="margin-top:6pt;text-align:left">**9. Contact Person:**</p>
+    `<p style="margin-top:17.8pt;text-align:left">**9. Contact Person:**</p>
 <table class="ct">
   <colgroup><col style="width:243pt"><col style="width:225pt"></colgroup>
   <tr>
@@ -170,13 +171,13 @@ export const buildPages = (data) => {
     <td>@@org2_contact_name|**@@<br>@@org2_contact_designation|@@{{org2_name}}<br>@@org2_contact_phone|Mobile: @@@@org2_contact_email|Email: @@</td>
   </tr>
 </table>
-<p style="line-height:16.1pt;margin-top:10pt">The parties knowingly signed this Medical Services Agreement in duplicate as of the date set forth below.</p>
+<p style="line-height:16.1pt">The parties knowingly signed this Medical Services Agreement in duplicate as of the date set forth below.</p>
 <p style="line-height:16.1pt;text-align:left">Date: {{agreement_date_fmt}}</p>
 <div class="sg" style="grid-template-columns:253.5pt 1fr;font-size:11pt;line-height:13.5pt;margin:2pt 0 0 1.4pt">
   <span>For &amp; On Behalf of **{{org1_short_name}}**</span>
   <span>On behalf of **{{org2_short_name}}**</span>
 </div>
-<div class="sg" style="grid-template-columns:288pt 1fr;margin-top:30pt">
+<div class="sg" style="grid-template-columns:288pt 1fr;margin-top:61.6pt">
   <span class="d">${'…'.repeat(15)}</span>
   <span class="d">.${'…'.repeat(13)}</span>
   <b>{{org1_signatory_name}}</b>
@@ -186,8 +187,8 @@ export const buildPages = (data) => {
   <span>{{org1_name}}</span>
   <span>{{org2_name}}</span>
 </div>
-<p class="c" style="font-size:12pt;line-height:13.8pt;margin-top:26pt">In presence of</p>
-<div class="sg" style="grid-template-columns:252pt 1fr;margin-top:32pt">
+<p class="c" style="font-size:12pt;line-height:13.8pt;margin-top:49.5pt">In presence of</p>
+<div class="sg" style="grid-template-columns:252pt 1fr;margin-top:65.6pt">
   <span class="d">${'…'.repeat(15)}</span>
   <span class="d">${'…'.repeat(13)}</span>
   <b>{{org1_witness_name}}</b>
@@ -203,7 +204,7 @@ export const buildPages = (data) => {
 };
 
 // ==================================================
-// ✅ Print Styles
+// ✅ Print Styles — ORIGINAL + fixed footer
 // ==================================================
 export const MOU_PRINT_CSS = `
   .mou-pages {
@@ -215,9 +216,9 @@ export const MOU_PRINT_CSS = `
   .mou-page {
     position: relative;
     width: 595.32pt;
-    height: 841.92pt;
+    min-height: 841.92pt;
     box-sizing: border-box;
-    padding: 36.5pt 36pt 60pt;   /* ✅ bottom padding: content শেষ হবে footer-এর আগে */
+    padding: 36.5pt 36pt 60pt;   /* ✅ bottom padding for footer */
     margin: 0 0 14px;
     background: #ffffff;
     color: #000000;
@@ -265,20 +266,19 @@ export const MOU_PRINT_CSS = `
     left: calc(var(--t, 36pt) - 18pt);
   }
 
-  /* ✅ Footer — Screen preview: absolute bottom; Print: fixed bottom */
+  /* ✅ Footer — stays at bottom of each page, above content */
   .mou-page .foot {
     position: absolute;
-    left: 0;
-    right: 0;
+    left: 35pt;
+    right: 34pt;
     bottom: 14pt;
-    padding: 3pt 36pt 0 35pt;
     border-top: 1pt solid #d9d9d9;
+    padding: 3pt 0 0 1pt;
     font: 11pt Calibri, Carlito, "Segoe UI", sans-serif;
     line-height: 13pt;
     text-align: left;
     background: #ffffff;
     z-index: 5;
-    box-sizing: border-box;
   }
   .mou-page .foot .g { color: #7f7f7f; letter-spacing: 0.12em; }
 
@@ -323,7 +323,7 @@ export const MOU_PRINT_CSS = `
   }
 
   /* ==================================================
-     ✅ PRINT — footer becomes fixed at page bottom
+     ✅ PRINT — exact A4 + fixed footer
      ================================================== */
   @page {
     size: A4;
@@ -332,23 +332,23 @@ export const MOU_PRINT_CSS = `
 
   @media print {
     html, body {
-      background: #ffffff;
+      background: #ffffff !important;
       margin: 0;
       padding: 0;
     }
 
     .mou-pages {
       transform: none !important;
-      width: 100%;
+      width: auto;
       height: auto !important;
     }
 
     .mou-page {
       margin: 0;
       box-shadow: none;
-      height: 297mm;               /* ✅ exact A4 height in mm */
-      width: 210mm;                /* ✅ exact A4 width in mm */
-      padding: 12.9mm 12.7mm 21mm; /* ✅ bottom padding for footer */
+      width: 210mm;
+      height: 297mm;
+      padding: 12.9mm 12.7mm 21mm;
       break-after: page;
       page-break-after: always;
       overflow: hidden;
@@ -360,18 +360,18 @@ export const MOU_PRINT_CSS = `
       page-break-after: auto;
     }
 
-    /* ✅ Footer stays at physical page bottom */
+    /* ✅ Footer fixed at physical page bottom */
     .mou-page .foot {
       position: absolute;
-      left: 0;
-      right: 0;
-      bottom: 8mm;                 /* ✅ fixed distance from page bottom */
-      padding: 2mm 12.7mm 0 12.3mm;
+      left: 12.3mm;
+      right: 12mm;
+      bottom: 8mm;
+      padding: 2mm 0 0 0.3mm;
       background: #ffffff;
       z-index: 10;
     }
 
-    /* ✅ Hide background highlight in print */
+    /* Hide background highlight in print */
     .mou-page .v,
     .mou-page .v.miss {
       background: none !important;
