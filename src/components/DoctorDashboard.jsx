@@ -9,6 +9,7 @@
 // ✅ NEW: Real-time pending profile request badge
 // ✅ NEW: Error boundary
 // ✅ NEW: Dynamic hospital branding (name + logo)
+// ✅ NEW: Home/Back button to main site
 // ==================================================
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -22,6 +23,7 @@ import {
   ShieldAlert,
   Menu,
   X,
+  Home,
 } from 'lucide-react';
 import { getDoc, doc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
@@ -175,6 +177,22 @@ const DASH_CSS = `
   .dd-nav-item.is-active {
     background: #1D4ED8;
     color: #FFFFFF;
+  }
+
+  /* ---------- Home button (visually distinct) ---------- */
+  .dd-nav-home {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed #E2E8F0;
+  }
+  .dd-nav-item.dd-home-btn {
+    background: #EFF6FF;
+    color: #1D4ED8;
+    font-weight: 700;
+  }
+  .dd-nav-item.dd-home-btn:hover {
+    background: #DBEAFE;
+    color: #1E40AF;
   }
 
   .dd-sidebar-footer {
@@ -403,9 +421,9 @@ const DASH_CSS = `
 // ✅ Default branding (fallback)
 // ==================================================
 const DEFAULT_BRANDING = {
-  name: 'Al-Afiyah Hospital',
+  name: 'আল-আফিয়া',
   subtitle: 'Doctor Panel',
-  logo: './assets/logo.png',
+  logo: '/logo.png',
 };
 
 // ==================================================
@@ -498,7 +516,7 @@ export default function DoctorDashboard() {
     };
   }, [hospitalId, user?.doctorId, isDoctor]);
 
-  // ✅ Load hospital branding (name + logo) from footer/data
+  // Load hospital branding
   useEffect(() => {
     if (!hospitalId) return;
     let mounted = true;
@@ -558,6 +576,12 @@ export default function DoctorDashboard() {
   const handleNavClick = (itemPath) => {
     navigate(itemPath);
     setDrawerOpen(false);
+  };
+
+  // ✅ NEW — Back to home handler
+  const handleGoHome = () => {
+    setDrawerOpen(false);
+    navigate('/');
   };
 
   const sidebarItems = [
@@ -814,6 +838,21 @@ export default function DoctorDashboard() {
                 </button>
               );
             })}
+
+            {/* ============================================
+                ✅ NEW — Back to Home button
+                ============================================ */}
+            <div className="dd-nav-home">
+              <button
+                type="button"
+                onClick={handleGoHome}
+                className="dd-nav-item dd-home-btn"
+                aria-label="Back to Home"
+              >
+                <Home size={18} />
+                হোমপেজে ফিরে যান
+              </button>
+            </div>
           </nav>
 
           <div className="dd-sidebar-footer">

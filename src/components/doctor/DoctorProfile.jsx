@@ -8,9 +8,8 @@
 // ✅ Consistent color palette + typography
 // ✅ Empty fields auto-hidden
 // ✅ Edit Profile + admin approval flow preserved
-// ✅ Existing services + modal reused (nothing new)
-// ✅ RESPONSIVE FIX: no horizontal overflow, proper text wrap,
-//    mobile stacked header, tablet 2-col, mobile 1-col
+// ✅ Real-time profile sync
+// ✅ Responsive: no horizontal overflow, proper text wrap
 // ==================================================
 
 import React, { useEffect, useState } from 'react';
@@ -35,6 +34,7 @@ import { useHospital } from '../../context/HospitalContext';
 import {
   getDoctorInfo,
   getDoctorSchedule,
+  subscribeToDoctorInfo,
 } from '../../services/doctorAppointmentService';
 import {
   subscribeToMyRequests,
@@ -45,9 +45,6 @@ import DoctorProfileEditModal from './DoctorProfileEditModal';
 // ✅ Design Tokens + Responsive Layout
 // ==================================================
 const CSS = `
-  /* ============================================
-     Root wrapper — prevents horizontal overflow
-     ============================================ */
   .dp-page {
     background: #F8FAFC;
     min-height: 100%;
@@ -64,9 +61,6 @@ const CSS = `
     box-sizing: border-box;
   }
 
-  /* ============================================
-     Compact Profile Header
-     ============================================ */
   .dp-header {
     background: #FFFFFF;
     border: 1px solid #E2E8F0;
@@ -103,8 +97,8 @@ const CSS = `
   }
 
   .dp-identity {
-    flex: 1 1 200px;             /* ✅ grows and wraps */
-    min-width: 0;                /* ✅ critical for text overflow */
+    flex: 1 1 200px;
+    min-width: 0;
     overflow-wrap: anywhere;
     word-break: break-word;
   }
@@ -179,9 +173,6 @@ const CSS = `
   .dp-edit-btn:hover { background: #1E40AF; }
   .dp-edit-btn:active { background: #1E3A8A; }
 
-  /* ============================================
-     Sections (cards)
-     ============================================ */
   .dp-section {
     background: #FFFFFF;
     border: 1px solid #E2E8F0;
@@ -208,9 +199,6 @@ const CSS = `
   }
   .dp-section-title svg { color: #1D4ED8; flex-shrink: 0; }
 
-  /* ============================================
-     Info Grid — responsive 3 / 2 / 1
-     ============================================ */
   .dp-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -247,14 +235,11 @@ const CSS = `
     font-weight: 600;
     color: #0F172A;
     line-height: 1.55;
-    word-break: normal;              /* ✅ no break-all */
+    word-break: normal;
     overflow-wrap: anywhere;
     white-space: pre-line;
   }
 
-  /* ============================================
-     Schedule / Time chips
-     ============================================ */
   .dp-chips {
     display: flex;
     flex-wrap: wrap;
@@ -279,9 +264,6 @@ const CSS = `
   }
   .dp-chip svg { flex-shrink: 0; }
 
-  /* ============================================
-     Pending request banner
-     ============================================ */
   .dp-pending {
     display: flex;
     align-items: flex-start;
@@ -309,9 +291,6 @@ const CSS = `
     color: #A16207;
   }
 
-  /* ============================================
-     Request history rows
-     ============================================ */
   .dp-req-row {
     background: #FFFFFF;
     border: 1px solid #E2E8F0;
@@ -362,9 +341,6 @@ const CSS = `
   .dp-status-rejected { background: #FEE2E2; color: #991B1B; }
   .dp-status-cancelled { background: #F1F5F9; color: #64748B; }
 
-  /* ============================================
-     Empty / Loading states
-     ============================================ */
   .dp-empty {
     color: #94A3B8;
     font-size: 13.5px;
@@ -386,11 +362,6 @@ const CSS = `
     to { transform: rotate(360deg); }
   }
 
-  /* ============================================
-     RESPONSIVE BREAKPOINTS
-     ============================================ */
-
-  /* ---------- Tablet (768 – 1023px) ---------- */
   @media (max-width: 1023px) {
     .dp-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -404,7 +375,6 @@ const CSS = `
     }
   }
 
-  /* ---------- Mobile (<= 767px) ---------- */
   @media (max-width: 767px) {
     .dp-page {
       padding: 0;
@@ -470,7 +440,6 @@ const CSS = `
     }
   }
 
-  /* ---------- Small mobile (<= 360px) ---------- */
   @media (max-width: 360px) {
     .dp-header {
       padding: 14px;
@@ -501,7 +470,7 @@ const formatTime = (ts) => {
 };
 
 // ==================================================
-// ✅ Helper — Info Card (renders only if value exists)
+// ✅ Helper — Info Card
 // ==================================================
 function InfoCard({ icon: Icon, label, value }) {
   const hasValue =
@@ -570,7 +539,7 @@ export default function DoctorProfile({ user }) {
   const [myRequests, setMyRequests] = useState([]);
 
   // ==================================================
-  // ✅ Load profile (reused by refresh)
+  // ✅ Load profile
   // ==================================================
   const loadProfile = async () => {
     if (!user?.doctorId) {
@@ -615,6 +584,26 @@ export default function DoctorProfile({ user }) {
     })();
     return () => {
       mounted = false;
+    };
+  }, [hospitalId, user?.doctorId]);
+
+  // ==================================================
+  // ✅ Real-time profile sync (admin approve → auto refresh)
+  // ==================================================
+  useEffect(() => {
+    if (!user?.doctorId) return;
+    const unsub = subscribeToDoctorInfo(
+      hospitalId,
+      user.doctorId,
+      (info) => {
+        if (info) {
+          setDoctor((prev) => ({ ...(prev || {}), ...info }));
+        }
+      },
+      (err) => console.warn('subscribeToDoctorInfo error:', err.message)
+    );
+    return () => {
+      if (typeof unsub === 'function') unsub();
     };
   }, [hospitalId, user?.doctorId]);
 
@@ -837,7 +826,7 @@ export default function DoctorProfile({ user }) {
 
       </div>
 
-      {/* ============ Edit Modal (functionality unchanged) ============ */}
+      {/* ============ Edit Modal ============ */}
       {showEditModal && (
         <DoctorProfileEditModal
           currentProfile={{
