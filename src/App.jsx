@@ -2,9 +2,10 @@
 // ==================================================
 // 🎯 App Router — Full Version
 // ==================================================
-// ✅ সব routes: patient, doctor panel, MOU, admin
+// ✅ সব routes: patient, doctor panel, MOU, admin, doctor dashboard
 // ✅ /add-mobile — Google/Email user-এর mobile verify
 // ✅ /my-bookings — Patient dashboard
+// ✅ /doctor — Doctor's own dashboard (designation: 'Doctor')
 // ✅ /mou — MOU Generator (dynamic content)
 // ✅ /booking/:doctorId — Direct doctor booking
 // ✅ Lazy loading + Suspense
@@ -26,6 +27,9 @@ const QueueDisplay = lazy(() => import('./components/QueueDisplay'));
 const CheckIn = lazy(() => import('./components/CheckIn'));
 const NotFoundPage = lazy(() => import('./components/NotFoundPage'));
 const UserProfile = lazy(() => import('./components/UserProfile'));
+
+// ✅ NEW: Doctor Dashboard
+const DoctorDashboard = lazy(() => import('./components/DoctorDashboard'));
 
 // ==================================================
 // ✅ Global Loader
@@ -100,6 +104,17 @@ function App() {
           <Route path="/add-mobile" element={<AddMobilePage />} />
           <Route path="/my-bookings" element={<PatientDashboard />} />
           <Route path="/profile" element={<UserProfile />} />
+
+          {/* ==================================================
+              🩺 Doctor Dashboard (own dashboard)
+              Designation = 'Doctor' হলে accessible
+              ================================================== */}
+          <Route path="/doctor" element={<DoctorDashboard />} />
+          <Route path="/doctor/patients" element={<DoctorDashboard />} />
+          <Route path="/doctor/reports" element={<DoctorDashboard />} />
+          <Route path="/doctor/history" element={<DoctorDashboard />} />
+          <Route path="/doctor/schedule" element={<DoctorDashboard />} />
+          <Route path="/doctor/profile" element={<DoctorDashboard />} />
 
           {/* ==================================================
               📄 MOU Generator — Dynamic content (Firestore-driven)

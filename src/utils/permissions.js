@@ -15,8 +15,7 @@ export const TABS = {
 };
 
 // ==================================================
-// ✅ PERMISSION REGISTRY – সব permission এখানে
-// নতুন feature যোগ করলে শুধু এখানে add করুন
+// ✅ PERMISSION REGISTRY
 // ==================================================
 export const PERMISSION_REGISTRY = [
   {
@@ -75,6 +74,29 @@ export const PERMISSION_REGISTRY = [
       { key: 'doctor.schedule.edit', label: 'Schedule এডিট' },
     ],
   },
+  // ✅ NEW: Doctor's own dashboard permissions
+  {
+    module: "Doctor's Own Dashboard",
+    icon: '🩺',
+    permissions: [
+      {
+        key: 'doctor_dashboard.view',
+        label: 'নিজের ড্যাশবোর্ড দেখুন',
+      },
+      {
+        key: 'doctor_dashboard.patients.view',
+        label: 'নিজের রোগী দেখুন',
+      },
+      {
+        key: 'doctor_dashboard.reports.view',
+        label: 'নিজের রিপোর্ট দেখুন',
+      },
+      {
+        key: 'doctor_dashboard.profile.view',
+        label: 'নিজের প্রোফাইল দেখুন',
+      },
+    ],
+  },
   {
     module: 'Location Manager',
     icon: '📍',
@@ -98,9 +120,7 @@ export const PERMISSION_REGISTRY = [
   {
     module: 'Activity Log',
     icon: '📜',
-    permissions: [
-      { key: 'activity_log.view', label: 'Activity Log দেখুন' },
-    ],
+    permissions: [{ key: 'activity_log.view', label: 'Activity Log দেখুন' }],
   },
   {
     module: 'Archived',
@@ -127,7 +147,7 @@ export const PERMISSION_REGISTRY = [
 ];
 
 // ==================================================
-// ✅ Flat list of all permission keys
+// ✅ Flat list
 // ==================================================
 export const ALL_PERMISSIONS = PERMISSION_REGISTRY.flatMap((m) =>
   m.permissions.map((p) => p.key)
@@ -137,16 +157,10 @@ export const ALL_PERMISSIONS = PERMISSION_REGISTRY.flatMap((m) =>
 // ✅ Default Role Templates
 // ==================================================
 export const ROLE_TEMPLATES = {
-  // ---------- ADMIN — সব permission ----------
   admin: {
     label: 'Admin',
-    permissions: ALL_PERMISSIONS.reduce(
-      (acc, k) => ({ ...acc, [k]: true }),
-      {}
-    ),
+    permissions: ALL_PERMISSIONS.reduce((acc, k) => ({ ...acc, [k]: true }), {}),
   },
-
-  // ---------- SUB-ADMIN — প্রায় সব, তবে কিছু নিষিদ্ধ ----------
   'sub-admin': {
     label: 'Sub-Admin',
     permissions: ALL_PERMISSIONS.reduce((acc, k) => {
@@ -158,8 +172,6 @@ export const ROLE_TEMPLATES = {
       return acc;
     }, {}),
   },
-
-  // ---------- EDITOR — ডেটা এন্ট্রি ও বুকিং ----------
   editor: {
     label: 'Editor',
     permissions: {
@@ -174,13 +186,19 @@ export const ROLE_TEMPLATES = {
       'booking.referral_edit': true,
       'booking.print': true,
       'booking.qr_view': true,
-      'booking.archive': true,
       'marketing_report.view': true,
       'marketing_report.filter': true,
+      'booking.archive': true,
     },
   },
-
-  // ---------- MODERATOR — সীমিত দেখার অনুমতি ----------
+  viewer: {
+    label: 'Viewer',
+    permissions: {
+      'dashboard.view': true,
+      'statistics.view': true,
+      'booking.view': true,
+    },
+  },
   moderator: {
     label: 'Moderator',
     permissions: {
@@ -191,57 +209,49 @@ export const ROLE_TEMPLATES = {
       'activity_log.view': true,
     },
   },
-
-  // ---------- VIEWER — শুধু দেখার অনুমতি ----------
-  viewer: {
-    label: 'Viewer',
-    permissions: {
-      'dashboard.view': true,
-      'statistics.view': true,
-      'booking.view': true,
-    },
-  },
-
-  // ---------- PATIENT — রোগী (নিজের বুকিং) ----------
-  // ✅ নতুন role — Google/Email দিয়ে signup করলে এটাই পাবে
-  patient: {
-    label: 'রোগী',
-    permissions: {
-      'dashboard.view': true,
-      'booking.view': true,
-      'booking.create': true,
-      'booking.edit': true,
-      'booking.qr_view': true,
-    },
-  },
-
-  // ---------- PENDING — কোনো অনুমতি নেই ----------
   pending: {
     label: 'Pending',
     permissions: {},
+  },
+  // ✅ NEW: Doctor-specific role (only own dashboard)
+  doctor: {
+    label: 'Doctor',
+    permissions: {
+      'doctor_dashboard.view': true,
+      'doctor_dashboard.patients.view': true,
+      'doctor_dashboard.reports.view': true,
+      'doctor_dashboard.profile.view': true,
+    },
   },
 };
 
 // ==================================================
 // ✅ Effective Permissions Calculator
-// Priority: user.overrides > role.permissions
+// Priority: designation=Doctor → doctor template
+//           else → role template
+//           user.overrides > template
 // ==================================================
 export const calculateEffectivePermissions = (userData) => {
   if (!userData) return {};
 
-  // Admin সব সময় সব permission পাবে
+  // ✅ Admin all-access
   if (userData.role === 'admin') {
     return ALL_PERMISSIONS.reduce((acc, k) => ({ ...acc, [k]: true }), {});
   }
 
-  const roleTemplate =
-    ROLE_TEMPLATES[userData.role] || ROLE_TEMPLATES.pending;
+  // ✅ Doctor designation → doctor template (unless overridden by role)
+  let roleTemplate;
+  if (userData.designation === 'Doctor' && userData.role === 'viewer') {
+    roleTemplate = ROLE_TEMPLATES.doctor;
+  } else {
+    roleTemplate = ROLE_TEMPLATES[userData.role] || ROLE_TEMPLATES.pending;
+  }
+
   const rolePerms = roleTemplate.permissions || {};
   const overrides = userData.permissionOverrides || {};
 
   const effective = {};
   ALL_PERMISSIONS.forEach((key) => {
-    // User-specific override আগে
     if (Object.prototype.hasOwnProperty.call(overrides, key)) {
       effective[key] = overrides[key] === true;
     } else {
@@ -253,22 +263,19 @@ export const calculateEffectivePermissions = (userData) => {
 };
 
 // ==================================================
-// ✅ hasPermission helper
+// ✅ Helpers
 // ==================================================
 export const hasPermission = (effectivePermissions, key) => {
   if (!effectivePermissions) return false;
   return effectivePermissions[key] === true;
 };
 
-// ==================================================
-// ✅ Role label helper
-// ==================================================
 export const getRoleLabel = (role) => {
   return ROLE_TEMPLATES[role]?.label || role || 'Unknown';
 };
 
 // ==================================================
-// ✅ Permission dependency (view required for others)
+// ✅ Permission dependency
 // ==================================================
 export const PERMISSION_DEPENDENCIES = {
   'booking.create': 'booking.view',
@@ -295,6 +302,11 @@ export const PERMISSION_DEPENDENCIES = {
   'doctor.delete': 'doctor.view',
   'doctor.schedule.edit': 'doctor.view',
 
+  // ✅ Doctor dashboard dependencies
+  'doctor_dashboard.patients.view': 'doctor_dashboard.view',
+  'doctor_dashboard.reports.view': 'doctor_dashboard.view',
+  'doctor_dashboard.profile.view': 'doctor_dashboard.view',
+
   'location.create': 'location.view',
   'location.edit': 'location.view',
   'location.delete': 'location.view',
@@ -314,13 +326,21 @@ export const PERMISSION_DEPENDENCIES = {
   'user.permission_manage': 'user.view',
 };
 
-// ==================================================
-// ✅ Auto-enable dependent permission
-// ==================================================
 export const applyDependencies = (perms) => {
   const result = { ...perms };
   Object.entries(PERMISSION_DEPENDENCIES).forEach(([child, parent]) => {
     if (result[child]) result[parent] = true;
   });
   return result;
+};
+
+// ==================================================
+// ✅ Doctor-specific helpers
+// ==================================================
+export const isDoctorDesignation = (userData) => {
+  return userData?.designation === 'Doctor' && !!userData?.doctorId;
+};
+
+export const canAccessAdminFeatures = (userData) => {
+  return userData?.role === 'admin' || userData?.role === 'sub-admin';
 };
