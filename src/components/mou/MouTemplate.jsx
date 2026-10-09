@@ -6,8 +6,9 @@
 // ✅ Times New Roman 14pt / 18.5pt line height
 // ✅ 36pt margin
 // ✅ Dynamic placeholders {{key}}, **bold**, @@optional@@
-// ✅ Dynamic logo watermark (from Firebase Storage URL)
+// ✅ Dynamic logo watermark (from Vercel Blob URL)
 // ✅ Dynamic beneficiary label — FULL BOLD
+// ✅ Page 3 layout fixed (no content cut-off)
 // ✅ Print CSS with page-break
 // ==================================================
 import React from 'react';
@@ -35,9 +36,6 @@ const getValue = (data, key) => {
 
   // ==================================================
   // ✅ Special: beneficiary_full_text — FULL BOLD LINE
-  // Priority: custom full line → auto-composed from parts
-  // All return values are wrapped in **...** so the
-  // entire line becomes <b>...</b> after processing.
   // ==================================================
   if (key === 'beneficiary_full_text') {
     const custom = (data.beneficiary_full_text || '').trim();
@@ -62,7 +60,7 @@ const getValue = (data, key) => {
   }
 
   // ==================================================
-  // ✅ Legacy fallbacks (backward compatibility)
+  // ✅ Legacy fallbacks
   // ==================================================
   if (key === 'beneficiary_label') {
     return (
@@ -176,9 +174,9 @@ export const buildPages = (data) => {
 <p>This agreement is being executed in 2(two) identical originals, one to be retained by ${B1} Authority and other copy ${B2}.</p>`,
 
     // ==================================================
-    // PAGE 3
+    // PAGE 3  ← ✅ Fixed: no content cut-off
     // ==================================================
-    `<p style="margin-top:17.8pt;text-align:left">**9. Contact Person:**</p>
+    `<p style="margin-top:6pt;text-align:left">**9. Contact Person:**</p>
 <table class="ct">
   <colgroup><col style="width:243pt"><col style="width:225pt"></colgroup>
   <tr>
@@ -190,13 +188,13 @@ export const buildPages = (data) => {
     <td>@@org2_contact_name|**@@<br>@@org2_contact_designation|@@{{org2_name}}<br>@@org2_contact_phone|Mobile: @@@@org2_contact_email|Email: @@</td>
   </tr>
 </table>
-<p style="line-height:16.1pt">The parties knowingly signed this Medical Services Agreement in duplicate as of the date set forth below.</p>
+<p style="line-height:16.1pt;margin-top:10pt">The parties knowingly signed this Medical Services Agreement in duplicate as of the date set forth below.</p>
 <p style="line-height:16.1pt;text-align:left">Date: {{agreement_date_fmt}}</p>
 <div class="sg" style="grid-template-columns:253.5pt 1fr;font-size:11pt;line-height:13.5pt;margin:2pt 0 0 1.4pt">
   <span>For &amp; On Behalf of **{{org1_short_name}}**</span>
   <span>On behalf of **{{org2_short_name}}**</span>
 </div>
-<div class="sg" style="grid-template-columns:288pt 1fr;margin-top:61.6pt">
+<div class="sg" style="grid-template-columns:288pt 1fr;margin-top:38pt">
   <span class="d">${'…'.repeat(15)}</span>
   <span class="d">.${'…'.repeat(13)}</span>
   <b>{{org1_signatory_name}}</b>
@@ -206,8 +204,8 @@ export const buildPages = (data) => {
   <span>{{org1_name}}</span>
   <span>{{org2_name}}</span>
 </div>
-<p class="c" style="font-size:12pt;line-height:13.8pt;margin-top:49.5pt">In presence of</p>
-<div class="sg" style="grid-template-columns:252pt 1fr;margin-top:65.6pt">
+<p class="c" style="font-size:12pt;line-height:13.8pt;margin-top:32pt">In presence of</p>
+<div class="sg" style="grid-template-columns:252pt 1fr;margin-top:42pt">
   <span class="d">${'…'.repeat(15)}</span>
   <span class="d">${'…'.repeat(13)}</span>
   <b>{{org1_witness_name}}</b>
@@ -237,7 +235,7 @@ export const MOU_PRINT_CSS = `
     width: 595.32pt;
     min-height: 841.92pt;
     box-sizing: border-box;
-    padding: 36.5pt 36pt 0;
+    padding: 36.5pt 36pt 48pt;    /* ✅ bottom padding */
     margin: 0 0 14px;
     background: #ffffff;
     color: #000000;
@@ -289,7 +287,7 @@ export const MOU_PRINT_CSS = `
     position: absolute;
     left: 35pt;
     right: 34pt;
-    top: 778pt;
+    bottom: 12pt;                 /* ✅ bottom থেকে distance */
     border-top: 1pt solid #d9d9d9;
     padding: 1.5pt 0 0 1pt;
     font: 11pt Calibri, Carlito, "Segoe UI", sans-serif;
@@ -353,8 +351,7 @@ export const MOU_PRINT_CSS = `
     .mou-page {
       margin: 0;
       box-shadow: none;
-      height: 841pt;
-      min-height: 0;
+      min-height: 841pt;
       break-after: page;
     }
     .mou-page:last-child { break-after: auto; }
