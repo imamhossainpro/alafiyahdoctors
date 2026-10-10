@@ -1,24 +1,31 @@
 // src/components/admin/Overview.jsx
+// ==================================================
+// 📊 Overview — Admin Dashboard Statistics
+// ==================================================
+// ✅ Date filter: Today / Yesterday / 7d / 30d / All / Custom
+// ✅ All KPIs, charts, trends respect the filter
+// ✅ Bengali date display
+// ==================================================
 import React, { useState, useEffect, useMemo } from 'react';
 import { OverviewSkeleton } from '../ui/SkeletonScreens';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, PieChart, Pie, Cell, Legend, LabelList,
-  LineChart, Line
+  LineChart, Line,
 } from 'recharts';
-import { X, MapPin, TrendingUp } from 'lucide-react';
+import { X, MapPin, TrendingUp, Calendar, Filter } from 'lucide-react';
 import { subscribeToPatients } from '../../services/patientService';
 import { getAllLocations } from '../../services/locationService';
 import { useHospital } from '../../context/HospitalContext';
 
-// ---------- কালার কনস্ট্যান্ট ----------
+// ---------- Color constants ----------
 const STATUS_COLORS = {
   pending: '#f59e0b',
   confirmed: '#3b82f6',
   'checked-in': '#8b5cf6',
   completed: '#22c55e',
   cancelled: '#ef4444',
-  'no-show': '#6b7280'
+  'no-show': '#6b7280',
 };
 
 const CHART_COLORS = [
@@ -27,10 +34,13 @@ const CHART_COLORS = [
   STATUS_COLORS['checked-in'],
   STATUS_COLORS.completed,
   STATUS_COLORS.cancelled,
-  STATUS_COLORS['no-show']
+  STATUS_COLORS['no-show'],
 ];
 
-const OTHER_COLORS = ['#1c5fa8', '#2f9e52', '#9c3a9c', '#d1392f', '#0e8ca3', '#e0653a', '#4438ab', '#159a72', '#8a6a2e', '#7a2d5c'];
+const OTHER_COLORS = [
+  '#1c5fa8', '#2f9e52', '#9c3a9c', '#d1392f', '#0e8ca3',
+  '#e0653a', '#4438ab', '#159a72', '#8a6a2e', '#7a2d5c',
+];
 
 const styles = {
   dashboardContainer: { display: 'flex', flexDirection: 'column', gap: '24px', color: '#1e293b' },
@@ -49,113 +59,142 @@ const styles = {
 const CSSString = `
   .overview-main-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
   @media (max-width: 900px) { .overview-main-grid { grid-template-columns: 1fr; } }
-  
-  .location-drill-modal {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.5);
-    z-index: 999;
+
+  /* ============================================
+     ✅ Date Filter Bar
+     ============================================ */
+  .ov-filter-bar {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .ov-filter-label {
     display: flex;
     align-items: center;
-    justify-content: center;
-    padding: 20px;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #475569;
+    margin-right: 4px;
+  }
+  .ov-filter-preset {
+    padding: 7px 14px;
+    border-radius: 20px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #334155;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+  }
+  .ov-filter-preset:hover {
+    background: #eef2f7;
+    border-color: #cbd5e1;
+  }
+  .ov-filter-preset.active {
+    background: #1c5fa8;
+    color: #ffffff;
+    border-color: #1c5fa8;
+    box-shadow: 0 2px 8px rgba(28, 95, 168, 0.25);
+  }
+  .ov-filter-custom {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 6px 10px;
+    border-radius: 10px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+  }
+  .ov-filter-custom input[type="date"] {
+    padding: 6px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 13px;
+    background: #fff;
+    color: #1e293b;
+  }
+  .ov-filter-custom span {
+    font-size: 12.5px;
+    color: #64748b;
+    font-weight: 600;
+  }
+  .ov-filter-result {
+    margin-left: auto;
+    background: #dbeafe;
+    color: #1e40af;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12.5px;
+    font-weight: 700;
+  }
+  .ov-filter-active {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fde68a;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-left: 4px;
+  }
+
+  /* Location drill modal */
+  .location-drill-modal {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
   }
   .location-drill-content {
-    background: #fff;
-    border-radius: 16px;
-    max-width: 800px;
-    width: 100%;
-    max-height: 80vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+    background: #fff; border-radius: 16px; max-width: 800px; width: 100%;
+    max-height: 80vh; display: flex; flex-direction: column; overflow: hidden;
     box-shadow: 0 20px 60px rgba(0,0,0,0.2);
   }
   .location-drill-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px 24px;
-    border-bottom: 1px solid #e2e8f0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 24px; border-bottom: 1px solid #e2e8f0;
   }
-  .location-drill-header h3 {
-    margin: 0;
-    color: #1c5fa8;
-  }
-  .location-drill-body {
-    padding: 20px 24px;
-    overflow-y: auto;
-    flex: 1;
-  }
-  .location-drill-body table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 14px;
-  }
-  .location-drill-body th {
-    background: #f1f5f9;
-    padding: 10px 12px;
-    text-align: left;
-    color: #475569;
-    font-weight: 600;
-  }
-  .location-drill-body td {
-    padding: 8px 12px;
-    border-bottom: 1px solid #eef2f6;
-  }
-  .location-drill-body tr:hover td {
-    background: #f8fafc;
-  }
-  .close-drill-btn {
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    color: #64748b;
-    padding: 4px;
-    border-radius: 50%;
-    transition: background 0.2s;
-  }
-  .close-drill-btn:hover {
-    background: #f1f5f9;
-  }
-  .location-trend-selector {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-bottom: 16px;
-  }
+  .location-drill-header h3 { margin: 0; color: #1c5fa8; }
+  .location-drill-body { padding: 20px 24px; overflow-y: auto; flex: 1; }
+  .location-drill-body table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .location-drill-body th { background: #f1f5f9; padding: 10px 12px; text-align: left; color: #475569; font-weight: 600; }
+  .location-drill-body td { padding: 8px 12px; border-bottom: 1px solid #eef2f6; }
+  .location-drill-body tr:hover td { background: #f8fafc; }
+  .close-drill-btn { background: transparent; border: none; cursor: pointer; color: #64748b; padding: 4px; border-radius: 50%; transition: background 0.2s; }
+  .close-drill-btn:hover { background: #f1f5f9; }
+  .location-trend-selector { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
   .location-trend-selector button {
-    padding: 4px 14px;
-    border: 1px solid #e2e8f0;
-    border-radius: 20px;
-    background: #fff;
-    font-size: 13px;
-    cursor: pointer;
-    transition: all 0.2s;
+    padding: 4px 14px; border: 1px solid #e2e8f0; border-radius: 20px;
+    background: #fff; font-size: 13px; cursor: pointer; transition: all 0.2s;
   }
-  .location-trend-selector button.active {
-    background: #1c5fa8;
-    color: #fff;
-    border-color: #1c5fa8;
-  }
-  .location-trend-selector button:hover:not(.active) {
-    background: #f1f5f9;
-  }
+  .location-trend-selector button.active { background: #1c5fa8; color: #fff; border-color: #1c5fa8; }
+  .location-trend-selector button:hover:not(.active) { background: #f1f5f9; }
 
-  /* ✅ Content fade-in animation */
-  @keyframes overview-fade-in {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  .content-fade-in {
-    animation: overview-fade-in 0.5s ease both;
+  @keyframes overview-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .content-fade-in { animation: overview-fade-in 0.5s ease both; }
+
+  @media (max-width: 640px) {
+    .ov-filter-bar { padding: 10px 12px; gap: 8px; }
+    .ov-filter-preset { padding: 6px 10px; font-size: 11.5px; }
+    .ov-filter-result { margin-left: 0; width: 100%; text-align: center; justify-content: center; }
   }
 `;
 
-// ---------- ড্রিল-ডাউন মোডাল ----------
+// ---------- Location Drill-Down Modal ----------
 const LocationDrillModal = ({ location, patients, onClose }) => {
   if (!location) return null;
-  
+
   return (
     <div className="location-drill-modal" onClick={onClose}>
       <div className="location-drill-content" onClick={(e) => e.stopPropagation()}>
@@ -167,7 +206,9 @@ const LocationDrillModal = ({ location, patients, onClose }) => {
         </div>
         <div className="location-drill-body">
           {patients.length === 0 ? (
-            <div style={{ textAlign: 'center', color: '#94a3b8', padding: '30px' }}>এই লোকেশনে কোনো রোগী নেই</div>
+            <div style={{ textAlign: 'center', color: '#94a3b8', padding: '30px' }}>
+              এই লোকেশনে কোনো রোগী নেই
+            </div>
           ) : (
             <table>
               <thead>
@@ -186,14 +227,24 @@ const LocationDrillModal = ({ location, patients, onClose }) => {
                     <td>{p.name || '-'}</td>
                     <td>{p.mobile || '-'}</td>
                     <td>{p.doctorName || '-'}</td>
-                    <td><span style={{ 
-                      background: p.status === 'completed' ? '#dcfce7' : p.status === 'checked-in' ? '#ede9fe' : '#fef3c7',
-                      color: p.status === 'completed' ? '#166534' : p.status === 'checked-in' ? '#6d28d9' : '#92400e',
-                      padding: '2px 10px',
-                      borderRadius: '20px',
-                      fontSize: '12px',
-                      fontWeight: '600'
-                    }}>{p.status || 'pending'}</span></td>
+                    <td>
+                      <span
+                        style={{
+                          background:
+                            p.status === 'completed' ? '#dcfce7' :
+                            p.status === 'checked-in' ? '#ede9fe' : '#fef3c7',
+                          color:
+                            p.status === 'completed' ? '#166534' :
+                            p.status === 'checked-in' ? '#6d28d9' : '#92400e',
+                          padding: '2px 10px',
+                          borderRadius: '20px',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                        }}
+                      >
+                        {p.status || 'pending'}
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -206,15 +257,90 @@ const LocationDrillModal = ({ location, patients, onClose }) => {
 };
 
 // ==================================================
+// ✅ Date utilities for filtering
+// ==================================================
+const pad = (n) => String(n).padStart(2, '0');
+
+const toDateString = (d) => {
+  if (!d) return '';
+  const date = d instanceof Date ? d : new Date(d);
+  if (isNaN(date.getTime())) return '';
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};
+
+const getTodayStr = () => toDateString(new Date());
+
+const getYesterdayStr = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return toDateString(d);
+};
+
+const getNDaysAgoStr = (n) => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return toDateString(d);
+};
+
+const normalizeBookingDate = (bookingDate) => {
+  if (!bookingDate) return null;
+  if (typeof bookingDate === 'string') return bookingDate.split('T')[0];
+  if (bookingDate?.toDate) return toDateString(bookingDate.toDate());
+  if (bookingDate?.seconds) return toDateString(new Date(bookingDate.seconds * 1000));
+  try {
+    return toDateString(new Date(bookingDate));
+  } catch {
+    return null;
+  }
+};
+
+const formatBengaliDate = (isoDate) => {
+  if (!isoDate) return '';
+  const months = [
+    'জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন',
+    'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর',
+  ];
+  const [y, m, d] = isoDate.split('-').map(Number);
+  if (!y || !m || !d) return isoDate;
+  return `${d} ${months[m - 1]} ${y}`;
+};
+
+// ==================================================
+// ✅ Filter presets
+// ==================================================
+const FILTER_PRESETS = [
+  { key: 'all', label: 'সব' },
+  { key: 'today', label: 'আজ' },
+  { key: 'yesterday', label: 'গতকাল' },
+  { key: 'week', label: 'গত ৭ দিন' },
+  { key: 'month', label: 'গত ৩০ দিন' },
+  { key: 'custom', label: 'কাস্টম' },
+];
+
+const getPresetRange = (preset) => {
+  const today = getTodayStr();
+  switch (preset) {
+    case 'today':
+      return { start: today, end: today };
+    case 'yesterday': {
+      const y = getYesterdayStr();
+      return { start: y, end: y };
+    }
+    case 'week':
+      return { start: getNDaysAgoStr(6), end: today };
+    case 'month':
+      return { start: getNDaysAgoStr(29), end: today };
+    case 'all':
+    default:
+      return { start: '', end: '' };
+  }
+};
+
+// ==================================================
 // ✅ Helper: Determine patient type (override first)
 // ==================================================
 const getPatientTypeForOverview = (appt, patientMap) => {
-  // Priority 1: Manual override on appointment
-  if (appt.patientTypeOverride) {
-    return appt.patientTypeOverride;
-  }
-
-  // Priority 2: Compute from patient visits
+  if (appt.patientTypeOverride) return appt.patientTypeOverride;
   const patientId = appt.patientId;
   if (!patientId) return null;
   const patient = patientMap[patientId];
@@ -229,19 +355,17 @@ const getPatientTypeForOverview = (appt, patientMap) => {
 
   if (doctorVisits.length === 0) return 'নতুন';
 
-  const sorted = [...doctorVisits].sort(
-    (a, b) => new Date(b.date) - new Date(a.date)
-  );
+  const sorted = [...doctorVisits].sort((a, b) => new Date(b.date) - new Date(a.date));
   const lastVisit = sorted[0];
   const diffDays = Math.ceil(
-    Math.abs(new Date(lastVisit.date) - new Date(appt.bookingDate)) /
-      (1000 * 60 * 60 * 24)
+    Math.abs(new Date(lastVisit.date) - new Date(appt.bookingDate)) / (1000 * 60 * 60 * 24)
   );
-
   return diffDays <= 7 ? 'রিপোর্ট' : 'ফলোআপ';
 };
 
-// ---------- মূল কম্পোনেন্ট ----------
+// ==================================================
+// ✅ MAIN COMPONENT
+// ==================================================
 export default function Overview({ appointments }) {
   const { currentHospital } = useHospital();
   const hospitalId = currentHospital?.id;
@@ -253,7 +377,12 @@ export default function Overview({ appointments }) {
   const [drillPatients, setDrillPatients] = useState([]);
   const [trendDays, setTrendDays] = useState(7);
 
-  // ✅ Real-time Patient Subscription
+  // ✅ Date filter state
+  const [filterPreset, setFilterPreset] = useState('all');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+
+  // ✅ Real-time patient subscription
   useEffect(() => {
     if (!hospitalId) {
       setLoading(false);
@@ -287,23 +416,47 @@ export default function Overview({ appointments }) {
   }, [hospitalId]);
 
   // ==================================================
-  // ✅ রোগীর ক্যাটাগরি নির্ধারণ (override priority)
+  // ✅ Compute active date range
+  // ==================================================
+  const activeRange = useMemo(() => {
+    if (filterPreset === 'custom') {
+      return { start: customStart || '', end: customEnd || '' };
+    }
+    return getPresetRange(filterPreset);
+  }, [filterPreset, customStart, customEnd]);
+
+  const isFiltered = !!(activeRange.start || activeRange.end);
+
+  // ==================================================
+  // ✅ Filtered appointments (by bookingDate)
+  // ==================================================
+  const filteredAppointments = useMemo(() => {
+    if (!appointments || !Array.isArray(appointments)) return [];
+
+    if (!isFiltered) return appointments;
+
+    return appointments.filter((appt) => {
+      const apptDate = normalizeBookingDate(appt.bookingDate);
+      if (!apptDate) return false;
+
+      if (activeRange.start && apptDate < activeRange.start) return false;
+      if (activeRange.end && apptDate > activeRange.end) return false;
+      return true;
+    });
+  }, [appointments, activeRange, isFiltered]);
+
+  // ==================================================
+  // ✅ Patient category counts (uses filtered)
   // ==================================================
   const categorizedCounts = useMemo(() => {
-    if (!appointments.length) {
+    if (!filteredAppointments.length) {
       return { new: 0, report: 0, followup: 0, total: 0 };
     }
-
     const patientMap = {};
-    patients.forEach((p) => {
-      patientMap[p.id] = p;
-    });
+    patients.forEach((p) => { patientMap[p.id] = p; });
 
-    let newCount = 0;
-    let reportCount = 0;
-    let followupCount = 0;
-
-    appointments.forEach((appt) => {
+    let newCount = 0, reportCount = 0, followupCount = 0;
+    filteredAppointments.forEach((appt) => {
       const type = getPatientTypeForOverview(appt, patientMap);
       if (type === 'নতুন') newCount++;
       else if (type === 'রিপোর্ট') reportCount++;
@@ -314,16 +467,16 @@ export default function Overview({ appointments }) {
       new: newCount,
       report: reportCount,
       followup: followupCount,
-      total: appointments.length,
+      total: filteredAppointments.length,
     };
-  }, [appointments, patients]);
+  }, [filteredAppointments, patients]);
 
-  // ---------- লোকেশন ডেটা ----------
+  // ---------- Location data ----------
   const locationData = useMemo(() => {
     const activeLocationNames = new Set(locations.map((loc) => loc.name));
     const map = {};
 
-    appointments.forEach((appt) => {
+    filteredAppointments.forEach((appt) => {
       let locKey = appt.locationName || appt.address || appt.locationId || 'অজানা';
 
       if (locKey === 'অজানা' || locKey === appt.locationId) {
@@ -331,15 +484,10 @@ export default function Overview({ appointments }) {
         if (matchedLoc) locKey = matchedLoc.name;
         else return;
       }
-
       if (locKey !== 'অজানা' && !activeLocationNames.has(locKey)) return;
 
       if (!map[locKey]) {
-        map[locKey] = {
-          name: locKey,
-          count: 0,
-          patients: [],
-        };
+        map[locKey] = { name: locKey, count: 0, patients: [] };
       }
       map[locKey].count += 1;
       map[locKey].patients.push(appt);
@@ -348,29 +496,28 @@ export default function Overview({ appointments }) {
     return Object.values(map)
       .filter((loc) => loc.count > 0)
       .sort((a, b) => b.count - a.count);
-  }, [appointments, locations]);
+  }, [filteredAppointments, locations]);
 
-  // ---------- ট্রেন্ড ডেটা ----------
+  // ---------- Trend data (uses filtered) ----------
   const trendData = useMemo(() => {
-    if (appointments.length === 0 || locationData.length === 0) return [];
+    if (filteredAppointments.length === 0 || locationData.length === 0) return [];
 
     const today = new Date();
     const dateArray = [];
     for (let i = trendDays - 1; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(today.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
-      dateArray.push(dateStr);
+      dateArray.push(toDateString(d));
     }
 
     const locationNames = locationData.map((loc) => loc.name);
 
-    const result = dateArray.map((dateStr) => {
+    return dateArray.map((dateStr) => {
       const dayData = { date: dateStr };
       let totalCount = 0;
       locationNames.forEach((locName) => {
-        const count = appointments.filter((a) => {
-          const apptDate = a.bookingDate ? a.bookingDate.split('T')[0] : '';
+        const count = filteredAppointments.filter((a) => {
+          const apptDate = a.bookingDate ? String(a.bookingDate).split('T')[0] : '';
           const locKey = a.locationName || a.address || a.locationId || 'অজানা';
           let match = false;
           if (locKey === a.locationId) {
@@ -387,18 +534,16 @@ export default function Overview({ appointments }) {
       dayData.total = totalCount;
       return dayData;
     });
+  }, [filteredAppointments, locationData, trendDays, locations]);
 
-    return result;
-  }, [appointments, locationData, trendDays, locations]);
-
-  // ---------- Status Counts ----------
-  const total = appointments.length;
-  const pending = appointments.filter((a) => a.status === 'pending').length;
-  const confirmed = appointments.filter((a) => a.status === 'confirmed').length;
-  const checkedIn = appointments.filter((a) => a.status === 'checked-in').length;
-  const completed = appointments.filter((a) => a.status === 'completed').length;
-  const cancelled = appointments.filter((a) => a.status === 'cancelled').length;
-  const noShow = appointments.filter((a) => a.status === 'no-show').length;
+  // ---------- Status counts (uses filtered) ----------
+  const total = filteredAppointments.length;
+  const pending = filteredAppointments.filter((a) => a.status === 'pending').length;
+  const confirmed = filteredAppointments.filter((a) => a.status === 'confirmed').length;
+  const checkedIn = filteredAppointments.filter((a) => a.status === 'checked-in').length;
+  const completed = filteredAppointments.filter((a) => a.status === 'completed').length;
+  const cancelled = filteredAppointments.filter((a) => a.status === 'cancelled').length;
+  const noShow = filteredAppointments.filter((a) => a.status === 'no-show').length;
 
   const bookingToVisit = total > 0 ? ((completed + checkedIn) / total) * 100 : 0;
   const checkedInRate = total > 0 ? (checkedIn / total) * 100 : 0;
@@ -407,7 +552,7 @@ export default function Overview({ appointments }) {
 
   // ---------- Doctor Data ----------
   const doctorCounts = {};
-  appointments.forEach((a) => {
+  filteredAppointments.forEach((a) => {
     doctorCounts[a.doctorName] = (doctorCounts[a.doctorName] || 0) + 1;
   });
   const doctorData = Object.entries(doctorCounts)
@@ -416,7 +561,7 @@ export default function Overview({ appointments }) {
 
   // ---------- Department Data ----------
   const departmentCounts = {};
-  appointments.forEach((a) => {
+  filteredAppointments.forEach((a) => {
     departmentCounts[a.doctorDept || 'Unknown'] =
       (departmentCounts[a.doctorDept || 'Unknown'] || 0) + 1;
   });
@@ -426,7 +571,7 @@ export default function Overview({ appointments }) {
 
   // ---------- Age Data ----------
   const ageGroups = { '০-১২': 0, '১৩-২০': 0, '২১-৩০': 0, '৩১-৪০': 0, '৪১-৫০': 0, '৫০+': 0 };
-  appointments.forEach((a) => {
+  filteredAppointments.forEach((a) => {
     if (a.age) {
       const age = Number(a.age);
       if (age <= 12) ageGroups['০-১২']++;
@@ -441,7 +586,7 @@ export default function Overview({ appointments }) {
 
   // ---------- Referral Data ----------
   const referralCounts = {};
-  appointments.forEach((a) => {
+  filteredAppointments.forEach((a) => {
     const src = a.referralSource || 'Unknown';
     referralCounts[src] = (referralCounts[src] || 0) + 1;
   });
@@ -455,7 +600,7 @@ export default function Overview({ appointments }) {
     }
   };
 
-  // ✅ Status Data — stable with useMemo
+  // ✅ Status Data
   const statusData = useMemo(
     () => [
       { name: 'Pending', value: pending },
@@ -478,7 +623,7 @@ export default function Overview({ appointments }) {
     [categorizedCounts]
   );
 
-  // ✅ Stable keys for Pie re-render (Recharts caching workaround)
+  // ✅ Stable keys for Pie re-render
   const statusPieKey = useMemo(
     () => `status-${statusData.map((d) => d.value).join('-')}`,
     [statusData]
@@ -500,25 +645,16 @@ export default function Overview({ appointments }) {
     for (let i = 6; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(d.getDate() - i);
-
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      const dateStr = `${year}-${month}-${day}`;
-
+      const dateStr = toDateString(d);
       const dayIndex = d.getDay();
       const dayName = banglaDays[dayIndex === 0 ? 6 : dayIndex - 1];
 
-      const count = appointments.filter((a) => {
-        const apptDate = a.bookingDate ? a.bookingDate.split('T')[0] : '';
+      const count = filteredAppointments.filter((a) => {
+        const apptDate = a.bookingDate ? String(a.bookingDate).split('T')[0] : '';
         return apptDate === dateStr;
       }).length;
 
-      days.push({
-        name: dayName,
-        date: dateStr,
-        count: count,
-      });
+      days.push({ name: dayName, date: dateStr, count });
     }
     return days;
   };
@@ -528,8 +664,7 @@ export default function Overview({ appointments }) {
   const renderLegend = (value, entry) => {
     const totalValue = entry.payload.value;
     const percentage = total > 0 ? ((totalValue / total) * 100).toFixed(0) : 0;
-    const color =
-      entry.payload.fill || STATUS_COLORS[entry.payload.name?.toLowerCase()] || '#64748b';
+    const color = entry.payload.fill || '#64748b';
     return (
       <span style={{ color: '#475569', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}>
         <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', background: color }} />
@@ -566,13 +701,109 @@ export default function Overview({ appointments }) {
     { label: 'Cancellation Rate', value: cancellationRate.toFixed(1), color: '#ef4444', prefix: '%' },
   ];
 
-  // ✅ Loading state — Skeleton Screen
+  const handlePresetChange = (preset) => {
+    setFilterPreset(preset);
+    if (preset !== 'custom') {
+      // Clear custom dates when switching to preset
+      setCustomStart('');
+      setCustomEnd('');
+    } else {
+      // Prefill custom with today if empty
+      if (!customStart && !customEnd) {
+        setCustomStart(getTodayStr());
+        setCustomEnd(getTodayStr());
+      }
+    }
+  };
+
+  const clearFilter = () => {
+    setFilterPreset('all');
+    setCustomStart('');
+    setCustomEnd('');
+  };
+
+  // ✅ Loading state
   if (loading) return <OverviewSkeleton />;
 
-  // ✅ Loaded state — content fade-in animation সহ
+  // ✅ Loaded state
   return (
     <div style={styles.dashboardContainer} className="content-fade-in">
       <style>{CSSString}</style>
+
+      {/* ============================================
+          ✅ Date Filter Bar
+          ============================================ */}
+      <div className="ov-filter-bar">
+        <div className="ov-filter-label">
+          <Filter size={16} color="#1c5fa8" />
+          তারিখ:
+        </div>
+
+        {FILTER_PRESETS.map((p) => (
+          <button
+            key={p.key}
+            type="button"
+            className={`ov-filter-preset ${filterPreset === p.key ? 'active' : ''}`}
+            onClick={() => handlePresetChange(p.key)}
+          >
+            {p.label}
+          </button>
+        ))}
+
+        {filterPreset === 'custom' && (
+          <div className="ov-filter-custom">
+            <input
+              type="date"
+              value={customStart}
+              onChange={(e) => setCustomStart(e.target.value)}
+              max={customEnd || undefined}
+            />
+            <span>→</span>
+            <input
+              type="date"
+              value={customEnd}
+              onChange={(e) => setCustomEnd(e.target.value)}
+              min={customStart || undefined}
+            />
+          </div>
+        )}
+
+        <div className="ov-filter-result">
+          📊 {filteredAppointments.length} টি booking
+        </div>
+      </div>
+
+      {/* Active filter indicator */}
+      {isFiltered && (
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginTop: '-12px' }}>
+          <span className="ov-filter-active">
+            <Calendar size={12} />
+            {activeRange.start && activeRange.end && activeRange.start === activeRange.end
+              ? formatBengaliDate(activeRange.start)
+              : activeRange.start && activeRange.end
+              ? `${formatBengaliDate(activeRange.start)} → ${formatBengaliDate(activeRange.end)}`
+              : activeRange.start
+              ? `${formatBengaliDate(activeRange.start)} থেকে`
+              : `${formatBengaliDate(activeRange.end)} পর্যন্ত`}
+          </span>
+          <button
+            type="button"
+            onClick={clearFilter}
+            style={{
+              background: 'transparent',
+              border: '1px solid #fca5a5',
+              color: '#dc2626',
+              padding: '4px 12px',
+              borderRadius: '20px',
+              fontSize: '12px',
+              fontWeight: '600',
+              cursor: 'pointer',
+            }}
+          >
+            ✕ ফিল্টার মুছুন
+          </button>
+        </div>
+      )}
 
       {/* KPI Grid */}
       <div style={styles.kpiGrid}>
@@ -627,7 +858,6 @@ export default function Overview({ appointments }) {
           </ResponsiveContainer>
         </div>
 
-        {/* ✅ Status Pie Chart — with dynamic KEY for reactivity */}
         <div style={styles.chartCard}>
           <h4 style={styles.chartTitle}>স্ট্যাটাস ডিস্ট্রিবিউশন</h4>
           <ResponsiveContainer width="100%" height={250}>
@@ -708,7 +938,7 @@ export default function Overview({ appointments }) {
         </div>
       </div>
 
-      {/* ✅ NEW: Patient Category Pie Chart */}
+      {/* Patient Category Pie */}
       <div style={styles.chartCard}>
         <h4 style={styles.chartTitle}>রোগীর ক্যাটাগরি বিশ্লেষণ</h4>
         <ResponsiveContainer width="100%" height={280}>
@@ -736,7 +966,8 @@ export default function Overview({ appointments }) {
           </PieChart>
         </ResponsiveContainer>
         <div style={{ fontSize: '12px', color: '#94a3b8', textAlign: 'center', marginTop: '8px' }}>
-          মোট {total} টি booking এর মধ্যে {categorizedCounts.new} নতুন, {categorizedCounts.report} রিপোর্ট, {categorizedCounts.followup} ফলোআপ
+          {isFiltered ? 'ফিল্টার করা' : 'মোট'} {total} টি booking এর মধ্যে {categorizedCounts.new} নতুন,{' '}
+          {categorizedCounts.report} রিপোর্ট, {categorizedCounts.followup} ফলোআপ
         </div>
       </div>
 
@@ -747,15 +978,9 @@ export default function Overview({ appointments }) {
           লোকেশন ট্রেন্ড অ্যানালাইসিস (গত {trendDays} দিন)
         </h4>
         <div className="location-trend-selector">
-          <button className={trendDays === 7 ? 'active' : ''} onClick={() => setTrendDays(7)}>
-            গত ৭ দিন
-          </button>
-          <button className={trendDays === 14 ? 'active' : ''} onClick={() => setTrendDays(14)}>
-            গত ১৪ দিন
-          </button>
-          <button className={trendDays === 30 ? 'active' : ''} onClick={() => setTrendDays(30)}>
-            গত ৩০ দিন
-          </button>
+          <button className={trendDays === 7 ? 'active' : ''} onClick={() => setTrendDays(7)}>গত ৭ দিন</button>
+          <button className={trendDays === 14 ? 'active' : ''} onClick={() => setTrendDays(14)}>গত ১৪ দিন</button>
+          <button className={trendDays === 30 ? 'active' : ''} onClick={() => setTrendDays(30)}>গত ৩০ দিন</button>
         </div>
         {trendData.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
