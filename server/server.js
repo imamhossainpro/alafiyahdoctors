@@ -1,9 +1,9 @@
 // server.js
 // ==================================================
-// 🏥 আল-আফিয়া হাসপাতাল — Backend Server
+// 🏥 আল-আফিয়াহ হাসপাতাল — Backend Server
 // ==================================================
 // ✅ WhatsApp via Baileys (v6.7.9)
-// ✅ SMS via Automas Technologies (Masking)
+// ✅ SMS via Automas Technologies (Masking) — Unicode Support
 // ✅ Email via Gmail
 // ✅ FCM Push Notifications
 // ✅ Uses nameEn / doctorNameEn (no transliteration)
@@ -33,7 +33,6 @@ const { getMessaging } = require('firebase-admin/messaging');
 let serviceAccount;
 
 try {
-  // Option 1: Load from environment variable (base64 encoded) — for production
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
     const decoded = Buffer.from(
       process.env.FIREBASE_SERVICE_ACCOUNT,
@@ -42,7 +41,6 @@ try {
     serviceAccount = JSON.parse(decoded);
     console.log('✅ serviceAccount loaded from env variable');
   } else {
-    // Option 2: Load from file — for local development
     serviceAccount = require('./serviceAccountKey.json');
     console.log('✅ serviceAccountKey.json loaded');
   }
@@ -101,6 +99,13 @@ app.use(express.json());
 const HOSPITAL_ID = 'alafiyah_main';
 const HOSPITAL_WHATSAPP = '8801889885094';
 
+// ✅ Automas SMS Configuration (আপনি পরে .env এ পরিবর্তন করবেন)
+const AUTOMAS_API_KEY =
+  process.env.AUTOMAS_API_KEY || '8198172360c6b3fb6c26714305ff8e47';
+const AUTOMAS_SENDER_ID = process.env.AUTOMAS_SENDER_ID || 'AL AFIYAH';
+const AUTOMAS_API_URL =
+  process.env.AUTOMAS_API_URL || 'https://api.automas.com.bd/smsapiv4';
+
 let sock = null;
 let isConnected = false;
 let reconnectAttempts = 0;
@@ -123,6 +128,27 @@ function formatDateDDMMYYYY(dateStr) {
   const parts = String(dateStr).split('-');
   if (parts.length === 3 && parts[0].length === 4) {
     return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  }
+  return dateStr;
+}
+
+// ==================================================
+// ✅ Helper: Format date as DD Month YYYY (Bengali)
+// ==================================================
+function formatDateBengali(dateStr) {
+  if (!dateStr) return '';
+  const months = [
+    'জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন',
+    'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর',
+  ];
+  const parts = String(dateStr).split('-');
+  if (parts.length === 3 && parts[0].length === 4) {
+    const year = parts[0];
+    const month = parseInt(parts[1], 10);
+    const day = parseInt(parts[2], 10);
+    if (month >= 1 && month <= 12) {
+      return `${day} ${months[month - 1]} ${year}`;
+    }
   }
   return dateStr;
 }
@@ -224,78 +250,122 @@ async function sendToDevice(fcmToken, notification, data = {}) {
 }
 
 // ==================================================
-// 📱 SMS Sending Function — Automas Technologies
+// 📱 SMS Sending Function — Automas Technologies (JSON API v4)
 // ==================================================
-// ✅ Masking SMS via Automas API
-// ⚠️ IMPORTANT: Automas API endpoint & body format
-//    আপনার Automas documentation দেখে নিচের format adjust করুন
+// ✅ বাংলা (Unicode) SMS সাপোর্ট
+// ✅ Automas API v4 (JSON format)
+// ✅ Response status code: 0 = Success
 // ==================================================
-async function sendSMS(phoneNumber, message) {
+async function sendSMS(phoneNumber, message, options = {}) {
   try {
-    const apiKey = process.env.AUTOMAS_API_KEY;
-    const senderId = process.env.AUTOMAS_SENDER_ID;
-    const baseUrl = process.env.AUTOMAS_API_BASE_URL;
-
-    if (!apiKey) {
+    if (!AUTOMAS_API_KEY) {
       console.error('❌ AUTOMAS_API_KEY not set');
-      return false;
-    }
-    if (!baseUrl) {
-      console.error('❌ AUTOMAS_API_BASE_URL not set');
-      return false;
-    }
-    if (!senderId) {
-      console.error('⚠️ AUTOMAS_SENDER_ID not set — masking may fail');
+      return { success: false, error: 'API key missing' };
     }
 
-    // ✅ Phone number format: 8801XXXXXXXXX
-    let number = phoneNumber.replace(/[^0-9]/g, '');
+    // ✅ Phone number format: 8801XXXXXXXXX (without +)
+    let number = String(phoneNumber).replace(/[^0-9]/g, '');
     if (number.startsWith('0')) {
       number = '88' + number.substring(1);
     } else if (!number.startsWith('88')) {
       number = '88' + number;
     }
 
-    console.log(`📤 Sending SMS via Automas to: ${number}`);
+    // ✅ Auto-detect Unicode (Bengali) vs ASCII
+    const isUnicode = /[\u0980-\u09FF]/.test(message);
 
-    // ==================================================
-    // ✅ Automas API Request — Template
-    // ⚠️ আপনার Automas documentation অনুযায়ী নিচের
-    //    endpoint, body format, এবং response check adjust করুন
-    // ==================================================
-    const response = await axios.post(
-      `${baseUrl}/api/sendsms`, // ← Automas-এর সঠিক endpoint বসান
-      {
-        api_key: apiKey,
-        sender_id: senderId, // ← Masking name (e.g., "ALAFIYAH")
-        to: number,
-        msg: message,
-      },
-      {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 15000,
-      }
+    // ✅ Build request body (Automas API v4 — JSON)
+    const requestBody = {
+      api_key: AUTOMAS_API_KEY,
+      senderid: AUTOMAS_SENDER_ID,
+      type: isUnicode ? 'unicode' : 'text',
+      scheduledDateTime: '',
+      msg: message,
+      contacts: number,
+    };
+
+    // ✅ For Unicode SMS, add smsformat=8
+    if (isUnicode) {
+      requestBody.smsformat = 8;
+    }
+
+    console.log(
+      `📤 Sending SMS via Automas to: ${number} | Type: ${
+        isUnicode ? 'Unicode (বাংলা)' : 'ASCII'
+      } | Length: ${message.length}`
     );
 
-    console.log(`📥 Automas response:`, JSON.stringify(response.data, null, 2));
+    // ✅ Send request to Automas API
+    const response = await axios.post(AUTOMAS_API_URL, requestBody, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 20000,
+    });
 
-    // ⚠️ Automas response format — documentation অনুযায়ী check করুন
-    // এই example-এ আমরা ধরে নিচ্ছি response.status === 'success'
-    if (response.data && response.data.status === 'success') {
-      console.log(`📱 SMS sent successfully: ${response.data.message}`);
-      return true;
+    console.log(
+      `📥 Automas response:`,
+      JSON.stringify(response.data, null, 2)
+    );
+
+    // ✅ Check Automas response
+    // Expected: { "response": [{ "status": 0, "id": 296334, "msisdn": "..." }] }
+    if (
+      response.data &&
+      response.data.response &&
+      Array.isArray(response.data.response) &&
+      response.data.response.length > 0
+    ) {
+      const firstResult = response.data.response[0];
+      const statusCode = firstResult.status;
+
+      if (statusCode === 0) {
+        console.log(
+          `📱 SMS sent successfully | ID: ${firstResult.id} | MSISDN: ${firstResult.msisdn}`
+        );
+        return {
+          success: true,
+          messageId: firstResult.id,
+          msisdn: firstResult.msisdn,
+        };
+      } else {
+        // Status code meaning
+        const errorMessages = {
+          101: 'Invalid Message Length',
+          102: 'Sender Not Valid',
+          103: 'Authentication Failed',
+          104: 'Invalid User',
+          105: 'Invalid MSISDN',
+          106: 'Incorrect API Key',
+          107: 'User Account Suspended',
+          108: 'IP Address Not Allowed',
+          109: 'API Access Not Allowed',
+          110: 'Do Not Disturb (DND)',
+          111: 'Spam Word Detected',
+          1000: 'Insufficient Balance',
+          2300: 'Destination Route Issue',
+          2400: 'Destination Route Not Permitted',
+          3300: 'System Error',
+          2000: 'Provider Unavailable',
+          3000: 'Provider Unavailable',
+          4000: 'Provider Unavailable',
+        };
+        const errorMsg =
+          errorMessages[statusCode] || `Unknown error (status ${statusCode})`;
+        console.error(`❌ SMS send failed: ${errorMsg}`);
+        return { success: false, error: errorMsg, statusCode };
+      }
     } else {
-      const errorMsg =
-        response.data?.message || response.data?.error || 'Unknown error';
-      console.error(`❌ SMS send failed: ${errorMsg}`);
-      return false;
+      console.error(
+        `❌ Unexpected Automas response format:`,
+        JSON.stringify(response.data)
+      );
+      return { success: false, error: 'Invalid response format' };
     }
   } catch (error) {
     console.error('❌ Automas SMS API error:', error.message);
     if (error.response) {
-      console.error('   Response:', error.response.data);
+      console.error('   Response:', JSON.stringify(error.response.data));
     }
-    return false;
+    return { success: false, error: error.message };
   }
 }
 
@@ -412,23 +482,37 @@ Admin confirm korle patient SMS/Email pabe.`;
 }
 
 // ==================================================
-// 🆕 TRIGGER 2: Admin Confirm → Patient SMS + Email + In-App + FCM
+// 🆕 TRIGGER 2: Admin Confirm → Patient SMS (বাংলা) + Email + In-App + FCM
 // ==================================================
 async function sendPatientConfirmation(data, appointmentId) {
   const englishPatientName = data.nameEn || data.name || '';
+  const bengaliPatientName = data.name || englishPatientName;
   const englishDoctorName = data.doctorNameEn || data.doctorName || '';
+  const bengaliDoctorName = data.doctorName || englishDoctorName;
 
   const formattedDate = formatDateDDMMYYYY(data.bookingDate);
+  const bengaliDate = formatDateBengali(data.bookingDate);
   const serial = data.serialNo || '';
   const arrivalTime = data.doctorTime || 'As scheduled';
 
-  const smsText = `Al-Afiyah Hospital
-Dear ${englishPatientName},
-Serial: ${serial}
-Doctor: ${englishDoctorName}
-Date: ${formattedDate}
-Time: ${arrivalTime}
-Booking Confirmed. Thank you.`;
+  // ==================================================
+  // ✅ বাংলা Unicode SMS (BTRC নিয়ম অনুযায়ী)
+  // ⚠️ Length limit: 70 characters per SMS (Unicode)
+  // ==================================================
+  const smsText = `আল-আফিয়াহ হসপিটাল
+প্রিয় ${bengaliPatientName},
+সিরিয়াল: ${serial}
+ডাক্তার: ${bengaliDoctorName}
+তারিখ: ${bengaliDate}
+পৌঁছানোর সময়: ${arrivalTime}
+বুকিং নিশ্চিত হয়েছে। ধন্যবাদ।`;
+
+  // ✅ Check SMS length (Unicode limit: 70 chars per SMS)
+  if (smsText.length > 70) {
+    console.warn(
+      `⚠️ Bengali SMS is ${smsText.length} chars (limit 70 per SMS). Will be split into multiple SMS.`
+    );
+  }
 
   const emailHtml = `
     <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; border: 1px solid #e2e8f0; padding: 24px; border-radius: 12px;">
@@ -456,18 +540,18 @@ Booking Confirmed. Thank you.`;
     </div>
   `;
 
-  // ---------- ১. এসএমএস ----------
+  // ---------- ১. এসএমএস (বাংলা Unicode) ----------
   let mobile = data.mobile;
   if (mobile) {
-    mobile = mobile.replace(/[^0-9]/g, '');
+    mobile = String(mobile).replace(/[^0-9]/g, '');
     if (mobile.startsWith('0')) mobile = '88' + mobile.substring(1);
     else if (!mobile.startsWith('88')) mobile = '88' + mobile;
 
-    const smsSent = await sendSMS(mobile, smsText);
-    if (smsSent) {
+    const smsResult = await sendSMS(mobile, smsText);
+    if (smsResult.success) {
       console.log(`📱 SMS sent to ${mobile}`);
     } else {
-      console.log(`⚠️ SMS failed for ${mobile}`);
+      console.log(`⚠️ SMS failed for ${mobile}: ${smsResult.error}`);
     }
   }
 
@@ -810,6 +894,46 @@ app.post('/api/notification/send-promo', async (req, res) => {
 });
 
 // ==================================================
+// 🧪 Test SMS API Endpoint (Debug Only)
+// ==================================================
+// ⚠️ Production এ এই endpoint সরিয়ে ফেলুন বা protect করুন
+app.post('/api/test-sms', async (req, res) => {
+  try {
+    const { mobile, message } = req.body;
+
+    if (!mobile || !message) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing mobile or message',
+      });
+    }
+
+    console.log(`🧪 Test SMS to ${mobile}`);
+
+    const result = await sendSMS(mobile, message);
+
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================================================
+// 💰 Balance Check API (Automas)
+// ==================================================
+app.get('/api/sms-balance', async (req, res) => {
+  try {
+    const response = await axios.get(
+      `https://api.automas.com.bd/getbalancev3?apikey=${AUTOMAS_API_KEY}`,
+      { timeout: 10000 }
+    );
+    res.json({ success: true, balance: response.data });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================================================
 // 🏠 Root endpoint
 // ==================================================
 app.get('/', (req, res) => {
@@ -817,6 +941,11 @@ app.get('/', (req, res) => {
     status: 'ok',
     hospital: HOSPITAL_ID,
     whatsapp: isConnected ? 'connected' : 'disconnected',
+    sms: {
+      provider: 'Automas Technologies',
+      senderId: AUTOMAS_SENDER_ID,
+      unicodeSupported: true,
+    },
     timestamp: new Date().toISOString(),
   });
 });
@@ -922,6 +1051,7 @@ app.listen(PORT, () => {
   console.log(`📁 Hospital ID: ${HOSPITAL_ID}`);
   console.log(`📁 Appointments path: ${appointmentsPath}`);
   console.log(`📞 Hospital WhatsApp: ${HOSPITAL_WHATSAPP}`);
+  console.log(`📱 SMS Provider: Automas Technologies (${AUTOMAS_SENDER_ID})`);
   console.log(`🌐 CORS allowed origins: ${ALLOWED_ORIGINS.join(', ')}\n`);
 });
 
