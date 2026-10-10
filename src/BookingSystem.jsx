@@ -9,6 +9,7 @@
 // ✅ Doctor quals + workplace + specialty shown
 // ✅ Referral source NOT auto-selected
 // ✅ GA4 booking_complete event
+// ✅ Mobile stored in international format (8801XXXXXXXXX)
 // ==================================================
 import React, { useState, useEffect, useMemo } from 'react';
 import { db, doc, getDoc, setDoc, addDoc, collection, trackEvent } from './firebase';
@@ -21,7 +22,9 @@ import { generateQRCode } from './services/qrService';
 import { addLocationFromBooking } from './services/locationService';
 import { useHospital } from './context/HospitalContext';
 import { useAuth } from './context/AuthContext';
-import BangladeshMobileInput from './components/BangladeshMobileInput';
+import BangladeshMobileInput, {
+  toDisplayFormat,
+} from './components/BangladeshMobileInput';
 import {
   Send,
   Loader2,
@@ -494,9 +497,15 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
         throw new Error('রোগীর নাম শুধু ইংরেজি অক্ষরে লিখুন');
       }
       if (!formData.age.trim()) throw new Error('বয়স লিখুন');
+
+      // ✅ Mobile validation — international format (8801XXXXXXXXX)
       if (!formData.mobile.trim()) throw new Error('মোবাইল নম্বর লিখুন');
-      if (formData.mobile.length < 10)
-        throw new Error('সঠিক ১০ বা ১১ digit মোবাইল নম্বর লিখুন');
+      if (formData.mobile.length !== 13 || !formData.mobile.startsWith('880')) {
+        throw new Error(
+          'সঠিক ১১ digit মোবাইল নম্বর লিখুন (যেমন: 01889885094)'
+        );
+      }
+
       if (!selectedDoctor) throw new Error('ডাক্তার নির্বাচন করুন');
       if (!selectedDate) throw new Error('তারিখ নির্বাচন করুন');
 
@@ -514,6 +523,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
 
       const patientName = formData.nameEn.trim();
 
+      // ✅ formData.mobile is already in international format (8801889885094)
       let patient = await findPatientByMobile(hospitalId, formData.mobile);
       let patientId;
       let isNewPatient = true;
@@ -530,7 +540,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
         const newPatient = await createPatient(hospitalId, {
           name: patientName,
           nameEn: patientName,
-          mobile: formData.mobile,
+          mobile: formData.mobile, // ✅ International format
           age: formData.age,
           gender: formData.gender,
           address: formData.address,
@@ -581,6 +591,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
         ...formData,
         name: patientName,
         nameEn: patientName,
+        mobile: formData.mobile, // ✅ International format
         doctorNameEn: selectedDoctor.nameEn || '',
         referralSource: finalReferralSource,
         patientId,
@@ -1054,7 +1065,9 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
               </div>
               <div className="summary-row">
                 <span className="summary-label">মোবাইল:</span>
-                <span className="summary-value">{formData.mobile || '-'}</span>
+                <span className="summary-value">
+                  {formData.mobile ? toDisplayFormat(formData.mobile) : '-'}
+                </span>
               </div>
               <div className="summary-row">
                 <span className="summary-label">নির্বাচিত ডাক্তার:</span>
