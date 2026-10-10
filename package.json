@@ -1,5 +1,6 @@
 {
   "name": "al_afiyah_hospital",
+  "type": "module",
   "private": true,
   "version": "0.0.0",
   "scripts": {

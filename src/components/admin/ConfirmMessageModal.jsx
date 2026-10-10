@@ -4,12 +4,13 @@
 // ==================================================
 // ✅ Bengali message only (matches server.js)
 // ✅ No emoji, no link, no hospital prefix
+// ✅ API endpoint: https://api.alafiyahhospital.com
 // ==================================================
 import React, { useState, useEffect } from 'react';
 import { X, Send, Loader2, Edit3, AlertCircle, Clock } from 'lucide-react';
 
-const RAILWAY_API_URL =
-  'https://soothing-healing-production-8e36.up.railway.app';
+// ✅ Nur Host — Production API
+const API_BASE_URL = 'https://api.alafiyahhospital.com';
 
 // ==================================================
 // ✅ Quick Time Preset Options
@@ -100,7 +101,7 @@ export default function ConfirmMessageModal({
 
     try {
       const response = await fetch(
-        `${RAILWAY_API_URL}/api/appointment/confirm-with-message`,
+        `${API_BASE_URL}/api/appointment/confirm-with-message`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

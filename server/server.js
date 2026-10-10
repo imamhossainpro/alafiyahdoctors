@@ -99,12 +99,17 @@ app.use(express.json());
 const HOSPITAL_ID = 'alafiyah_main';
 const HOSPITAL_WHATSAPP = '8801889885094';
 
-// ✅ Automas SMS Configuration (আপনি পরে .env এ পরিবর্তন করবেন)
-const AUTOMAS_API_KEY =
-  process.env.AUTOMAS_API_KEY || '8198172360c6b3fb6c26714305ff8e47';
+// ✅ Automas SMS Configuration — load from .env only
+const AUTOMAS_API_KEY = process.env.AUTOMAS_API_KEY;
 const AUTOMAS_SENDER_ID = process.env.AUTOMAS_SENDER_ID || 'AL AFIYAH';
 const AUTOMAS_API_URL =
   process.env.AUTOMAS_API_URL || 'https://api.automas.com.bd/smsapiv4';
+
+if (!AUTOMAS_API_KEY) {
+  console.error(
+    '❌ AUTOMAS_API_KEY .env থেকে load হয়নি! SMS কাজ করবে না।'
+  );
+}
 
 let sock = null;
 let isConnected = false;
@@ -275,6 +280,8 @@ async function sendSMS(phoneNumber, message, options = {}) {
     const isUnicode = /[\u0980-\u09FF]/.test(message);
 
     // ✅ Build request body (Automas API v4 — JSON)
+    // ⚠️ NOTE: smsformat field intentionally NOT sent — Automas
+    //    auto-detects format from `type` field.
     const requestBody = {
       api_key: AUTOMAS_API_KEY,
       senderid: AUTOMAS_SENDER_ID,
@@ -284,16 +291,13 @@ async function sendSMS(phoneNumber, message, options = {}) {
       contacts: number,
     };
 
-    // ✅ For Unicode SMS, add smsformat=8
-    if (isUnicode) {
-      requestBody.smsformat = 8;
-    }
-
     console.log(
-      `📤 Sending SMS via Automas to: ${number} | Type: ${
-        isUnicode ? 'Unicode (বাংলা)' : 'ASCII'
-      } | Length: ${message.length}`
+      `📤 Sending SMS via Automas | To: ${number} | Type: ${
+        isUnicode ? 'unicode' : 'text'
+      } | SenderID: ${AUTOMAS_SENDER_ID} | Length: ${message.length}`
     );
+    console.log(`📝 SMS Body:\n${message}\n`);
+    console.log(`📦 Request Body:`, JSON.stringify(requestBody, null, 2));
 
     // ✅ Send request to Automas API
     const response = await axios.post(AUTOMAS_API_URL, requestBody, {
