@@ -485,58 +485,44 @@ Admin confirm korle patient SMS/Email pabe.`;
 // 🆕 TRIGGER 2: Admin Confirm → Patient SMS (বাংলা) + Email + In-App + FCM
 // ==================================================
 async function sendPatientConfirmation(data, appointmentId) {
-  const englishPatientName = data.nameEn || data.name || '';
-  const bengaliPatientName = data.name || englishPatientName;
-  const englishDoctorName = data.doctorNameEn || data.doctorName || '';
-  const bengaliDoctorName = data.doctorName || englishDoctorName;
-
-  const formattedDate = formatDateDDMMYYYY(data.bookingDate);
-  const bengaliDate = formatDateBengali(data.bookingDate);
+  const bengaliPatientName = data.name || '';
+  const bengaliDoctorName = data.doctorName || '';
+  const bookingDate = data.bookingDate || '';
   const serial = data.serialNo || '';
-  const arrivalTime = data.doctorTime || 'As scheduled';
+  const arrivalTime = data.doctorTime || '';
 
   // ==================================================
-  // ✅ বাংলা Unicode SMS (BTRC নিয়ম অনুযায়ী)
-  // ⚠️ Length limit: 70 characters per SMS (Unicode)
+  // ✅ SMS — বাংলা Unicode (হুবহু ConfirmMessageModal এর preview)
   // ==================================================
-  const smsText = `আল-আফিয়াহ হসপিটাল
-প্রিয় ${bengaliPatientName},
+  const smsText = `প্রিয় ${bengaliPatientName},
+আপনার সিরিয়াল নিশ্চিত হয়েছে!
 সিরিয়াল: ${serial}
 ডাক্তার: ${bengaliDoctorName}
-তারিখ: ${bengaliDate}
-পৌঁছানোর সময়: ${arrivalTime}
-বুকিং নিশ্চিত হয়েছে। ধন্যবাদ।`;
+তারিখ: ${bookingDate}
+সময়: ${arrivalTime}
+ধন্যবাদ।`;
 
-  // ✅ Check SMS length (Unicode limit: 70 chars per SMS)
+  // ✅ Unicode SMS length check (70 chars/SMS)
   if (smsText.length > 70) {
     console.warn(
       `⚠️ Bengali SMS is ${smsText.length} chars (limit 70 per SMS). Will be split into multiple SMS.`
     );
   }
 
+  // ==================================================
+  // ✅ Email — একই মেসেজ, HTML-এ রূপান্তরিত
+  // ==================================================
   const emailHtml = `
-    <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; border: 1px solid #e2e8f0; padding: 24px; border-radius: 12px;">
-      <h2 style="color: #1c5fa8; margin-top: 0;">Al-Afiyah Hospital</h2>
-      <p><strong>Dear ${englishPatientName},</strong></p>
-      <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
-        <tr>
-          <td style="padding: 6px 0; color: #475569;">Serial:</td>
-          <td style="padding: 6px 0; font-weight: 700;">${serial}</td>
-        </tr>
-        <tr>
-          <td style="padding: 6px 0; color: #475569;">Doctor:</td>
-          <td style="padding: 6px 0; font-weight: 700;">${englishDoctorName}</td>
-        </tr>
-        <tr>
-          <td style="padding: 6px 0; color: #475569;">Date:</td>
-          <td style="padding: 6px 0; font-weight: 700;">${formattedDate}</td>
-        </tr>
-        <tr>
-          <td style="padding: 6px 0; color: #475569;">Time:</td>
-          <td style="padding: 6px 0; font-weight: 700;">${arrivalTime}</td>
-        </tr>
-      </table>
-      <p style="color: #16a34a; font-weight: 700;">Booking Confirmed. Thank you.</p>
+    <div style="font-family: 'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; line-height: 1.7; color: #1e293b;">
+      <p>প্রিয় ${bengaliPatientName},</p>
+      <p>আপনার সিরিয়াল নিশ্চিত হয়েছে!</p>
+      <p>
+        সিরিয়াল: ${serial}<br/>
+        ডাক্তার: ${bengaliDoctorName}<br/>
+        তারিখ: ${bookingDate}<br/>
+        সময়: ${arrivalTime}
+      </p>
+      <p>ধন্যবাদ।</p>
     </div>
   `;
 
@@ -561,7 +547,7 @@ async function sendPatientConfirmation(data, appointmentId) {
       await transporter.sendMail({
         from: process.env.EMAIL_USER,
         to: data.email,
-        subject: `Booking Confirmed - Serial ${serial}`,
+        subject: `আপনার সিরিয়াল নিশ্চিত - ${serial}`,
         html: emailHtml,
       });
       console.log(`📧 Email sent to ${data.email}`);
@@ -575,13 +561,13 @@ async function sendPatientConfirmation(data, appointmentId) {
     await saveInAppNotification(
       data.userId,
       {
-        title: 'Booking Confirmed',
-        body: `Serial #${serial} · ${englishDoctorName} · ${formattedDate}`,
+        title: 'সিরিয়াল নিশ্চিত হয়েছে',
+        body: `সিরিয়াল #${serial} · ${bengaliDoctorName} · ${bookingDate}`,
         type: 'booking_confirmed',
       },
       {
         appointmentId: appointmentId,
-        doctorName: englishDoctorName,
+        doctorName: bengaliDoctorName,
         serialNo: String(serial),
         bookingDate: data.bookingDate || '',
       }
@@ -612,8 +598,8 @@ async function sendPatientConfirmation(data, appointmentId) {
           await sendToDevice(
             fcmTokens[0],
             {
-              title: 'Booking Confirmed',
-              body: `Serial #${serial} · ${englishDoctorName}`,
+              title: 'সিরিয়াল নিশ্চিত হয়েছে',
+              body: `সিরিয়াল #${serial} · ${bengaliDoctorName}`,
             },
             {
               type: 'BOOKING_CONFIRMED',
