@@ -10,6 +10,7 @@
 // ✅ Referral source NOT auto-selected
 // ✅ GA4 booking_complete event
 // ✅ Mobile stored in international format (8801XXXXXXXXX)
+// ✅ Doctor image lightbox (click to view full size + close button)
 // ==================================================
 import React, { useState, useEffect, useMemo } from 'react';
 import { db, doc, getDoc, setDoc, addDoc, collection, trackEvent } from './firebase';
@@ -37,6 +38,7 @@ import {
   CheckCircle2,
   MessageSquare,
   PhoneCall,
+  X,
 } from 'lucide-react';
 
 const DEFAULT_HOSPITAL_ID = 'alafiyah_main';
@@ -168,8 +170,10 @@ const BookingCSS = `
 
   /* Doctor profile card (direct link mode) */
   .doctor-profile-card { background: linear-gradient(135deg, #1565C0 0%, #1976D2 50%, #2196F3 100%); border-radius: 16px; padding: 20px; margin-bottom: 24px; color: #fff; box-shadow: 0 8px 20px rgba(13,148,136,0.25); text-align: center; }
-  .doctor-profile-avatar { width: 80px; height: 80px; border-radius: 50%; background: rgba(255,255,255,0.2); border: 3px solid rgba(255,255,255,0.5); margin: 0 auto 12px; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 800; overflow: hidden; padding: 0; }
+  .doctor-profile-avatar { width: 80px; height: 80px; border-radius: 50%; background: rgba(255,255,255,0.2); border: 3px solid rgba(255,255,255,0.5); margin: 0 auto 12px; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 800; overflow: hidden; padding: 0; transition: transform 0.2s ease, box-shadow 0.2s ease; }
   .doctor-profile-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+  .doctor-profile-avatar.clickable { cursor: pointer; }
+  .doctor-profile-avatar.clickable:hover { transform: scale(1.05); box-shadow: 0 0 0 4px rgba(255,255,255,0.35), 0 8px 20px rgba(0,0,0,0.25); }
   .doctor-profile-name { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
   .doctor-profile-specialty { font-size: 15px; font-weight: 700; color: #fef3c7; margin-bottom: 6px; }
   .doctor-profile-quals { font-size: 13px; opacity: 0.95; line-height: 1.5; white-space: pre-line; margin-bottom: 6px; }
@@ -177,6 +181,18 @@ const BookingCSS = `
   .doctor-profile-dept { display: inline-block; background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; margin-bottom: 4px; }
   .doctor-profile-times { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 10px; }
   .doctor-profile-time { background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+
+  /* ✅ Doctor Image Lightbox */
+  .lightbox-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 20px; animation: lightboxFadeIn 0.25s ease; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+  @keyframes lightboxFadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .lightbox-content { position: relative; max-width: 90vw; max-height: 90vh; display: flex; flex-direction: column; align-items: center; gap: 16px; animation: lightboxZoomIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  @keyframes lightboxZoomIn { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .lightbox-image { max-width: 100%; max-height: 75vh; width: auto; height: auto; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); background: #fff; object-fit: contain; display: block; }
+  .lightbox-close-btn { position: absolute; top: -50px; right: -10px; width: 42px; height: 42px; border-radius: 50%; background: rgba(255,255,255,0.95); color: #1e293b; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: all 0.2s ease; z-index: 1; }
+  .lightbox-close-btn:hover { background: #dc2626; color: #fff; transform: rotate(90deg) scale(1.08); box-shadow: 0 6px 20px rgba(220,38,38,0.5); }
+  .lightbox-close-btn:active { transform: rotate(90deg) scale(0.95); }
+  .lightbox-caption { color: #fff; font-size: 16px; font-weight: 700; text-align: center; font-family: 'Hind Siliguri','Noto Sans Bengali',Arial,sans-serif; text-shadow: 0 2px 8px rgba(0,0,0,0.5); padding: 0 20px; line-height: 1.4; }
+  .lightbox-caption-sub { font-size: 13px; font-weight: 500; opacity: 0.85; margin-top: 4px; font-style: italic; }
 
   /* Allowed days hint */
   .allowed-days-hint { background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; color: #0f766e; display: flex; align-items: center; gap: 8px; }
@@ -263,6 +279,9 @@ const BookingCSS = `
     .success-info-text { text-align: center; font-size: 14px; }
     .success-buttons { flex-direction: column; }
     .success-btn { width: 100%; min-width: unset; }
+    .lightbox-close-btn { top: -46px; right: 0; width: 38px; height: 38px; }
+    .lightbox-image { max-height: 68vh; border-radius: 12px; }
+    .lightbox-caption { font-size: 14px; }
   }
 `;
 
@@ -298,6 +317,9 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
   const [appointmentId, setAppointmentId] = useState(null);
   const [bookedSerialNo, setBookedSerialNo] = useState(null);
 
+  // ✅ NEW: Doctor Image Lightbox state
+  const [showImageLightbox, setShowImageLightbox] = useState(false);
+
   const doctorAllowedDays = useMemo(() => {
     if (!preselectedDoctorId || !panels || panels.length === 0) return [];
 
@@ -311,6 +333,16 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
 
     return allowed;
   }, [preselectedDoctorId, panels]);
+
+  // ✅ NEW: ESC key দিয়ে lightbox বন্ধ
+  useEffect(() => {
+    if (!showImageLightbox) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setShowImageLightbox(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showImageLightbox]);
 
   useEffect(() => {
     if (!preselectedDoctorId || !departments || departments.length === 0) return;
@@ -734,7 +766,13 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
 
             {isDirectBooking && selectedDoctor && (
               <div className="doctor-profile-card">
-                <div className="doctor-profile-avatar">
+                <div
+                  className={`doctor-profile-avatar ${selectedDoctor.imageUrl ? 'clickable' : ''}`}
+                  onClick={() => {
+                    if (selectedDoctor.imageUrl) setShowImageLightbox(true);
+                  }}
+                  title={selectedDoctor.imageUrl ? 'ছবিতে ক্লিক করে বড় দেখুন' : ''}
+                >
                   {selectedDoctor.imageUrl ? (
                     <img
                       src={selectedDoctor.imageUrl}
@@ -1104,6 +1142,43 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
           </form>
         )}
       </div>
+
+      {/* ✅ Doctor Image Lightbox */}
+      {showImageLightbox && selectedDoctor?.imageUrl && (
+        <div
+          className="lightbox-overlay"
+          onClick={() => setShowImageLightbox(false)}
+        >
+          <div
+            className="lightbox-content"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="lightbox-close-btn"
+              onClick={() => setShowImageLightbox(false)}
+              aria-label="ছবি বন্ধ করুন"
+              title="বন্ধ করুন (Esc)"
+            >
+              <X size={20} strokeWidth={2.5} />
+            </button>
+
+            <img
+              src={selectedDoctor.imageUrl}
+              alt={selectedDoctor.name}
+              className="lightbox-image"
+            />
+
+            <div className="lightbox-caption">
+              {selectedDoctor.name}
+              {selectedDoctor.nameEn && (
+                <div className="lightbox-caption-sub">
+                  {selectedDoctor.nameEn}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
