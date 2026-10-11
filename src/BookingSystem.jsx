@@ -42,6 +42,7 @@ import {
   MessageSquare,
   PhoneCall,
   X,
+  Info,
 } from 'lucide-react';
 
 import {
@@ -865,16 +866,53 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
                     className="location-status-badge captured clickable"
                     onClick={() => setShowLocationDetails(true)}
                     title="বিস্তারিত দেখতে ক্লিক করুন"
+                    style={{
+                      cursor: 'pointer',
+                      border: 'none',
+                      fontFamily: 'inherit',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      transition: 'all 0.2s ease',
+                      padding: '6px 12px',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.02)';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(22, 163, 74, 0.25)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'scale(1)';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
                   >
                     <MapPin size={13} />
-                    {bookingLocation.summary}
+                    <span>{bookingLocation.summary}</span>
+
                     {bookingLocation.distance?.distanceText && (
-                      <span style={{ marginLeft: '4px' }}>
+                      <span style={{ marginLeft: '2px' }}>
                         · 🚗 {bookingLocation.distance.distanceText}
                       </span>
                     )}
-                    <span style={{ fontSize: '10px', opacity: 0.7, marginLeft: '4px' }}>
-                      ℹ️
+
+                    {/* ✅ NEW: "বিস্তারিত" Button */}
+                    <span
+                      style={{
+                        marginLeft: '8px',
+                        padding: '3px 10px',
+                        background: '#166534',
+                        color: '#fff',
+                        borderRadius: '10px',
+                        fontSize: '10.5px',
+                        fontWeight: '700',
+                        letterSpacing: '0.3px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                        boxShadow: '0 1px 3px rgba(22, 101, 52, 0.3)',
+                      }}
+                    >
+                      <Info size={10} strokeWidth={2.5} />
+                      বিস্তারিত
                     </span>
                   </button>
                 )}
