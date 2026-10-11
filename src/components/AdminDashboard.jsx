@@ -19,6 +19,7 @@ import {
   LOG_MODULES,
   LOG_ACTIONS,
 } from '../services/activityLogService';
+import LogEntry from './admin/LogEntry';
 
 // ==================================================
 // ✅ Lazy Load Components
@@ -230,6 +231,11 @@ export default function AdminDashboard({ user: propUser }) {
   const [panels, setPanels] = useState([]);
   // ✅ NEW: pending profile request count for badge
   const [pendingProfileRequests, setPendingProfileRequests] = useState(0);
+
+  // ✅ NEW: Activity Log Filters
+  const [logUserFilter, setLogUserFilter] = useState('all');
+  const [logModuleFilter, setLogModuleFilter] = useState('all');
+  const [logActionFilter, setLogActionFilter] = useState('all');
 
   // ==================================================
   // ✅ Initial Load – Marketing Team
@@ -671,19 +677,48 @@ export default function AdminDashboard({ user: propUser }) {
     [filteredAppointments]
   );
 
+  // ==================================================
+  // ✅ NEW: Activity Log — unique users for filter
+  // ==================================================
+  const uniqueLogUsers = useMemo(() => {
+    const map = new Map();
+    (activityLogs || []).forEach((log) => {
+      if (log.userId && !map.has(log.userId)) {
+        map.set(log.userId, {
+          id: log.userId,
+          name: log.userName || 'Unknown',
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [activityLogs]);
+
+  // ==================================================
+  // ✅ Filtered Activity Logs (with user, module, action, date)
+  // ==================================================
   const filteredAuditLogs = useMemo(() => {
     if (!activityLogs || !Array.isArray(activityLogs)) return [];
     return activityLogs.filter((item) => {
-      if (!item.timestamp) return true;
-      let logDate;
-      if (item.timestamp?.seconds) logDate = new Date(item.timestamp.seconds * 1000);
-      else if (typeof item.timestamp === 'string') logDate = new Date(item.timestamp);
-      else logDate = new Date(item.timestamp);
-      if (isNaN(logDate.getTime())) return true;
-      const logDateStr = logDate.toISOString().split('T')[0];
-      return logDateStr >= startDate && logDateStr <= endDate;
+      // Date filter
+      if (item.timestamp) {
+        let logDate;
+        if (item.timestamp?.seconds) logDate = new Date(item.timestamp.seconds * 1000);
+        else if (typeof item.timestamp === 'string') logDate = new Date(item.timestamp);
+        else logDate = new Date(item.timestamp);
+        if (!isNaN(logDate.getTime())) {
+          const logDateStr = logDate.toISOString().split('T')[0];
+          if (logDateStr < startDate || logDateStr > endDate) return false;
+        }
+      }
+      // User filter
+      if (logUserFilter !== 'all' && item.userId !== logUserFilter) return false;
+      // Module filter
+      if (logModuleFilter !== 'all' && item.module !== logModuleFilter) return false;
+      // Action filter
+      if (logActionFilter !== 'all' && item.action !== logActionFilter) return false;
+      return true;
     });
-  }, [activityLogs, startDate, endDate]);
+  }, [activityLogs, startDate, endDate, logUserFilter, logModuleFilter, logActionFilter]);
 
   // ==================================================
   // ✅ Loading State
@@ -1031,6 +1066,7 @@ export default function AdminDashboard({ user: propUser }) {
           </Suspense>
         </SafeArea>
       )}
+
       {tab === 'user_access' && can('user.view') && (
         <SafeArea>
           <AdminPanel
@@ -1045,31 +1081,178 @@ export default function AdminDashboard({ user: propUser }) {
         </SafeArea>
       )}
 
+      {/* ==================================================
+          ✅ ACTIVITY LOG — Full Featured (User Info + Filters)
+          ================================================== */}
       {tab === 'logs' && can('activity_log.view') && (
         <SafeArea>
-          <div style={{ background: '#fff', padding: '20px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-            <h3 style={{ margin: '0 0 16px 0' }}>📋 Activity Log</h3>
-            <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
+          <div
+            style={{
+              background: '#fff',
+              padding: '20px',
+              borderRadius: '10px',
+              border: '1px solid #e2e8f0',
+            }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '16px',
+                flexWrap: 'wrap',
+                gap: '10px',
+              }}
+            >
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                📋 Activity Log
+              </h3>
+              <div style={{ fontSize: '13px', color: '#64748b' }}>
+                Showing: <strong>{filteredAuditLogs.length}</strong> / {activityLogs.length}
+              </div>
+            </div>
+
+            {/* Filters */}
+            <div
+              style={{
+                display: 'flex',
+                gap: '10px',
+                marginBottom: '16px',
+                flexWrap: 'wrap',
+                padding: '12px',
+                background: '#f8fafc',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+              }}
+            >
+              {/* User Filter */}
+              <select
+                value={logUserFilter}
+                onChange={(e) => setLogUserFilter(e.target.value)}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  background: '#fff',
+                  fontFamily: 'inherit',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="all">👤 সব ইউজার</option>
+                {uniqueLogUsers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+
+              {/* Module Filter */}
+              <select
+                value={logModuleFilter}
+                onChange={(e) => setLogModuleFilter(e.target.value)}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  background: '#fff',
+                  fontFamily: 'inherit',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="all">📦 সব Module</option>
+                <option value="Booking List">Booking List</option>
+                <option value="Marketing Report">Marketing Report</option>
+                <option value="Location Manager">Location Manager</option>
+                <option value="Patient Management">Patient Management</option>
+                <option value="Settings">Settings</option>
+                <option value="User Management">User Management</option>
+              </select>
+
+              {/* Action Filter */}
+              <select
+                value={logActionFilter}
+                onChange={(e) => setLogActionFilter(e.target.value)}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  background: '#fff',
+                  fontFamily: 'inherit',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="all">⚡ সব Action</option>
+                <option value="CREATE">CREATE</option>
+                <option value="UPDATE">UPDATE</option>
+                <option value="DELETE">DELETE</option>
+                <option value="STATUS_CHANGE">STATUS_CHANGE</option>
+                <option value="PATIENT_TYPE_CHANGE">PATIENT_TYPE_CHANGE</option>
+                <option value="LOCATION_CHANGE">LOCATION_CHANGE</option>
+                <option value="MARKETING_OFFICER_CHANGE">MARKETING_OFFICER_CHANGE</option>
+                <option value="BOOKING_ARCHIVED">BOOKING_ARCHIVED</option>
+                <option value="BOOKING_RESTORED">BOOKING_RESTORED</option>
+                <option value="BOOKING_PERMANENTLY_DELETED">BOOKING_PERMANENTLY_DELETED</option>
+              </select>
+
+              {/* Reset */}
+              <button
+                onClick={() => {
+                  setLogUserFilter('all');
+                  setLogModuleFilter('all');
+                  setLogActionFilter('all');
+                }}
+                style={{
+                  padding: '6px 14px',
+                  background: '#f1f5f9',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '12.5px',
+                  fontWeight: '600',
+                  fontFamily: 'inherit',
+                }}
+              >
+                ✕ রিসেট
+              </button>
+            </div>
+
+            {/* Logs List */}
+            <div
+              style={{
+                maxHeight: '700px',
+                overflowY: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                paddingRight: '4px',
+              }}
+            >
               {logsLoading ? (
-                <div style={{ textAlign: 'center', color: '#64748b', padding: '30px' }}>লোড হচ্ছে...</div>
+                <div style={{ textAlign: 'center', color: '#64748b', padding: '30px' }}>
+                  লোড হচ্ছে...
+                </div>
               ) : filteredAuditLogs.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#64748b', padding: '30px' }}>কোনো লগ নেই</div>
+                <div
+                  style={{
+                    textAlign: 'center',
+                    color: '#64748b',
+                    padding: '40px 20px',
+                    background: '#f8fafc',
+                    borderRadius: '10px',
+                    border: '1px dashed #cbd5e1',
+                  }}
+                >
+                  <div style={{ fontSize: '40px', marginBottom: '10px' }}>📭</div>
+                  <p style={{ fontWeight: '600', color: '#475569' }}>কোনো লগ নেই</p>
+                </div>
               ) : (
-                filteredAuditLogs.map((log, idx) => {
-                  const ts = log.timestamp?.seconds
-                    ? new Date(log.timestamp.seconds * 1000)
-                    : log.timestamp
-                    ? new Date(log.timestamp)
-                    : null;
-                  return (
-                    <div key={log.id || idx} style={{ borderBottom: '1px solid #f1f5f9', padding: '12px 0' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
-                        <strong style={{ color: '#1c5fa8', fontSize: '14px' }}>{log.description || log.action}</strong>
-                        <small style={{ color: '#64748b' }}>{ts ? ts.toLocaleString('bn-BD') : '—'}</small>
-                      </div>
-                    </div>
-                  );
-                })
+                filteredAuditLogs.map((log, idx) => (
+                  <LogEntry key={log.id || idx} log={log} />
+                ))
               )}
             </div>
           </div>
