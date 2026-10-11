@@ -856,7 +856,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
                 {locationStatus === 'loading' && (
                   <div className="location-status-badge loading">
                     <Loader2 size={13} className="spin" />
-                    লোকেশন শনাক্ত হচ্ছে...
+                    লোড হচ্ছে...
                   </div>
                 )}
 
