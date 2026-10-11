@@ -4,7 +4,7 @@
 // ==================================================
 // ✅ Responsive: hides low-priority columns on small screens
 // ✅ departments + panels props for EditBookingModal
-// ✅ Check-in Location column (from QR scan tracking)
+// ✅ Location column: Booking location + Check-in location
 // ==================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { AppointmentsTableSkeleton } from '../ui/SkeletonScreens';
@@ -229,111 +229,184 @@ const calculatePatientType = (patient, appointment) => {
 };
 
 // ==================================================
-// ✅ Check-in Location Cell Renderer
+// ✅ Location Cell — Shows booking + check-in location
 // ==================================================
-const CheckInLocationCell = ({ appt }) => {
-  const loc = appt.checkInLocation;
-  const summary = appt.checkInLocationSummary;
+const LocationCell = ({ appt }) => {
+  // ✅ Priority: Check-in location > Booking location
+  const hasCheckIn =
+    appt.checkInLocation &&
+    appt.checkInLocationSummary &&
+    appt.checkInLocationSummary !== 'Location not captured' &&
+    appt.checkInLocationSummary !== 'Unknown Location';
 
-  // ✅ Has location data
-  if (loc && summary && summary !== 'Location not captured') {
-    return (
-      <div style={{ lineHeight: '1.3' }}>
-        {/* City / District summary */}
+  const hasBooking =
+    appt.bookingLocation &&
+    appt.bookingLocationSummary &&
+    appt.bookingLocationSummary !== 'Location not captured' &&
+    appt.bookingLocationSummary !== 'Unknown Location';
+
+  if (hasCheckIn) {
+    return renderLocationInfo({
+      type: 'checkin',
+      summary: appt.checkInLocationSummary,
+      loc: appt.checkInLocation,
+      distanceKm: appt.checkInDistanceKm ?? appt.checkInLocation?.distanceKm,
+      distanceText: appt.checkInDistanceText ?? appt.checkInLocation?.distanceText,
+      distanceCategory:
+        appt.checkInDistanceCategory ?? appt.checkInLocation?.distanceCategory,
+    });
+  }
+
+  if (hasBooking) {
+    return renderLocationInfo({
+      type: 'booking',
+      summary: appt.bookingLocationSummary,
+      loc: appt.bookingLocation,
+      distanceKm: appt.bookingDistanceKm ?? appt.bookingLocation?.distanceKm,
+      distanceText: appt.bookingDistanceText ?? appt.bookingLocation?.distanceText,
+      distanceCategory:
+        appt.bookingDistanceCategory ?? appt.bookingLocation?.distanceCategory,
+    });
+  }
+
+  return <span style={{ color: '#cbd5e1', fontSize: '11px' }}>—</span>;
+};
+
+// ✅ Helper: Render location info based on type
+const renderLocationInfo = ({
+  type,
+  summary,
+  loc,
+  distanceKm,
+  distanceText,
+  distanceCategory,
+}) => {
+  const distanceColor =
+    distanceCategory === 'near'      ? '#16a34a' :
+    distanceCategory === 'local'     ? '#0891b2' :
+    distanceCategory === 'district'  ? '#d97706' :
+    distanceCategory === 'far'       ? '#ea580c' :
+    distanceCategory === 'very-far'  ? '#dc2626' :
+                                        '#94a3b8';
+
+  const isCheckin = type === 'checkin';
+
+  return (
+    <div style={{ lineHeight: '1.3', minWidth: '120px' }}>
+      {/* Type badge */}
+      <div
+        style={{
+          display: 'inline-block',
+          background: isCheckin ? '#ede9fe' : '#dbeafe',
+          color: isCheckin ? '#6d28d9' : '#1e40af',
+          padding: '1px 7px',
+          borderRadius: '8px',
+          fontSize: '9.5px',
+          fontWeight: '700',
+          marginBottom: '3px',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {isCheckin ? '📍 Check-in' : '📝 Booked'}
+      </div>
+
+      {/* Location summary */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+          color: '#0891b2',
+          fontWeight: '700',
+          fontSize: '11.5px',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          maxWidth: '160px',
+        }}
+        title={summary}
+      >
+        <MapPin size={11} style={{ flexShrink: 0 }} />
+        <span
+          style={{
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {summary}
+        </span>
+      </div>
+
+      {/* Distance badge */}
+      {distanceText && distanceText !== '—' && distanceKm !== null && distanceKm !== undefined && (
         <div
           style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '3px',
+            marginTop: '3px',
+            background: `${distanceColor}15`,
+            color: distanceColor,
+            padding: '1px 7px',
+            borderRadius: '10px',
+            fontSize: '10.5px',
+            fontWeight: '700',
+            border: `1px solid ${distanceColor}30`,
+            whiteSpace: 'nowrap',
+          }}
+          title={`Distance from hospital: ${distanceText}`}
+        >
+          🚗 {distanceText}
+        </div>
+      )}
+
+      {/* GPS coordinates */}
+      {loc?.latitude && loc?.longitude && (
+        <div
+          style={{
+            fontSize: '10px',
+            color: '#94a3b8',
+            marginTop: '2px',
+            fontFamily: 'monospace',
+            whiteSpace: 'nowrap',
+          }}
+          title={`Lat: ${loc.latitude}, Lng: ${loc.longitude}`}
+        >
+          {loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)}
+        </div>
+      )}
+
+      {/* Device info */}
+      {(loc?.deviceType || loc?.browser) && (
+        <div
+          style={{
+            fontSize: '10px',
+            color: '#64748b',
+            marginTop: '2px',
             display: 'flex',
             alignItems: 'center',
             gap: '4px',
-            color: '#0891b2',
-            fontWeight: '700',
-            fontSize: '11.5px',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            maxWidth: '160px',
+            flexWrap: 'wrap',
           }}
-          title={summary}
         >
-          <MapPin size={11} style={{ flexShrink: 0 }} />
-          <span
-            style={{
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {summary}
-          </span>
+          {loc.deviceType && (
+            <span
+              style={{
+                background: '#f1f5f9',
+                padding: '1px 6px',
+                borderRadius: '8px',
+                fontWeight: '600',
+              }}
+            >
+              {loc.deviceType}
+            </span>
+          )}
+          {loc.browser && <span style={{ color: '#94a3b8' }}>{loc.browser}</span>}
         </div>
-
-        {/* GPS coordinates */}
-        {loc.latitude && loc.longitude && (
-          <div
-            style={{
-              fontSize: '10px',
-              color: '#94a3b8',
-              marginTop: '2px',
-              fontFamily: 'monospace',
-            }}
-            title={`Lat: ${loc.latitude}, Lng: ${loc.longitude}`}
-          >
-            {loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)}
-          </div>
-        )}
-
-        {/* Device info */}
-        {(loc.deviceType || loc.browser) && (
-          <div
-            style={{
-              fontSize: '10px',
-              color: '#64748b',
-              marginTop: '2px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              flexWrap: 'wrap',
-            }}
-          >
-            {loc.deviceType && (
-              <span
-                style={{
-                  background: '#f1f5f9',
-                  padding: '1px 6px',
-                  borderRadius: '8px',
-                  fontWeight: '600',
-                }}
-              >
-                {loc.deviceType}
-              </span>
-            )}
-            {loc.browser && (
-              <span style={{ color: '#94a3b8' }}>{loc.browser}</span>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // ✅ Old check-in without location data
-  if (appt.status === 'checked-in' || appt.status === 'completed') {
-    return (
-      <span
-        style={{
-          fontSize: '10.5px',
-          color: '#94a3b8',
-          fontStyle: 'italic',
-        }}
-        title="এই check-in-এ location data নেই (পুরনো)"
-      >
-        পুরনো check-in
-      </span>
-    );
-  }
-
-  // ✅ Not checked-in yet
-  return <span style={{ color: '#cbd5e1', fontSize: '11px' }}>—</span>;
+      )}
+    </div>
+  );
 };
 
 // ==================================================
@@ -477,7 +550,8 @@ export default function AppointmentsTable({
           String(a.serialNo || '').includes(term) ||
           (a.doctorName?.toLowerCase().includes(term) || '') ||
           (a.id?.toLowerCase().includes(term) || '') ||
-          (a.checkInLocationSummary?.toLowerCase().includes(term) || '')
+          (a.checkInLocationSummary?.toLowerCase().includes(term) || '') ||
+          (a.bookingLocationSummary?.toLowerCase().includes(term) || '')
       );
     }
 
@@ -1765,10 +1839,10 @@ export default function AppointmentsTable({
                   <th style={{ padding: '8px 6px' }}>রিমার্কস</th>
                 )}
 
-                {/* ✅ NEW: Check-in Location Column */}
+                {/* ✅ Location column */}
                 {!isSmallScreen && (
                   <th style={{ padding: '8px 6px', whiteSpace: 'nowrap' }}>
-                    📍 Check-in
+                    📍 Location
                   </th>
                 )}
 
@@ -2092,16 +2166,17 @@ export default function AppointmentsTable({
                       </td>
                     )}
 
-                    {/* ✅ NEW: Check-in Location Cell */}
+                    {/* ✅ Location Cell */}
                     {!isSmallScreen && (
                       <td
                         style={{
                           padding: '8px 6px',
                           minWidth: '140px',
                           maxWidth: '200px',
+                          verticalAlign: 'top',
                         }}
                       >
-                        <CheckInLocationCell appt={appt} />
+                        <LocationCell appt={appt} />
                       </td>
                     )}
 
@@ -2403,11 +2478,11 @@ export default function AppointmentsTable({
             style={{
               background: '#fff',
               borderRadius: '12px',
-              maxWidth: '500px',
+              maxWidth: '540px',
               width: '100%',
               padding: isMobile ? '16px' : '24px',
               position: 'relative',
-              maxHeight: '80vh',
+              maxHeight: '85vh',
               overflowY: 'auto',
             }}
             onClick={(e) => e.stopPropagation()}
@@ -2549,7 +2624,138 @@ export default function AppointmentsTable({
                 </div>
               )}
 
-              {/* ✅ NEW: Check-in Location Details */}
+              {/* ✅ Booking Location Details */}
+              {viewDetails.bookingLocation && (
+                <div
+                  style={{
+                    gridColumn: isMobile ? 'auto' : '1 / -1',
+                    marginTop: '8px',
+                    borderTop: '1px solid #e2e8f0',
+                    paddingTop: '12px',
+                  }}
+                >
+                  <strong
+                    style={{
+                      color: '#1e40af',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    <MapPin size={14} /> Booking Location
+                  </strong>
+
+                  <div
+                    style={{
+                      marginTop: '10px',
+                      background: '#eff6ff',
+                      borderRadius: '8px',
+                      padding: '12px 14px',
+                      fontSize: '12.5px',
+                      lineHeight: '1.8',
+                    }}
+                  >
+                    {viewDetails.bookingLocationSummary &&
+                      viewDetails.bookingLocationSummary !== 'Location not captured' && (
+                        <div style={{ marginBottom: '6px' }}>
+                          <strong style={{ color: '#1c5fa8', fontSize: '13px' }}>
+                            🌍 {viewDetails.bookingLocationSummary}
+                          </strong>
+                        </div>
+                      )}
+
+                    {viewDetails.bookingLocation.latitude && (
+                      <div>
+                        <strong>GPS:</strong>{' '}
+                        <code
+                          style={{
+                            background: '#fff',
+                            padding: '1px 6px',
+                            borderRadius: '3px',
+                            fontSize: '11px',
+                          }}
+                        >
+                          {viewDetails.bookingLocation.latitude.toFixed(5)},{' '}
+                          {viewDetails.bookingLocation.longitude.toFixed(5)}
+                        </code>
+                        {viewDetails.bookingLocation.accuracy && (
+                          <span
+                            style={{
+                              color: '#64748b',
+                              fontSize: '11px',
+                              marginLeft: '6px',
+                            }}
+                          >
+                            (±{viewDetails.bookingLocation.accuracy}m)
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {viewDetails.bookingLocation.fullAddress && (
+                      <div>
+                        <strong>ঠিকানা:</strong>{' '}
+                        <span style={{ color: '#334155' }}>
+                          {viewDetails.bookingLocation.fullAddress}
+                        </span>
+                      </div>
+                    )}
+
+                    {viewDetails.bookingDistanceText &&
+                      viewDetails.bookingDistanceText !== '—' && (
+                        <div style={{ marginTop: '6px' }}>
+                          <strong>🚗 Distance from Hospital:</strong>{' '}
+                          <span
+                            style={{
+                              background: '#dcfce7',
+                              color: '#166534',
+                              padding: '2px 10px',
+                              borderRadius: '12px',
+                              fontWeight: '700',
+                              fontSize: '12px',
+                            }}
+                          >
+                            {viewDetails.bookingDistanceText}
+                          </span>
+                        </div>
+                      )}
+
+                    {viewDetails.bookingLocation.deviceType && (
+                      <div
+                        style={{
+                          marginTop: '6px',
+                          paddingTop: '6px',
+                          borderTop: '1px dashed #bfdbfe',
+                        }}
+                      >
+                        <strong>📱 Device:</strong>{' '}
+                        {viewDetails.bookingLocation.deviceType}
+                        {viewDetails.bookingLocation.browser &&
+                          ` · ${viewDetails.bookingLocation.browser}`}
+                        {viewDetails.bookingLocation.os &&
+                          ` · ${viewDetails.bookingLocation.os}`}
+                      </div>
+                    )}
+
+                    {viewDetails.bookingLocation.capturedAt && (
+                      <div
+                        style={{
+                          fontSize: '11px',
+                          color: '#94a3b8',
+                          marginTop: '4px',
+                        }}
+                      >
+                        🕒 Booked:{' '}
+                        {new Date(
+                          viewDetails.bookingLocation.capturedAt
+                        ).toLocaleString('bn-BD')}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ✅ Check-in Location Details */}
               {viewDetails.checkInLocation && (
                 <div
                   style={{
@@ -2567,7 +2773,7 @@ export default function AppointmentsTable({
                       gap: '6px',
                     }}
                   >
-                    <MapPin size={14} /> Check-in Location Details
+                    <MapPin size={14} /> Check-in Location
                   </strong>
 
                   <div
@@ -2580,7 +2786,6 @@ export default function AppointmentsTable({
                       lineHeight: '1.8',
                     }}
                   >
-                    {/* Summary */}
                     {viewDetails.checkInLocationSummary &&
                       viewDetails.checkInLocationSummary !== 'Location not captured' && (
                         <div style={{ marginBottom: '6px' }}>
@@ -2590,7 +2795,6 @@ export default function AppointmentsTable({
                         </div>
                       )}
 
-                    {/* GPS */}
                     {viewDetails.checkInLocation.latitude && (
                       <div>
                         <strong>GPS:</strong>{' '}
@@ -2619,7 +2823,6 @@ export default function AppointmentsTable({
                       </div>
                     )}
 
-                    {/* Full Address */}
                     {viewDetails.checkInLocation.fullAddress && (
                       <div>
                         <strong>ঠিকানা:</strong>{' '}
@@ -2629,7 +2832,25 @@ export default function AppointmentsTable({
                       </div>
                     )}
 
-                    {/* Device */}
+                    {viewDetails.checkInDistanceText &&
+                      viewDetails.checkInDistanceText !== '—' && (
+                        <div style={{ marginTop: '6px' }}>
+                          <strong>🚗 Distance from Hospital:</strong>{' '}
+                          <span
+                            style={{
+                              background: '#dcfce7',
+                              color: '#166534',
+                              padding: '2px 10px',
+                              borderRadius: '12px',
+                              fontWeight: '700',
+                              fontSize: '12px',
+                            }}
+                          >
+                            {viewDetails.checkInDistanceText}
+                          </span>
+                        </div>
+                      )}
+
                     {viewDetails.checkInLocation.deviceType && (
                       <div
                         style={{
@@ -2647,15 +2868,6 @@ export default function AppointmentsTable({
                       </div>
                     )}
 
-                    {/* Device extras */}
-                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
-                      {viewDetails.checkInLocation.screenSize &&
-                        `Screen: ${viewDetails.checkInLocation.screenSize}`}
-                      {viewDetails.checkInLocation.language &&
-                        ` · Lang: ${viewDetails.checkInLocation.language}`}
-                    </div>
-
-                    {/* Captured at */}
                     {viewDetails.checkInLocation.capturedAt && (
                       <div
                         style={{
@@ -2664,7 +2876,7 @@ export default function AppointmentsTable({
                           marginTop: '4px',
                         }}
                       >
-                        🕒{' '}
+                        🕒 Checked-in:{' '}
                         {new Date(
                           viewDetails.checkInLocation.capturedAt
                         ).toLocaleString('bn-BD')}
