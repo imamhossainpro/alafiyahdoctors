@@ -5,6 +5,7 @@
 // ✅ Responsive: hides low-priority columns on small screens
 // ✅ departments + panels props for EditBookingModal
 // ✅ Location column: Booking location + Check-in location
+// ✅ Clickable location → Google Maps directions
 // ==================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { AppointmentsTableSkeleton } from '../ui/SkeletonScreens';
@@ -45,6 +46,7 @@ import {
 } from '../../services/activityLogService';
 import ConfirmMessageModal from './ConfirmMessageModal';
 import EditBookingModal from '../EditBookingModal';
+import { buildBestMapLink } from '../../utils/mapsLink';
 
 // ==================================================
 // ✅ Status Badge
@@ -229,7 +231,7 @@ const calculatePatientType = (patient, appointment) => {
 };
 
 // ==================================================
-// ✅ Location Cell — Shows booking + check-in location
+// ✅ Location Cell — Clickable → Google Maps directions
 // ==================================================
 const LocationCell = ({ appt }) => {
   // ✅ Priority: Check-in location > Booking location
@@ -245,34 +247,53 @@ const LocationCell = ({ appt }) => {
     appt.bookingLocationSummary !== 'Location not captured' &&
     appt.bookingLocationSummary !== 'Unknown Location';
 
-  if (hasCheckIn) {
-    return renderLocationInfo({
-      type: 'checkin',
-      summary: appt.checkInLocationSummary,
-      loc: appt.checkInLocation,
-      distanceKm: appt.checkInDistanceKm ?? appt.checkInLocation?.distanceKm,
-      distanceText: appt.checkInDistanceText ?? appt.checkInLocation?.distanceText,
-      distanceCategory:
-        appt.checkInDistanceCategory ?? appt.checkInLocation?.distanceCategory,
-    });
+  // ✅ No location data
+  if (!hasCheckIn && !hasBooking) {
+    return <span style={{ color: '#cbd5e1', fontSize: '11px' }}>—</span>;
   }
 
-  if (hasBooking) {
-    return renderLocationInfo({
-      type: 'booking',
-      summary: appt.bookingLocationSummary,
-      loc: appt.bookingLocation,
-      distanceKm: appt.bookingDistanceKm ?? appt.bookingLocation?.distanceKm,
-      distanceText: appt.bookingDistanceText ?? appt.bookingLocation?.distanceText,
-      distanceCategory:
-        appt.bookingDistanceCategory ?? appt.bookingLocation?.distanceCategory,
-    });
-  }
+  // ✅ Build Google Maps link
+  const mapLink = buildBestMapLink(appt);
+  const canClick = !!mapLink;
 
-  return <span style={{ color: '#cbd5e1', fontSize: '11px' }}>—</span>;
+  // ✅ Get location details based on type
+  const locationData = hasCheckIn
+    ? {
+        type: 'checkin',
+        summary: appt.checkInLocationSummary,
+        loc: appt.checkInLocation,
+        distanceKm:
+          appt.checkInDistanceKm ?? appt.checkInLocation?.distanceKm,
+        distanceText:
+          appt.checkInDistanceText ?? appt.checkInLocation?.distanceText,
+        distanceCategory:
+          appt.checkInDistanceCategory ??
+          appt.checkInLocation?.distanceCategory,
+      }
+    : {
+        type: 'booking',
+        summary: appt.bookingLocationSummary,
+        loc: appt.bookingLocation,
+        distanceKm:
+          appt.bookingDistanceKm ?? appt.bookingLocation?.distanceKm,
+        distanceText:
+          appt.bookingDistanceText ?? appt.bookingLocation?.distanceText,
+        distanceCategory:
+          appt.bookingDistanceCategory ??
+          appt.bookingLocation?.distanceCategory,
+      };
+
+  return renderLocationInfo({
+    ...locationData,
+    mapLink,
+    canClick,
+    patientName: appt.name,
+  });
 };
 
-// ✅ Helper: Render location info based on type
+// ==================================================
+// ✅ Helper: Render location info (clickable)
+// ==================================================
 const renderLocationInfo = ({
   type,
   summary,
@@ -280,6 +301,9 @@ const renderLocationInfo = ({
   distanceKm,
   distanceText,
   distanceCategory,
+  mapLink,
+  canClick,
+  patientName,
 }) => {
   const distanceColor =
     distanceCategory === 'near'      ? '#16a34a' :
@@ -291,8 +315,40 @@ const renderLocationInfo = ({
 
   const isCheckin = type === 'checkin';
 
+  // ✅ Click handler — open Google Maps in new tab
+  const handleClick = (e) => {
+    e.stopPropagation(); // Prevent row click
+    if (canClick && mapLink) {
+      window.open(mapLink, '_blank', 'noopener,noreferrer');
+    }
+  };
+
   return (
-    <div style={{ lineHeight: '1.3', minWidth: '120px' }}>
+    <div
+      style={{
+        lineHeight: '1.3',
+        minWidth: '140px',
+        cursor: canClick ? 'pointer' : 'default',
+        padding: '4px 6px',
+        margin: '-4px -6px',
+        borderRadius: '6px',
+        transition: 'background 0.15s ease',
+      }}
+      onClick={handleClick}
+      onMouseEnter={(e) => {
+        if (canClick) {
+          e.currentTarget.style.background = '#f0f9ff';
+        }
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = 'transparent';
+      }}
+      title={
+        canClick
+          ? `Click to see direction from hospital to ${patientName || 'patient'}`
+          : ''
+      }
+    >
       {/* Type badge */}
       <div
         style={{
@@ -348,16 +404,25 @@ const renderLocationInfo = ({
             marginTop: '3px',
             background: `${distanceColor}15`,
             color: distanceColor,
-            padding: '1px 7px',
+            padding: '2px 8px',
             borderRadius: '10px',
             fontSize: '10.5px',
             fontWeight: '700',
             border: `1px solid ${distanceColor}30`,
             whiteSpace: 'nowrap',
           }}
-          title={`Distance from hospital: ${distanceText}`}
+          title={
+            canClick
+              ? 'Click to open Google Maps directions'
+              : `Distance from hospital: ${distanceText}`
+          }
         >
           🚗 {distanceText}
+          {canClick && (
+            <span style={{ marginLeft: '3px', fontSize: '9px', opacity: 0.7 }}>
+              ↗
+            </span>
+          )}
         </div>
       )}
 
@@ -403,6 +468,23 @@ const renderLocationInfo = ({
             </span>
           )}
           {loc.browser && <span style={{ color: '#94a3b8' }}>{loc.browser}</span>}
+        </div>
+      )}
+
+      {/* Click hint */}
+      {canClick && (
+        <div
+          style={{
+            fontSize: '9.5px',
+            color: '#0891b2',
+            marginTop: '3px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '3px',
+            fontWeight: '600',
+          }}
+        >
+          🗺️ ক্লিক করুন — রাস্তা দেখুন
         </div>
       )}
     </div>

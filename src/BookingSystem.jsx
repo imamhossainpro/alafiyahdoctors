@@ -10,8 +10,10 @@
 // ✅ Referral source NOT auto-selected
 // ✅ GA4 booking_complete event
 // ✅ Mobile stored in international format (8801XXXXXXXXX)
-// ✅ Doctor image lightbox (click to view full size + close button)
+// ✅ Doctor image lightbox (click to view full size)
 // ✅ Location tracking (GPS + City + Distance + Device)
+// ✅ Patient-side location details popup
+// ✅ Booking summary shows AGE
 // ==================================================
 import React, { useState, useEffect, useMemo } from 'react';
 import { db, doc, getDoc, setDoc, addDoc, collection, trackEvent } from './firebase';
@@ -42,11 +44,10 @@ import {
   X,
 } from 'lucide-react';
 
-// ✅ NEW: Location tracking imports
 import {
   captureCompleteLocation,
   buildBookingLocationPayload,
-} from './utils/locationTracker';
+} from '../utils/locationTracker';
 
 const DEFAULT_HOSPITAL_ID = 'alafiyah_main';
 const BANGLA_DAYS = [
@@ -175,13 +176,15 @@ const BookingCSS = `
   .booking-card { background: #fff; border-radius: 16px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06); padding: 30px; border: 1px solid #e2e8f0; min-height: 500px; position: relative; }
   .booking-title { text-align: center; color: #0f766e; font-size: 24px; font-weight: 700; margin-bottom: 25px!important; font-family:'Hind Siliguri','Noto Sans Bengali',Arial,sans-serif;}
 
-  /* ✅ Location status badge */
-  .location-status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; margin-bottom: 16px; }
+  /* ✅ Location status badge (clickable) */
+  .location-status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; }
   .location-status-badge.loading { background: #fef3c7; color: #92400e; }
   .location-status-badge.captured { background: #dcfce7; color: #166534; }
+  .location-status-badge.captured.clickable { cursor: pointer; border: none; font-family: inherit; }
+  .location-status-badge.captured.clickable:hover { transform: scale(1.03); box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25); }
   .location-status-badge.failed { background: #fee2e2; color: #991b1b; }
 
-  /* Doctor profile card (direct link mode) */
+  /* Doctor profile card */
   .doctor-profile-card { background: linear-gradient(135deg, #1565C0 0%, #1976D2 50%, #2196F3 100%); border-radius: 16px; padding: 20px; margin-bottom: 24px; color: #fff; box-shadow: 0 8px 20px rgba(13,148,136,0.25); text-align: center; }
   .doctor-profile-avatar { width: 80px; height: 80px; border-radius: 50%; background: rgba(255,255,255,0.2); border: 3px solid rgba(255,255,255,0.5); margin: 0 auto 12px; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 800; overflow: hidden; padding: 0; transition: transform 0.2s ease, box-shadow 0.2s ease; }
   .doctor-profile-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
@@ -206,6 +209,33 @@ const BookingCSS = `
   .lightbox-close-btn:active { transform: rotate(90deg) scale(0.95); }
   .lightbox-caption { color: #fff; font-size: 16px; font-weight: 700; text-align: center; font-family: 'Hind Siliguri','Noto Sans Bengali',Arial,sans-serif; text-shadow: 0 2px 8px rgba(0,0,0,0.5); padding: 0 20px; line-height: 1.4; }
   .lightbox-caption-sub { font-size: 13px; font-weight: 500; opacity: 0.85; margin-top: 4px; font-style: italic; }
+
+  /* ✅ Location Details Popup */
+  @keyframes locationFadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes locationSlideUp { from { opacity: 0; transform: translateY(20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  .location-modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); z-index: 99998; display: flex; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); animation: locationFadeIn 0.2s ease; }
+  .location-modal-box { background: #fff; border-radius: 16px; max-width: 440px; width: 100%; max-height: 88vh; overflow-y: auto; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.35); position: relative; animation: locationSlideUp 0.3s ease; }
+  .location-modal-header { padding: 18px 22px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: linear-gradient(135deg, #0891b2, #0e7490); border-radius: 16px 16px 0 0; color: #fff; }
+  .location-modal-header h3 { margin: 0; font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .location-modal-close { background: rgba(255,255,255,0.2); border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; color: #fff; display: flex; align-items: center; justify-content: center; }
+  .location-modal-close:hover { background: rgba(255,255,255,0.3); }
+  .location-modal-body { padding: 20px 22px; }
+  .location-summary-box { background: #ecfdf5; border: 1.5px solid #86efac; border-radius: 12px; padding: 16px; margin-bottom: 16px; text-align: center; }
+  .location-summary-label { font-size: 12px; color: #065f46; font-weight: 600; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .location-summary-value { font-size: 18px; font-weight: 800; color: #166534; line-height: 1.4; }
+  .distance-big-box { background: linear-gradient(135deg, #0891b2, #0e7490); border-radius: 12px; padding: 20px; margin-bottom: 16px; text-align: center; color: #fff; box-shadow: 0 8px 20px rgba(8, 145, 178, 0.3); }
+  .distance-big-label { font-size: 12px; opacity: 0.9; margin-bottom: 6px; font-weight: 600; letter-spacing: 0.5px; }
+  .distance-big-value { font-size: 40px; font-weight: 900; line-height: 1; margin-bottom: 4px; }
+  .distance-big-category { font-size: 13px; opacity: 0.9; font-weight: 600; }
+  .gps-info-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+  .gps-badge { background: #dbeafe; border-radius: 8px; padding: 6px 8px; color: #1e40af; font-weight: 700; font-size: 11px; }
+  .gps-value { font-family: monospace; font-size: 13px; color: #334155; font-weight: 600; }
+  .hospital-info-box { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; font-size: 12.5px; line-height: 1.6; color: #1e40af; }
+  .hospital-info-title { font-weight: 700; margin-bottom: 4px; }
+  .hospital-info-sub { font-size: 11.5px; opacity: 0.85; margin-top: 2px; }
+  .directions-btn { display: flex; align-items: center; justify-content: center; gap: 8px; background: linear-gradient(135deg, #16a34a, #15803d); color: #fff; padding: 14px; border-radius: 10px; text-decoration: none; font-size: 15px; font-weight: 700; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3); transition: all 0.2s ease; }
+  .directions-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(22, 163, 74, 0.4); }
+  .location-helper-text { font-size: 11.5px; color: #94a3b8; text-align: center; margin-top: 12px; margin-bottom: 0; line-height: 1.5; }
 
   /* Allowed days hint */
   .allowed-days-hint { background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; color: #0f766e; display: flex; align-items: center; gap: 8px; }
@@ -295,6 +325,7 @@ const BookingCSS = `
     .lightbox-close-btn { top: -46px; right: 0; width: 38px; height: 38px; }
     .lightbox-image { max-height: 68vh; border-radius: 12px; }
     .lightbox-caption { font-size: 14px; }
+    .distance-big-value { font-size: 34px; }
   }
 `;
 
@@ -333,9 +364,12 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
   // ✅ Doctor Image Lightbox state
   const [showImageLightbox, setShowImageLightbox] = useState(false);
 
-  // ✅ NEW: Booking Location state
+  // ✅ Patient-side Location Details popup state
+  const [showLocationDetails, setShowLocationDetails] = useState(false);
+
+  // ✅ Booking Location state
   const [bookingLocation, setBookingLocation] = useState(null);
-  const [locationStatus, setLocationStatus] = useState('idle'); // idle | loading | captured | failed
+  const [locationStatus, setLocationStatus] = useState('idle');
 
   const doctorAllowedDays = useMemo(() => {
     if (!preselectedDoctorId || !panels || panels.length === 0) return [];
@@ -351,7 +385,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
     return allowed;
   }, [preselectedDoctorId, panels]);
 
-  // ✅ NEW: Auto-capture location on page load
+  // ✅ Auto-capture location on page load
   useEffect(() => {
     let mounted = true;
 
@@ -382,15 +416,17 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
     };
   }, []);
 
-  // ✅ ESC key দিয়ে lightbox বন্ধ
+  // ✅ ESC key দিয়ে সব modal বন্ধ
   useEffect(() => {
-    if (!showImageLightbox) return;
     const onKeyDown = (e) => {
-      if (e.key === 'Escape') setShowImageLightbox(false);
+      if (e.key === 'Escape') {
+        if (showImageLightbox) setShowImageLightbox(false);
+        if (showLocationDetails) setShowLocationDetails(false);
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [showImageLightbox]);
+  }, [showImageLightbox, showLocationDetails]);
 
   useEffect(() => {
     if (!preselectedDoctorId || !departments || departments.length === 0) return;
@@ -565,7 +601,6 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
     setQrCode(null);
     setAppointmentId(null);
     setBookedSerialNo(null);
-    // ✅ NOTE: location state reset করা লাগবে না — কারণ একই session-এ capture already আছে
   };
 
   const handleSubmit = async (e) => {
@@ -579,7 +614,6 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
       }
       if (!formData.age.trim()) throw new Error('বয়স লিখুন');
 
-      // ✅ Mobile validation — international format (8801XXXXXXXXX)
       if (!formData.mobile.trim()) throw new Error('মোবাইল নম্বর লিখুন');
       if (formData.mobile.length !== 13 || !formData.mobile.startsWith('880')) {
         throw new Error(
@@ -604,7 +638,6 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
 
       const patientName = formData.nameEn.trim();
 
-      // ✅ formData.mobile is already in international format (8801889885094)
       let patient = await findPatientByMobile(hospitalId, formData.mobile);
       let patientId;
       let isNewPatient = true;
@@ -621,7 +654,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
         const newPatient = await createPatient(hospitalId, {
           name: patientName,
           nameEn: patientName,
-          mobile: formData.mobile, // ✅ International format
+          mobile: formData.mobile,
           age: formData.age,
           gender: formData.gender,
           address: formData.address,
@@ -672,7 +705,8 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
         ...formData,
         name: patientName,
         nameEn: patientName,
-        mobile: formData.mobile, // ✅ International format
+        age: formData.age,
+        mobile: formData.mobile,
         doctorNameEn: selectedDoctor.nameEn || '',
         referralSource: finalReferralSource,
         patientId,
@@ -694,7 +728,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
         hospitalId,
         fromDoctorLink: isDirectBooking,
 
-          // ✅ NEW: Booking Location data (with manual address fallback)
+        // ✅ Booking Location data (with manual address fallback)
         ...buildBookingLocationPayload(bookingLocation, formData.address),
       };
 
@@ -720,7 +754,6 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
         'আপনার সিরিয়ালটি সফলভাবে কনফার্ম করা হয়েছে। চেক-ইন করতে QR কোড ব্যবহার করুন।'
       );
 
-      // ✅ GA4 — booking_complete event
       trackEvent('booking_complete', {
         doctor_id: selectedDoctor.id,
         doctor_name: selectedDoctor.name,
@@ -816,9 +849,9 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
           <form onSubmit={handleSubmit}>
             <h2 className="booking-title">রোগীর ডাক্তার বুকিং ফর্ম</h2>
 
-            {/* ✅ Location Status Badge */}
+            {/* ✅ Location Status Badge — Clickable for patient */}
             {locationStatus !== 'idle' && (
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
                 {locationStatus === 'loading' && (
                   <div className="location-status-badge loading">
                     <Loader2 size={13} className="spin" />
@@ -827,20 +860,44 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
                 )}
 
                 {locationStatus === 'captured' && bookingLocation?.geo && (
-                  <div className="location-status-badge captured">
-                    📍 {bookingLocation.summary}
+                  <button
+                    type="button"
+                    className="location-status-badge captured clickable"
+                    onClick={() => setShowLocationDetails(true)}
+                    title="বিস্তারিত দেখতে ক্লিক করুন"
+                  >
+                    <MapPin size={13} />
+                    {bookingLocation.summary}
                     {bookingLocation.distance?.distanceText && (
                       <span style={{ marginLeft: '4px' }}>
                         · 🚗 {bookingLocation.distance.distanceText}
                       </span>
                     )}
-                  </div>
+                    <span style={{ fontSize: '10px', opacity: 0.7, marginLeft: '4px' }}>
+                      ℹ️
+                    </span>
+                  </button>
                 )}
 
                 {locationStatus === 'failed' && (
-                  <div className="location-status-badge failed">
-                    ⚠️ লোকেশন পাওয়া যায়নি (optional)
-                  </div>
+                  <button
+                    type="button"
+                    className="location-status-badge failed"
+                    onClick={async () => {
+                      setLocationStatus('loading');
+                      try {
+                        const location = await captureCompleteLocation();
+                        setBookingLocation(location);
+                        setLocationStatus(location.gps ? 'captured' : 'failed');
+                      } catch {
+                        setLocationStatus('failed');
+                      }
+                    }}
+                    style={{ cursor: 'pointer', border: 'none', fontFamily: 'inherit' }}
+                    title="আবার চেষ্টা করুন"
+                  >
+                    ⚠️ লোকেশন পাওয়া যায়নি — আবার চেষ্টা করুন
+                  </button>
                 )}
               </div>
             )}
@@ -1161,6 +1218,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
               </div>
             )}
 
+            {/* ✅ Booking Summary — Now with AGE */}
             <div className="summary-box">
               <div
                 className="section-title"
@@ -1182,12 +1240,26 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
                 <span className="summary-label">রোগীর নাম:</span>
                 <span className="summary-value">{formData.nameEn || '-'}</span>
               </div>
+
+              {/* ✅ AGE — now showing */}
+              <div className="summary-row">
+                <span className="summary-label">বয়স:</span>
+                <span className="summary-value">{formData.age || '-'}</span>
+              </div>
+
               <div className="summary-row">
                 <span className="summary-label">মোবাইল:</span>
                 <span className="summary-value">
                   {formData.mobile ? toDisplayFormat(formData.mobile) : '-'}
                 </span>
               </div>
+
+              {/* ✅ GENDER — also added */}
+              <div className="summary-row">
+                <span className="summary-label">লিঙ্গ:</span>
+                <span className="summary-value">{formData.gender || '-'}</span>
+              </div>
+
               <div className="summary-row">
                 <span className="summary-label">নির্বাচিত ডাক্তার:</span>
                 <span className="summary-value">{selectedDoctor?.name || '-'}</span>
@@ -1256,6 +1328,115 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
                   {selectedDoctor.nameEn}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ NEW: Patient-side Location Details Popup */}
+      {showLocationDetails && bookingLocation && (
+        <div
+          className="location-modal-overlay"
+          onClick={() => setShowLocationDetails(false)}
+        >
+          <div
+            className="location-modal-box"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="location-modal-header">
+              <h3>
+                <MapPin size={20} />
+                আপনার লোকেশন তথ্য
+              </h3>
+              <button
+                className="location-modal-close"
+                onClick={() => setShowLocationDetails(false)}
+                title="বন্ধ করুন (Esc)"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="location-modal-body">
+              {/* Location Summary */}
+              <div className="location-summary-box">
+                <div className="location-summary-label">🌍 আপনার লোকেশন</div>
+                <div className="location-summary-value">
+                  {bookingLocation.summary || 'Unknown Location'}
+                </div>
+              </div>
+
+              {/* Distance — Big */}
+              {bookingLocation.distance?.distanceText &&
+                bookingLocation.distance.distanceText !== '—' && (
+                  <div className="distance-big-box">
+                    <div className="distance-big-label">
+                      🏥 হাসপাতাল থেকে আপনার দূরত্ব
+                    </div>
+                    <div className="distance-big-value">
+                      {bookingLocation.distance.distanceText}
+                    </div>
+                    {bookingLocation.distance.categoryLabel && (
+                      <div className="distance-big-category">
+                        ({bookingLocation.distance.categoryLabel})
+                      </div>
+                    )}
+                  </div>
+                )}
+
+              {/* GPS Coordinates */}
+              {bookingLocation.gps && (
+                <div className="gps-info-box">
+                  <div className="gps-badge">📌 GPS</div>
+                  <div className="gps-value">
+                    {bookingLocation.gps.latitude.toFixed(5)},{' '}
+                    {bookingLocation.gps.longitude.toFixed(5)}
+                    {bookingLocation.gps.accuracy && (
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          color: '#94a3b8',
+                          marginLeft: '6px',
+                          fontWeight: '400',
+                        }}
+                      >
+                        (±{bookingLocation.gps.accuracy}m)
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Hospital Info */}
+              <div className="hospital-info-box">
+                <div className="hospital-info-title">🏥 হাসপাতাল</div>
+                <div>Al-Afiyah Hospital & Diagnostic Centre</div>
+                <div className="hospital-info-sub">
+                  Bakalia Access Road, Chattogram
+                </div>
+              </div>
+
+              {/* Directions Button */}
+              {bookingLocation.gps && (
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&origin=${bookingLocation.gps.latitude},${bookingLocation.gps.longitude}&destination=22.3508119,91.8475064&travelmode=driving`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="directions-btn"
+                >
+                  🗺️ রাস্তা দেখুন (Google Maps)
+                </a>
+              )}
+
+              {/* Helper Text */}
+              <p className="location-helper-text">
+                💡 এটি আপনার বর্তমান অবস্থান থেকে হাসপাতালের দূরত্ব।
+                <br />
+                সঠিক দূরত্ব পেতে GPS চালু রাখুন।
+              </p>
             </div>
           </div>
         </div>
