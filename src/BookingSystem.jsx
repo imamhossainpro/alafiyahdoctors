@@ -47,7 +47,7 @@ import {
 import {
   captureCompleteLocation,
   buildBookingLocationPayload,
-} from '../utils/locationTracker';
+} from './utils/locationTracker';
 
 const DEFAULT_HOSPITAL_ID = 'alafiyah_main';
 const BANGLA_DAYS = [
