@@ -8,6 +8,7 @@
 // ✅ FCM Push Notifications
 // ✅ Uses nameEn / doctorNameEn (no transliteration)
 // ✅ Service account from env variable OR file
+// ✅ SMS Format: Professional English (2 SMS segments)
 // ==================================================
 require('dotenv').config();
 const express = require('express');
@@ -65,6 +66,7 @@ const ALLOWED_ORIGINS = [
   'https://doctors.alafiyahhospital.com',
   'https://alafiyahhospital.com',
   'https://www.alafiyahhospital.com',
+  'https://api.alafiyahhospital.com',
   'http://localhost:5173',
   'http://localhost:3000',
 ];
@@ -99,6 +101,10 @@ app.use(express.json());
 const HOSPITAL_ID = 'alafiyah_main';
 const HOSPITAL_WHATSAPP = '8801889885094';
 
+// ✅ Hospital Info — SMS-এ ব্যবহৃত
+const HOSPITAL_NAME_EN = 'Al-Afiyah Hospital';
+const HOSPITAL_CONTACT = '01886-776512';
+
 // ✅ Automas SMS Configuration — load from .env only
 const AUTOMAS_API_KEY = process.env.AUTOMAS_API_KEY;
 const AUTOMAS_SENDER_ID = process.env.AUTOMAS_SENDER_ID || 'AL AFIYAH';
@@ -124,6 +130,21 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASS,
   },
 });
+
+// ==================================================
+// ✅ Helper: Format date as DD/MM/YY (short English)
+// ==================================================
+function formatDateShort(dateStr) {
+  if (!dateStr) return '';
+  const parts = String(dateStr).split('-');
+  if (parts.length === 3 && parts[0].length === 4) {
+    const year = parts[0];
+    const month = parts[1];
+    const day = parts[2];
+    return `${day}/${month}/${year.slice(-2)}`;
+  }
+  return dateStr;
+}
 
 // ==================================================
 // ✅ Helper: Format date as DD-MM-YYYY
@@ -280,8 +301,6 @@ async function sendSMS(phoneNumber, message, options = {}) {
     const isUnicode = /[\u0980-\u09FF]/.test(message);
 
     // ✅ Build request body (Automas API v4 — JSON)
-    // ⚠️ NOTE: smsformat field intentionally NOT sent — Automas
-    //    auto-detects format from `type` field.
     const requestBody = {
       api_key: AUTOMAS_API_KEY,
       senderid: AUTOMAS_SENDER_ID,
@@ -311,7 +330,6 @@ async function sendSMS(phoneNumber, message, options = {}) {
     );
 
     // ✅ Check Automas response
-    // Expected: { "response": [{ "status": 0, "id": 296334, "msisdn": "..." }] }
     if (
       response.data &&
       response.data.response &&
@@ -331,7 +349,6 @@ async function sendSMS(phoneNumber, message, options = {}) {
           msisdn: firstResult.msisdn,
         };
       } else {
-        // Status code meaning
         const errorMessages = {
           101: 'Invalid Message Length',
           102: 'Sender Not Valid',
@@ -486,51 +503,77 @@ Admin confirm korle patient SMS/Email pabe.`;
 }
 
 // ==================================================
-// 🆕 TRIGGER 2: Admin Confirm → Patient SMS (বাংলা) + Email + In-App + FCM
+// 🆕 TRIGGER 2: Admin Confirm → Patient SMS + Email + In-App + FCM
+// ==================================================
+// ✅ SMS Format: Professional English (2 SMS segments)
+// ✅ Uses nameEn / doctorNameEn (English only)
 // ==================================================
 async function sendPatientConfirmation(data, appointmentId) {
-  const bengaliPatientName = data.name || '';
-  const bengaliDoctorName = data.doctorName || '';
-  const bookingDate = data.bookingDate || '';
+  // ==================================================
+  // ✅ English Fields — prefer nameEn / doctorNameEn
+  // ==================================================
+  const englishPatientName =
+    data.nameEn || data.name || 'Patient';
+  const englishDoctorName =
+    data.doctorNameEn || data.doctorName || 'Doctor';
+
   const serial = data.serialNo || '';
   const arrivalTime = data.doctorTime || '';
+  const formattedDate = formatDateShort(data.bookingDate);
 
   // ==================================================
-  // ✅ SMS — বাংলা Unicode (হুবহু ConfirmMessageModal এর preview)
+  // ✅ SMS — Professional English Format
   // ==================================================
-  const smsText = `প্রিয় ${bengaliPatientName},
-আপনার সিরিয়াল নিশ্চিত হয়েছে!
-সিরিয়াল: ${serial}
-ডাক্তার: ${bengaliDoctorName}
-তারিখ: ${bookingDate}
-সময়: ${arrivalTime}
-ধন্যবাদ।`;
+  const smsText = `Assalamu Alaikum. Your appointment with ${englishDoctorName} at ${HOSPITAL_NAME_EN} is confirmed.
 
-  // ✅ Unicode SMS length check (70 chars/SMS)
-  if (smsText.length > 70) {
-    console.warn(
-      `⚠️ Bengali SMS is ${smsText.length} chars (limit 70 per SMS). Will be split into multiple SMS.`
-    );
-  }
+Patient: ${englishPatientName}
+Serial: ${serial}
+Date: ${formattedDate}
+Arrival Time: ${arrivalTime}
+
+Please arrive on time. Contact: ${HOSPITAL_CONTACT}`;
+
+  // ✅ SMS Length Log (English = GSM-7, 153 chars/segment)
+  const estSegments = smsText.length <= 160 ? 1 : Math.ceil(smsText.length / 153);
+  console.log(
+    `📏 SMS Length: ${smsText.length} chars | Estimated segments: ${estSegments}`
+  );
 
   // ==================================================
-  // ✅ Email — একই মেসেজ, HTML-এ রূপান্তরিত
+  // ✅ Email HTML — Bengali (রোগীর পড়ার জন্য)
   // ==================================================
+  const banglaPatientName = data.name || englishPatientName;
+  const banglaDoctorName = data.doctorName || englishDoctorName;
+
   const emailHtml = `
     <div style="font-family: 'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; line-height: 1.7; color: #1e293b;">
-      <p>প্রিয় ${bengaliPatientName},</p>
+      <h2 style="color: #1c5fa8; margin-top: 0;">${HOSPITAL_NAME_EN}</h2>
+      <p>প্রিয় ${banglaPatientName},</p>
       <p>আপনার সিরিয়াল নিশ্চিত হয়েছে!</p>
-      <p>
-        সিরিয়াল: ${serial}<br/>
-        ডাক্তার: ${bengaliDoctorName}<br/>
-        তারিখ: ${bookingDate}<br/>
-        সময়: ${arrivalTime}
-      </p>
-      <p>ধন্যবাদ।</p>
+      <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+        <tr>
+          <td style="padding: 6px 0; color: #475569;">সিরিয়াল:</td>
+          <td style="padding: 6px 0; font-weight: 700;">${serial}</td>
+        </tr>
+        <tr>
+          <td style="padding: 6px 0; color: #475569;">ডাক্তার:</td>
+          <td style="padding: 6px 0; font-weight: 700;">${banglaDoctorName}</td>
+        </tr>
+        <tr>
+          <td style="padding: 6px 0; color: #475569;">তারিখ:</td>
+          <td style="padding: 6px 0; font-weight: 700;">${data.bookingDate || ''}</td>
+        </tr>
+        <tr>
+          <td style="padding: 6px 0; color: #475569;">সময়:</td>
+          <td style="padding: 6px 0; font-weight: 700;">${arrivalTime}</td>
+        </tr>
+      </table>
+      <p style="color: #16a34a; font-weight: 700;">অনুগ্রহ করে সময়মতো হাসপাতালে আসুন।</p>
+      <p style="font-size: 13px; color: #64748b;">যোগাযোগ: ${HOSPITAL_CONTACT}</p>
     </div>
   `;
 
-  // ---------- ১. এসএমএস (বাংলা Unicode) ----------
+  // ---------- ১. এসএমএস (English) ----------
   let mobile = data.mobile;
   if (mobile) {
     mobile = String(mobile).replace(/[^0-9]/g, '');
@@ -551,7 +594,7 @@ async function sendPatientConfirmation(data, appointmentId) {
       await transporter.sendMail({
         from: process.env.EMAIL_USER,
         to: data.email,
-        subject: `আপনার সিরিয়াল নিশ্চিত - ${serial}`,
+        subject: `Booking Confirmed - Serial ${serial}`,
         html: emailHtml,
       });
       console.log(`📧 Email sent to ${data.email}`);
@@ -565,13 +608,13 @@ async function sendPatientConfirmation(data, appointmentId) {
     await saveInAppNotification(
       data.userId,
       {
-        title: 'সিরিয়াল নিশ্চিত হয়েছে',
-        body: `সিরিয়াল #${serial} · ${bengaliDoctorName} · ${bookingDate}`,
+        title: 'Booking Confirmed',
+        body: `Serial #${serial} · ${englishDoctorName} · ${formattedDate}`,
         type: 'booking_confirmed',
       },
       {
         appointmentId: appointmentId,
-        doctorName: bengaliDoctorName,
+        doctorName: englishDoctorName,
         serialNo: String(serial),
         bookingDate: data.bookingDate || '',
       }
@@ -602,8 +645,8 @@ async function sendPatientConfirmation(data, appointmentId) {
           await sendToDevice(
             fcmTokens[0],
             {
-              title: 'সিরিয়াল নিশ্চিত হয়েছে',
-              body: `সিরিয়াল #${serial} · ${bengaliDoctorName}`,
+              title: 'Booking Confirmed',
+              body: `Serial #${serial} · ${englishDoctorName}`,
             },
             {
               type: 'BOOKING_CONFIRMED',
@@ -678,7 +721,8 @@ app.post('/api/queue/next', async (req, res) => {
       fcmTokens = [userData.fcmToken];
     }
 
-    const englishDoctorName = appointment.doctorNameEn || appointment.doctorName || '';
+    const englishDoctorName =
+      appointment.doctorNameEn || appointment.doctorName || '';
 
     let fcmResult = { success: false, error: 'No FCM token' };
     if (fcmTokens.length > 0) {

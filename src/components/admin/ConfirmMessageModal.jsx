@@ -2,8 +2,8 @@
 // ==================================================
 // 📩 ConfirmMessageModal — Patient arrival time
 // ==================================================
-// ✅ Bengali message only (matches server.js)
-// ✅ No emoji, no link, no hospital prefix
+// ✅ English message only (matches server.js)
+// ✅ Uses nameEn / doctorNameEn (no transliteration)
 // ✅ API endpoint: https://api.alafiyahhospital.com
 // ==================================================
 import React, { useState, useEffect } from 'react';
@@ -11,6 +11,10 @@ import { X, Send, Loader2, Edit3, AlertCircle, Clock } from 'lucide-react';
 
 // ✅ Nur Host — Production API
 const API_BASE_URL = 'https://api.alafiyahhospital.com';
+
+// ✅ Hospital Info — must match server.js
+const HOSPITAL_NAME_EN = 'Al-Afiyah Hospital';
+const HOSPITAL_CONTACT = '01886-776512';
 
 // ==================================================
 // ✅ Quick Time Preset Options
@@ -38,6 +42,21 @@ const TIME_PRESETS = [
   { label: '09:00 PM', value: '09:00 PM' },
   { label: '10:00 PM', value: '10:00 PM' },
 ];
+
+// ==================================================
+// ✅ Helper: Format date as DD/MM/YY (short English)
+// ==================================================
+const formatDateShort = (dateStr) => {
+  if (!dateStr) return '';
+  const parts = String(dateStr).split('-');
+  if (parts.length === 3 && parts[0].length === 4) {
+    const year = parts[0];
+    const month = parts[1];
+    const day = parts[2];
+    return `${day}/${month}/${year.slice(-2)}`;
+  }
+  return dateStr;
+};
 
 export default function ConfirmMessageModal({
   appointment,
@@ -67,22 +86,32 @@ export default function ConfirmMessageModal({
   if (!appointment) return null;
 
   // ==================================================
-  // ✅ Bengali fields (matches server.js)
+  // ✅ English fields — prefer nameEn / doctorNameEn
   // ==================================================
-  const banglaPatientName = appointment.name || '';
-  const banglaDoctorName = appointment.doctorName || '';
+  const englishPatientName =
+    appointment.nameEn || appointment.name || 'Patient';
+  const englishDoctorName =
+    appointment.doctorNameEn || appointment.doctorName || 'Doctor';
   const bookingDate = appointment.bookingDate || '';
+  const formattedDate = formatDateShort(bookingDate);
 
   // ==================================================
   // ✅ Preview Message — হুবহু server.js এর সাথে মিল
   // ==================================================
-  const previewMessage = `প্রিয় ${banglaPatientName},
-আপনার সিরিয়াল নিশ্চিত হয়েছে!
-সিরিয়াল: ${serialNo || appointment.serialNo}
-ডাক্তার: ${banglaDoctorName}
-তারিখ: ${bookingDate}
-সময়: ${arrivalTime}
-ধন্যবাদ।`;
+  const previewMessage = `Assalamu Alaikum. Your appointment with ${englishDoctorName} at ${HOSPITAL_NAME_EN} is confirmed.
+
+Patient: ${englishPatientName}
+Serial: ${serialNo || appointment.serialNo}
+Date: ${formattedDate}
+Arrival Time: ${arrivalTime}
+
+Please arrive on time. Contact: ${HOSPITAL_CONTACT}`;
+
+  // ✅ Estimated SMS segments (English = GSM-7)
+  const estimatedSegments =
+    previewMessage.length <= 160
+      ? 1
+      : Math.ceil(previewMessage.length / 153);
 
   const handleConfirm = async () => {
     if (!serialNo.toString().trim()) {
@@ -191,7 +220,7 @@ export default function ConfirmMessageModal({
                 color: '#64748b',
               }}
             >
-              {banglaPatientName} · {appointment.mobile} · {banglaDoctorName}
+              {englishPatientName} · {appointment.mobile} · {englishDoctorName}
             </p>
           </div>
           <button
@@ -354,10 +383,26 @@ export default function ConfirmMessageModal({
                 marginBottom: '8px',
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'space-between',
                 gap: '6px',
+                flexWrap: 'wrap',
               }}
             >
-              📱 রোগী এই মেসেজ পাবেন
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                📱 রোগী এই মেসেজ পাবেন
+              </span>
+              <span
+                style={{
+                  background: '#dbeafe',
+                  color: '#1e40af',
+                  padding: '2px 10px',
+                  borderRadius: '12px',
+                  fontSize: '11px',
+                  fontWeight: '700',
+                }}
+              >
+                {previewMessage.length} chars · {estimatedSegments} SMS
+              </span>
             </div>
             <pre
               style={{
@@ -365,7 +410,8 @@ export default function ConfirmMessageModal({
                 fontSize: '14px',
                 color: '#1e293b',
                 whiteSpace: 'pre-wrap',
-                fontFamily: "'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif",
+                fontFamily:
+                  "'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif",
                 lineHeight: '1.7',
               }}
             >
