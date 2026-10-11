@@ -4,6 +4,7 @@
 // ==================================================
 // ✅ Responsive: hides low-priority columns on small screens
 // ✅ departments + panels props for EditBookingModal
+// ✅ Check-in Location column (from QR scan tracking)
 // ==================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { AppointmentsTableSkeleton } from '../ui/SkeletonScreens';
@@ -28,6 +29,7 @@ import {
   QrCode,
   Calendar,
   Filter,
+  MapPin,
 } from 'lucide-react';
 import { db, doc, getDoc, updateDoc } from '../../firebase';
 import { useHospital } from '../../context/HospitalContext';
@@ -227,6 +229,114 @@ const calculatePatientType = (patient, appointment) => {
 };
 
 // ==================================================
+// ✅ Check-in Location Cell Renderer
+// ==================================================
+const CheckInLocationCell = ({ appt }) => {
+  const loc = appt.checkInLocation;
+  const summary = appt.checkInLocationSummary;
+
+  // ✅ Has location data
+  if (loc && summary && summary !== 'Location not captured') {
+    return (
+      <div style={{ lineHeight: '1.3' }}>
+        {/* City / District summary */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            color: '#0891b2',
+            fontWeight: '700',
+            fontSize: '11.5px',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            maxWidth: '160px',
+          }}
+          title={summary}
+        >
+          <MapPin size={11} style={{ flexShrink: 0 }} />
+          <span
+            style={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {summary}
+          </span>
+        </div>
+
+        {/* GPS coordinates */}
+        {loc.latitude && loc.longitude && (
+          <div
+            style={{
+              fontSize: '10px',
+              color: '#94a3b8',
+              marginTop: '2px',
+              fontFamily: 'monospace',
+            }}
+            title={`Lat: ${loc.latitude}, Lng: ${loc.longitude}`}
+          >
+            {loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)}
+          </div>
+        )}
+
+        {/* Device info */}
+        {(loc.deviceType || loc.browser) && (
+          <div
+            style={{
+              fontSize: '10px',
+              color: '#64748b',
+              marginTop: '2px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              flexWrap: 'wrap',
+            }}
+          >
+            {loc.deviceType && (
+              <span
+                style={{
+                  background: '#f1f5f9',
+                  padding: '1px 6px',
+                  borderRadius: '8px',
+                  fontWeight: '600',
+                }}
+              >
+                {loc.deviceType}
+              </span>
+            )}
+            {loc.browser && (
+              <span style={{ color: '#94a3b8' }}>{loc.browser}</span>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ✅ Old check-in without location data
+  if (appt.status === 'checked-in' || appt.status === 'completed') {
+    return (
+      <span
+        style={{
+          fontSize: '10.5px',
+          color: '#94a3b8',
+          fontStyle: 'italic',
+        }}
+        title="এই check-in-এ location data নেই (পুরনো)"
+      >
+        পুরনো check-in
+      </span>
+    );
+  }
+
+  // ✅ Not checked-in yet
+  return <span style={{ color: '#cbd5e1', fontSize: '11px' }}>—</span>;
+};
+
+// ==================================================
 // ✅ MAIN COMPONENT
 // ==================================================
 export default function AppointmentsTable({
@@ -259,8 +369,8 @@ export default function AppointmentsTable({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const isSmallScreen = screenWidth < 1024;   // < 1024px: hide low-priority columns
-  const isMobile = screenWidth < 768;         // < 768px: extra compact
+  const isSmallScreen = screenWidth < 1024;
+  const isMobile = screenWidth < 768;
 
   const [viewMode, setViewMode] = useState('list');
   const [searchTerm, setSearchTerm] = useState('');
@@ -366,7 +476,8 @@ export default function AppointmentsTable({
           (a.mobile?.toLowerCase().includes(term) || '') ||
           String(a.serialNo || '').includes(term) ||
           (a.doctorName?.toLowerCase().includes(term) || '') ||
-          (a.id?.toLowerCase().includes(term) || '')
+          (a.id?.toLowerCase().includes(term) || '') ||
+          (a.checkInLocationSummary?.toLowerCase().includes(term) || '')
       );
     }
 
@@ -1624,10 +1735,10 @@ export default function AppointmentsTable({
               width: '100%',
               borderCollapse: 'collapse',
               minWidth: isSmallScreen
-                ? '650px'
+                ? '700px'
                 : isArchivedView
-                ? '900px'
-                : '1000px',
+                ? '1000px'
+                : '1150px',
               fontSize: isSmallScreen ? '11.5px' : '13px',
             }}
           >
@@ -1653,6 +1764,14 @@ export default function AppointmentsTable({
                 {!isArchivedView && !isSmallScreen && (
                   <th style={{ padding: '8px 6px' }}>রিমার্কস</th>
                 )}
+
+                {/* ✅ NEW: Check-in Location Column */}
+                {!isSmallScreen && (
+                  <th style={{ padding: '8px 6px', whiteSpace: 'nowrap' }}>
+                    📍 Check-in
+                  </th>
+                )}
+
                 <th style={{ padding: '8px 6px' }}>স্ট্যাটাস</th>
                 {isArchivedView && !isSmallScreen && (
                   <th style={{ padding: '8px 6px', whiteSpace: 'nowrap' }}>আর্কাইভ</th>
@@ -1970,6 +2089,19 @@ export default function AppointmentsTable({
                             )}
                           </div>
                         )}
+                      </td>
+                    )}
+
+                    {/* ✅ NEW: Check-in Location Cell */}
+                    {!isSmallScreen && (
+                      <td
+                        style={{
+                          padding: '8px 6px',
+                          minWidth: '140px',
+                          maxWidth: '200px',
+                        }}
+                      >
+                        <CheckInLocationCell appt={appt} />
                       </td>
                     )}
 
@@ -2416,6 +2548,132 @@ export default function AppointmentsTable({
                   </span>
                 </div>
               )}
+
+              {/* ✅ NEW: Check-in Location Details */}
+              {viewDetails.checkInLocation && (
+                <div
+                  style={{
+                    gridColumn: isMobile ? 'auto' : '1 / -1',
+                    marginTop: '8px',
+                    borderTop: '1px solid #e2e8f0',
+                    paddingTop: '12px',
+                  }}
+                >
+                  <strong
+                    style={{
+                      color: '#0891b2',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    <MapPin size={14} /> Check-in Location Details
+                  </strong>
+
+                  <div
+                    style={{
+                      marginTop: '10px',
+                      background: '#f0f9ff',
+                      borderRadius: '8px',
+                      padding: '12px 14px',
+                      fontSize: '12.5px',
+                      lineHeight: '1.8',
+                    }}
+                  >
+                    {/* Summary */}
+                    {viewDetails.checkInLocationSummary &&
+                      viewDetails.checkInLocationSummary !== 'Location not captured' && (
+                        <div style={{ marginBottom: '6px' }}>
+                          <strong style={{ color: '#1c5fa8', fontSize: '13px' }}>
+                            🌍 {viewDetails.checkInLocationSummary}
+                          </strong>
+                        </div>
+                      )}
+
+                    {/* GPS */}
+                    {viewDetails.checkInLocation.latitude && (
+                      <div>
+                        <strong>GPS:</strong>{' '}
+                        <code
+                          style={{
+                            background: '#fff',
+                            padding: '1px 6px',
+                            borderRadius: '3px',
+                            fontSize: '11px',
+                          }}
+                        >
+                          {viewDetails.checkInLocation.latitude.toFixed(5)},{' '}
+                          {viewDetails.checkInLocation.longitude.toFixed(5)}
+                        </code>
+                        {viewDetails.checkInLocation.accuracy && (
+                          <span
+                            style={{
+                              color: '#64748b',
+                              fontSize: '11px',
+                              marginLeft: '6px',
+                            }}
+                          >
+                            (±{viewDetails.checkInLocation.accuracy}m)
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Full Address */}
+                    {viewDetails.checkInLocation.fullAddress && (
+                      <div>
+                        <strong>ঠিকানা:</strong>{' '}
+                        <span style={{ color: '#334155' }}>
+                          {viewDetails.checkInLocation.fullAddress}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Device */}
+                    {viewDetails.checkInLocation.deviceType && (
+                      <div
+                        style={{
+                          marginTop: '6px',
+                          paddingTop: '6px',
+                          borderTop: '1px dashed #bae6fd',
+                        }}
+                      >
+                        <strong>📱 Device:</strong>{' '}
+                        {viewDetails.checkInLocation.deviceType}
+                        {viewDetails.checkInLocation.browser &&
+                          ` · ${viewDetails.checkInLocation.browser}`}
+                        {viewDetails.checkInLocation.os &&
+                          ` · ${viewDetails.checkInLocation.os}`}
+                      </div>
+                    )}
+
+                    {/* Device extras */}
+                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
+                      {viewDetails.checkInLocation.screenSize &&
+                        `Screen: ${viewDetails.checkInLocation.screenSize}`}
+                      {viewDetails.checkInLocation.language &&
+                        ` · Lang: ${viewDetails.checkInLocation.language}`}
+                    </div>
+
+                    {/* Captured at */}
+                    {viewDetails.checkInLocation.capturedAt && (
+                      <div
+                        style={{
+                          fontSize: '11px',
+                          color: '#94a3b8',
+                          marginTop: '4px',
+                        }}
+                      >
+                        🕒{' '}
+                        {new Date(
+                          viewDetails.checkInLocation.capturedAt
+                        ).toLocaleString('bn-BD')}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div style={{ gridColumn: isMobile ? 'auto' : '1 / -1' }}>
                 <strong>স্ট্যাটাস:</strong>
                 <br />

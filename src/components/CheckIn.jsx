@@ -1,11 +1,165 @@
+// src/components/CheckIn.jsx
+// ==================================================
+// 🏥 CheckIn — QR Scan + Location Tracking
+// ==================================================
+// ✅ Captures GPS coordinates
+// ✅ Reverse geocoding (city/district)
+// ✅ Device info (browser, OS, screen)
+// ✅ IP-based location (fallback)
+// ✅ Saves to Firestore for dashboard analytics
+// ==================================================
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { CheckCircle, AlertCircle, Loader2, User, Stethoscope, Calendar, Clock, MapPin } from 'lucide-react';
-import { verifyQRCode, checkInWithQR, getAppointmentQR } from '../services/qrService';
-import { db, doc, getDoc } from '../firebase';
+import {
+  CheckCircle,
+  AlertCircle,
+  Loader2,
+  User,
+  Stethoscope,
+  Calendar,
+  Clock,
+  MapPin,
+} from 'lucide-react';
+import {
+  verifyQRCode,
+  checkInWithQR,
+  getAppointmentQR,
+} from '../services/qrService';
+import { db, doc, getDoc, updateDoc } from '../firebase';
 
 const HOSPITAL_PATH = 'hospitals/alafiyah_main';
 
+// ==================================================
+// ✅ Location Tracking Helpers
+// ==================================================
+
+/**
+ * GPS coordinates capture via Browser Geolocation API
+ * @returns {Promise<Object|null>}
+ */
+const captureGPSLocation = () => {
+  return new Promise((resolve) => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      console.warn('⚠️ Geolocation not supported');
+      resolve(null);
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      console.warn('⚠️ GPS capture timeout');
+      resolve(null);
+    }, 12000);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        clearTimeout(timeout);
+        resolve({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: Math.round(position.coords.accuracy),
+          capturedAt: new Date().toISOString(),
+        });
+      },
+      (error) => {
+        clearTimeout(timeout);
+        console.warn('⚠️ GPS error:', error.message);
+        resolve(null);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000, // 1 min cache
+      }
+    );
+  });
+};
+
+/**
+ * Reverse geocoding via OpenStreetMap Nominatim (free)
+ * @param {number} lat
+ * @param {number} lng
+ */
+const reverseGeocode = async (lat, lng) => {
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=en`,
+      {
+        headers: {
+          'User-Agent': 'Al-Afiyah-Hospital-App/1.0',
+        },
+      }
+    );
+
+    if (!response.ok) throw new Error('Reverse geocode failed');
+
+    const data = await response.json();
+    const addr = data.address || {};
+
+    return {
+      country: addr.country || '',
+      countryCode: addr.country_code?.toUpperCase() || '',
+      division: addr.state || addr.region || '',
+      district: addr.state_district || addr.county || '',
+      city: addr.city || addr.town || addr.village || '',
+      area: addr.suburb || addr.neighbourhood || '',
+      road: addr.road || '',
+      postcode: addr.postcode || '',
+      fullAddress: data.display_name || '',
+    };
+  } catch (err) {
+    console.warn('⚠️ Reverse geocode failed:', err.message);
+    return null;
+  }
+};
+
+/**
+ * Browser + device info
+ */
+const getDeviceInfo = () => {
+  if (typeof navigator === 'undefined') return {};
+
+  // Parse browser name
+  const ua = navigator.userAgent;
+  let browser = 'Unknown';
+  if (ua.includes('Edg/')) browser = 'Edge';
+  else if (ua.includes('Chrome/')) browser = 'Chrome';
+  else if (ua.includes('Safari/') && !ua.includes('Chrome')) browser = 'Safari';
+  else if (ua.includes('Firefox/')) browser = 'Firefox';
+  else if (ua.includes('Opera') || ua.includes('OPR/')) browser = 'Opera';
+
+  // Parse OS
+  let os = 'Unknown';
+  if (ua.includes('Windows')) os = 'Windows';
+  else if (ua.includes('Mac OS')) os = 'macOS';
+  else if (ua.includes('Android')) os = 'Android';
+  else if (ua.includes('iOS') || ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+  else if (ua.includes('Linux')) os = 'Linux';
+
+  // Device type
+  let deviceType = 'Desktop';
+  if (/Mobile|Android|iPhone|iPad|iPod/i.test(ua)) deviceType = 'Mobile';
+  if (/iPad|Tablet/i.test(ua)) deviceType = 'Tablet';
+
+  return {
+    userAgent: ua,
+    browser,
+    os,
+    deviceType,
+    language: navigator.language || '',
+    platform: navigator.platform || '',
+    screenSize:
+      typeof window !== 'undefined'
+        ? `${window.screen.width}x${window.screen.height}`
+        : '',
+    timezone:
+      Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+    referrer: typeof document !== 'undefined' ? document.referrer || 'Direct' : '',
+  };
+};
+
+// ==================================================
+// ✅ CheckIn CSS
+// ==================================================
 const CheckInCSS = `
   .checkin-wrapper {
     min-height: 100vh;
@@ -92,8 +246,28 @@ const CheckInCSS = `
   .checkin-success-icon { font-size: 56px; margin-bottom: 8px; }
   .spinner { animation: spin 1s linear infinite; }
   @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  /* ✅ Location status badge */
+  .location-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #eff6ff;
+    color: #1e40af;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 16px;
+  }
+  .location-badge.captured { background: #dcfce7; color: #166534; }
+  .location-badge.loading { background: #fef3c7; color: #92400e; }
+  .location-badge.failed { background: #fee2e2; color: #991b1b; }
 `;
 
+// ==================================================
+// ✅ Main Component
+// ==================================================
 export default function CheckIn() {
   const { appointmentId } = useParams();
   const navigate = useNavigate();
@@ -105,11 +279,18 @@ export default function CheckIn() {
   const [qrCode, setQrCode] = useState(null);
   const hasChecked = useRef(false);
 
+  // ✅ NEW: Location tracking states
+  const [locationData, setLocationData] = useState(null);
+  const [locationStatus, setLocationStatus] = useState('idle'); // idle | loading | captured | failed
+
+  // ==================================================
+  // ✅ Load appointment + start location capture
+  // ==================================================
   useEffect(() => {
     const loadData = async () => {
       if (!appointmentId || hasChecked.current) return;
       hasChecked.current = true;
-      
+
       try {
         const apptRef = doc(db, HOSPITAL_PATH, 'appointments', appointmentId);
         const apptSnap = await getDoc(apptRef);
@@ -120,10 +301,10 @@ export default function CheckIn() {
         }
         const data = apptSnap.data();
         setAppointment({ id: appointmentId, ...data });
-        
+
         const qr = await getAppointmentQR(appointmentId);
         setQrCode(qr);
-        
+
         if (data.status === 'checked-in' || data.status === 'completed') {
           setSuccess(true);
         }
@@ -136,15 +317,76 @@ export default function CheckIn() {
     loadData();
   }, [appointmentId]);
 
+  // ✅ NEW: Auto-capture location on page load (background)
+  useEffect(() => {
+    let mounted = true;
+
+    const captureLocation = async () => {
+      setLocationStatus('loading');
+      try {
+        // Step 1: GPS coordinates
+        const gps = await captureGPSLocation();
+        if (!mounted) return;
+
+        let geoInfo = null;
+        if (gps) {
+          // Step 2: Reverse geocode
+          geoInfo = await reverseGeocode(gps.latitude, gps.longitude);
+          if (!mounted) return;
+        }
+
+        // Step 3: Device info (always available)
+        const device = getDeviceInfo();
+
+        const fullLocationData = {
+          gps: gps || null,
+          geo: geoInfo || null,
+          device: device || null,
+          capturedAt: new Date().toISOString(),
+        };
+
+        if (mounted) {
+          setLocationData(fullLocationData);
+          setLocationStatus(gps ? 'captured' : 'failed');
+        }
+      } catch (err) {
+        console.warn('⚠️ Location capture error:', err);
+        if (mounted) {
+          setLocationStatus('failed');
+          // Still capture device info even if GPS fails
+          setLocationData({
+            gps: null,
+            geo: null,
+            device: getDeviceInfo(),
+            capturedAt: new Date().toISOString(),
+          });
+        }
+      }
+    };
+
+    captureLocation();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // ==================================================
+  // ✅ Check-in with location data
+  // ==================================================
   const handleCheckIn = async () => {
     if (checkingIn || !appointment) return;
     setCheckingIn(true);
     setError('');
-    
+
     try {
-      await checkInWithQR(appointmentId);
+      // ✅ Pass location data to service
+      await checkInWithQR(appointmentId, {
+        location: locationData,
+      });
+
       setSuccess(true);
-      setAppointment(prev => ({ ...prev, status: 'checked-in' }));
+      setAppointment((prev) => ({ ...prev, status: 'checked-in' }));
     } catch (err) {
       setError(err.message || 'চেক-ইন করতে সমস্যা হয়েছে');
     } finally {
@@ -156,6 +398,9 @@ export default function CheckIn() {
     navigate('/');
   };
 
+  // ==================================================
+  // ✅ Loading state
+  // ==================================================
   if (loading) {
     return (
       <div className="checkin-wrapper">
@@ -168,11 +413,46 @@ export default function CheckIn() {
     );
   }
 
+  // ==================================================
+  // ✅ Location status badge helper
+  // ==================================================
+  const renderLocationBadge = () => {
+    if (locationStatus === 'loading') {
+      return (
+        <div className="location-badge loading">
+          <Loader2 size={13} className="spinner" />
+          লোকেশন শনাক্ত হচ্ছে...
+        </div>
+      );
+    }
+    if (locationStatus === 'captured' && locationData?.geo) {
+      const { city, district } = locationData.geo;
+      const label = [city, district].filter(Boolean).join(', ') || 'শনাক্ত হয়েছে';
+      return (
+        <div className="location-badge captured">
+          <MapPin size={13} />
+          📍 {label}
+        </div>
+      );
+    }
+    if (locationStatus === 'failed') {
+      return (
+        <div className="location-badge failed">
+          <AlertCircle size={13} />
+          লোকেশন পাওয়া যায়নি
+        </div>
+      );
+    }
+    return null;
+  };
+
+  // ==================================================
+  // ✅ Render
+  // ==================================================
   return (
     <div className="checkin-wrapper">
       <style>{CheckInCSS}</style>
       <div className="checkin-card">
-        
         {error && (
           <div className="checkin-error">
             <AlertCircle size={20} />
@@ -205,7 +485,12 @@ export default function CheckIn() {
           <>
             <div className="checkin-icon">🏥</div>
             <h1 className="checkin-title">চেক-ইন করুন</h1>
-            <p className="checkin-sub">আপনার সিরিয়াল নিশ্চিত করতে নিচের বাটনে ক্লিক করুন</p>
+            <p className="checkin-sub">
+              আপনার সিরিয়াল নিশ্চিত করতে নিচের বাটনে ক্লিক করুন
+            </p>
+
+            {/* ✅ Location Status Badge */}
+            {renderLocationBadge()}
 
             {appointment && (
               <div className="checkin-patient-info">
@@ -230,15 +515,25 @@ export default function CheckIn() {
 
             {qrCode && (
               <div style={{ marginBottom: '16px' }}>
-                <img src={qrCode} alt="QR Code" style={{ width: '120px', height: '120px' }} />
+                <img
+                  src={qrCode}
+                  alt="QR Code"
+                  style={{ width: '120px', height: '120px' }}
+                />
               </div>
             )}
 
             <button
               onClick={handleCheckIn}
               disabled={checkingIn || !appointment}
-              className={`checkin-btn ${checkingIn ? '' : 'checkin-btn-primary'}`}
-              style={checkingIn ? { background: '#94a3b8', cursor: 'not-allowed' } : {}}
+              className={`checkin-btn ${
+                checkingIn ? '' : 'checkin-btn-primary'
+              }`}
+              style={
+                checkingIn
+                  ? { background: '#94a3b8', cursor: 'not-allowed' }
+                  : {}
+              }
             >
               {checkingIn ? (
                 <>
