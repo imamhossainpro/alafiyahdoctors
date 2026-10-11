@@ -7,6 +7,7 @@
 // ✅ browserLocalPersistence — session tab বন্ধ করলেও থাকে
 // ✅ GA4 analytics with pending event queue
 // ✅ ESM exports for all services
+// ✅ getCountFromServer — for efficient document counting
 // ==================================================
 import { initializeApp } from 'firebase/app';
 
@@ -33,6 +34,7 @@ import {
   arrayUnion,
   arrayRemove,
   runTransaction,
+  getCountFromServer,   // ✅ NEW
 } from 'firebase/firestore';
 
 // ---------- Auth ----------
@@ -203,6 +205,7 @@ export {
   arrayUnion,
   arrayRemove,
   runTransaction,
+  getCountFromServer,   // ✅ NEW
 };
 
 // ==================================================
