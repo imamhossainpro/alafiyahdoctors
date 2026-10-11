@@ -2,11 +2,18 @@
 // ==================================================
 // 📍 Location Tracker — GPS + Geocode + Device
 // ==================================================
+// ✅ GPS capture with timeout
+// ✅ Reverse geocoding (OpenStreetMap Nominatim)
+// ✅ Device info
+// ✅ Distance calculation
+// ✅ Fallback: manual address → approximate GPS
+// ==================================================
 import {
   distanceFromHospital,
   formatDistance,
   getDistanceCategoryInfo,
 } from './distance';
+import { getApproximateGPS } from '../config/locations';
 
 // ==================================================
 // ✅ GPS Coordinates Capture
@@ -42,7 +49,7 @@ export const captureGPS = () => {
       {
         enableHighAccuracy: true,
         timeout: 10000,
-        maximumAge: 300000, // 5 min cache
+        maximumAge: 300000,
       }
     );
   });
@@ -129,19 +136,15 @@ export const getDeviceInfo = () => {
 // ==================================================
 export const captureCompleteLocation = async () => {
   try {
-    // Step 1: GPS
     const gps = await captureGPS();
 
-    // Step 2: Reverse geocode
     let geo = null;
     if (gps) {
       geo = await reverseGeocode(gps.latitude, gps.longitude);
     }
 
-    // Step 3: Device
     const device = getDeviceInfo();
 
-    // Step 4: Distance
     let distance = null;
     if (gps) {
       const km = distanceFromHospital(gps.latitude, gps.longitude);
@@ -154,8 +157,12 @@ export const captureCompleteLocation = async () => {
       };
     }
 
-    // Step 5: Summary
-    const summaryParts = [geo?.area, geo?.city, geo?.district, geo?.division].filter(Boolean);
+    const summaryParts = [
+      geo?.area,
+      geo?.city,
+      geo?.district,
+      geo?.division,
+    ].filter(Boolean);
     const uniqueSummary = [...new Set(summaryParts)];
 
     return {
@@ -163,8 +170,12 @@ export const captureCompleteLocation = async () => {
       geo: geo || null,
       device,
       distance,
-      summary: uniqueSummary.length > 0 ? uniqueSummary.join(', ') : 'Unknown Location',
+      summary:
+        uniqueSummary.length > 0
+          ? uniqueSummary.join(', ')
+          : 'Unknown Location',
       capturedAt: new Date().toISOString(),
+      source: gps ? 'gps' : 'none',
     };
   } catch (err) {
     console.error('❌ captureCompleteLocation error:', err);
@@ -175,6 +186,7 @@ export const captureCompleteLocation = async () => {
       distance: null,
       summary: 'Location not captured',
       capturedAt: new Date().toISOString(),
+      source: 'error',
     };
   }
 };
@@ -182,11 +194,148 @@ export const captureCompleteLocation = async () => {
 // ==================================================
 // ✅ Build Firestore-payload for booking location
 // ==================================================
-export const buildBookingLocationPayload = (location) => {
-  if (!location?.gps) {
+// @param {Object} location       — output from captureCompleteLocation()
+// @param {string} manualAddress  — patient's typed address (fallback)
+// ==================================================
+export const buildBookingLocationPayload = (
+  location,
+  manualAddress = ''
+) => {
+  // ═══════════════════════════════════════════════════
+  // ✅ Case 1: GPS captured successfully
+  // ═══════════════════════════════════════════════════
+  if (location?.gps) {
     return {
-      bookingLocation: null,
-      bookingLocationSummary: 'Location not captured',
+      bookingLocation: {
+        latitude: location.gps.latitude,
+        longitude: location.gps.longitude,
+        accuracy: location.gps.accuracy,
+
+        country: location.geo?.country || '',
+        countryCode: location.geo?.countryCode || '',
+        division: location.geo?.division || '',
+        district: location.geo?.district || '',
+        city: location.geo?.city || '',
+        area: location.geo?.area || '',
+        road: location.geo?.road || '',
+        postcode: location.geo?.postcode || '',
+        fullAddress: location.geo?.fullAddress || '',
+
+        browser: location.device?.browser || '',
+        os: location.device?.os || '',
+        deviceType: location.device?.deviceType || '',
+        language: location.device?.language || '',
+        screenSize: location.device?.screenSize || '',
+        timezone: location.device?.timezone || '',
+        referrer: location.device?.referrer || '',
+        userAgent: location.device?.userAgent || '',
+
+        distanceKm: location.distance?.distanceKm ?? null,
+        distanceText: location.distance?.distanceText || '—',
+        distanceCategory: location.distance?.category || 'unknown',
+
+        source: 'gps',
+        capturedAt: location.capturedAt || new Date().toISOString(),
+      },
+      bookingLocationSummary:
+        location.summary || 'Unknown Location',
+      bookingDistanceKm: location.distance?.distanceKm ?? null,
+      bookingDistanceText: location.distance?.distanceText || '—',
+      bookingDistanceCategory: location.distance?.category || 'unknown',
+      bookingDistanceCategoryLabel:
+        location.distance?.categoryLabel || 'অজানা',
+    };
+  }
+
+  // ═══════════════════════════════════════════════════
+  // ✅ Case 2: GPS failed BUT manual address available
+  // ═══════════════════════════════════════════════════
+  const trimmedAddress = String(manualAddress || '').trim();
+  if (trimmedAddress) {
+    const approx = getApproximateGPS(trimmedAddress);
+
+    if (approx) {
+      const km = distanceFromHospital(approx.lat, approx.lng);
+      const catInfo = getDistanceCategoryInfo(km);
+
+      return {
+        bookingLocation: {
+          latitude: approx.lat,
+          longitude: approx.lng,
+          accuracy: null,
+
+          country: 'Bangladesh',
+          countryCode: 'BD',
+          division: 'Chattogram',
+          district: 'Chattogram',
+          city: 'Chattogram',
+          area: approx.matchedName || trimmedAddress,
+          road: '',
+          postcode: '',
+          fullAddress: trimmedAddress,
+
+          browser: location?.device?.browser || '',
+          os: location?.device?.os || '',
+          deviceType: location?.device?.deviceType || '',
+          language: location?.device?.language || '',
+          screenSize: location?.device?.screenSize || '',
+          timezone: location?.device?.timezone || '',
+          referrer: location?.device?.referrer || '',
+          userAgent: location?.device?.userAgent || '',
+
+          distanceKm: km,
+          distanceText: formatDistance(km),
+          distanceCategory: catInfo.category,
+
+          source: 'manual-address-lookup',
+          matchedName: approx.matchedName,
+          matchType: approx.matchType,
+          capturedAt: new Date().toISOString(),
+        },
+        bookingLocationSummary: trimmedAddress,
+        bookingDistanceKm: km,
+        bookingDistanceText: formatDistance(km),
+        bookingDistanceCategory: catInfo.category,
+        bookingDistanceCategoryLabel: catInfo.label,
+      };
+    }
+
+    // ═══════════════════════════════════════════════════
+    // ✅ Case 2b: Manual address but no GPS match found
+    // ═══════════════════════════════════════════════════
+    return {
+      bookingLocation: {
+        latitude: null,
+        longitude: null,
+        accuracy: null,
+
+        country: 'Bangladesh',
+        countryCode: 'BD',
+        division: '',
+        district: '',
+        city: '',
+        area: trimmedAddress,
+        road: '',
+        postcode: '',
+        fullAddress: trimmedAddress,
+
+        browser: location?.device?.browser || '',
+        os: location?.device?.os || '',
+        deviceType: location?.device?.deviceType || '',
+        language: location?.device?.language || '',
+        screenSize: location?.device?.screenSize || '',
+        timezone: location?.device?.timezone || '',
+        referrer: location?.device?.referrer || '',
+        userAgent: location?.device?.userAgent || '',
+
+        distanceKm: null,
+        distanceText: '—',
+        distanceCategory: 'unknown',
+
+        source: 'manual-address-only',
+        capturedAt: new Date().toISOString(),
+      },
+      bookingLocationSummary: trimmedAddress,
       bookingDistanceKm: null,
       bookingDistanceText: '—',
       bookingDistanceCategory: 'unknown',
@@ -194,42 +343,16 @@ export const buildBookingLocationPayload = (location) => {
     };
   }
 
+  // ═══════════════════════════════════════════════════
+  // ✅ Case 3: Nothing available
+  // ═══════════════════════════════════════════════════
   return {
-    bookingLocation: {
-      latitude: location.gps.latitude,
-      longitude: location.gps.longitude,
-      accuracy: location.gps.accuracy,
-
-      country: location.geo?.country || '',
-      countryCode: location.geo?.countryCode || '',
-      division: location.geo?.division || '',
-      district: location.geo?.district || '',
-      city: location.geo?.city || '',
-      area: location.geo?.area || '',
-      road: location.geo?.road || '',
-      postcode: location.geo?.postcode || '',
-      fullAddress: location.geo?.fullAddress || '',
-
-      browser: location.device?.browser || '',
-      os: location.device?.os || '',
-      deviceType: location.device?.deviceType || '',
-      language: location.device?.language || '',
-      screenSize: location.device?.screenSize || '',
-      timezone: location.device?.timezone || '',
-      referrer: location.device?.referrer || '',
-      userAgent: location.device?.userAgent || '',
-
-      distanceKm: location.distance?.distanceKm ?? null,
-      distanceText: location.distance?.distanceText || '—',
-      distanceCategory: location.distance?.category || 'unknown',
-
-      capturedAt: location.capturedAt || new Date().toISOString(),
-    },
-    bookingLocationSummary: location.summary || 'Unknown Location',
-    bookingDistanceKm: location.distance?.distanceKm ?? null,
-    bookingDistanceText: location.distance?.distanceText || '—',
-    bookingDistanceCategory: location.distance?.category || 'unknown',
-    bookingDistanceCategoryLabel: location.distance?.categoryLabel || 'অজানা',
+    bookingLocation: null,
+    bookingLocationSummary: 'Location not captured',
+    bookingDistanceKm: null,
+    bookingDistanceText: '—',
+    bookingDistanceCategory: 'unknown',
+    bookingDistanceCategoryLabel: 'অজানা',
   };
 };
 

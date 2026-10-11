@@ -694,8 +694,8 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
         hospitalId,
         fromDoctorLink: isDirectBooking,
 
-        // ✅ NEW: Booking Location data
-        ...buildBookingLocationPayload(bookingLocation),
+          // ✅ NEW: Booking Location data (with manual address fallback)
+        ...buildBookingLocationPayload(bookingLocation, formData.address),
       };
 
       const docRef = await addDoc(
