@@ -1386,29 +1386,6 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
                   </div>
                 )}
 
-              {/* GPS Coordinates */}
-              {bookingLocation.gps && (
-                <div className="gps-info-box">
-                  <div className="gps-badge">📌 GPS</div>
-                  <div className="gps-value">
-                    {bookingLocation.gps.latitude.toFixed(5)},{' '}
-                    {bookingLocation.gps.longitude.toFixed(5)}
-                    {bookingLocation.gps.accuracy && (
-                      <span
-                        style={{
-                          fontSize: '11px',
-                          color: '#94a3b8',
-                          marginLeft: '6px',
-                          fontWeight: '400',
-                        }}
-                      >
-                        (±{bookingLocation.gps.accuracy}m)
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-
               {/* Hospital Info */}
               <div className="hospital-info-box">
                 <div className="hospital-info-title">🏥 হাসপাতাল</div>
