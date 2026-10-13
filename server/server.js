@@ -2,8 +2,8 @@
 // ==================================================
 // 🏥 আল-আফিয়া হাসপাতাল — Backend Server
 // ==================================================
-// ✅ WhatsApp via Baileys (v6.7.9)
-// ✅ SMS via Automas Technologies
+// ✅ WhatsApp via Baileys
+// ✅ SMS via Automas Technologies (api.automas.com.bd)
 // ✅ Email via Gmail
 // ✅ FCM Push Notifications
 // ✅ Bot login: 8801898792301
@@ -99,7 +99,7 @@ app.use(express.json());
 // ==================================================
 // ---------- কনস্ট্যান্ট ----------
 // ==================================================
-const HOSPITAL_ID = 'alafiyah_main';
+const HOSPITAL_ID = process.env.HOSPITAL_ID || 'alafiyah_main';
 
 // ✅ Bot login number — এই number দিয়ে WhatsApp-এ login করবেন
 const HOSPITAL_WHATSAPP = '8801898792301';
@@ -235,6 +235,9 @@ async function sendToDevice(fcmToken, notification, data = {}) {
 async function sendSMS(phoneNumber, message) {
   try {
     const apiKey = process.env.AUTOMAS_API_KEY;
+    const apiUrl = process.env.AUTOMAS_API_URL || 'https://api.automas.com.bd/api/tm/onetomany';
+    const senderId = process.env.AUTOMAS_SENDER_ID || 'AL AFIYAH';
+
     if (!apiKey) {
       console.error('❌ AUTOMAS_API_KEY not set');
       return false;
@@ -247,36 +250,50 @@ async function sendSMS(phoneNumber, message) {
       number = '88' + number;
     }
 
-    console.log(`📤 Sending SMS to: ${number}`);
+    console.log(`📤 Sending SMS to: ${number} via ${apiUrl}`);
 
-    const response = await axios.post(
-      'https://api.automastechnologies.com/api/sms/send',
-      {
-        api_key: apiKey,
-        sender_id: process.env.AUTOMAS_SENDER_ID || 'AL AFIYAH',
-        to: number,
-        message: message,
-      },
-      {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 15000,
-      }
-    );
+    // ✅ Automas JSON API
+    const payload = {
+      api_key: apiKey,
+      senderid: senderId,
+      number: number,
+      message: message,
+    };
+
+    console.log(`📦 SMS Payload:`, JSON.stringify({ ...payload, api_key: '***' }));
+
+    const response = await axios.post(apiUrl, payload, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 15000,
+    });
 
     console.log(`📥 Automas response:`, JSON.stringify(response.data, null, 2));
 
-    if (response.data && (response.data.success === true || response.data.status === 'success')) {
+    // ✅ Response check
+    if (
+      response.data &&
+      (response.data.status === 'success' ||
+        response.data.status === 200 ||
+        response.data.status === 'SUCCESS' ||
+        response.data.success === true ||
+        response.data.response_code === 200 ||
+        response.data.responseCode === 200)
+    ) {
       console.log(`📱 SMS sent successfully`);
       return true;
     } else {
-      const errorMsg = response.data?.message || 'Unknown error';
+      const errorMsg =
+        response.data?.message ||
+        response.data?.error ||
+        JSON.stringify(response.data);
       console.error(`❌ SMS send failed: ${errorMsg}`);
       return false;
     }
   } catch (error) {
     console.error('❌ SMS API error:', error.message);
     if (error.response) {
-      console.error('   Response:', error.response.data);
+      console.error('   Status:', error.response.status);
+      console.error('   Response:', JSON.stringify(error.response.data));
     }
     return false;
   }
