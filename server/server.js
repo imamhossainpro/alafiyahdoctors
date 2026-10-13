@@ -99,7 +99,7 @@ app.use(express.json());
 
 // ---------- কনস্ট্যান্ট ----------
 const HOSPITAL_ID = 'alafiyah_main';
-const HOSPITAL_WHATSAPP = '8801889885094';
+const HOSPITAL_WHATSAPP = '8801886776513'; // +8801886776513
 
 // ✅ Hospital Info — SMS-এ ব্যবহৃত
 const HOSPITAL_NAME_EN = 'Al-Afiyah Hospital';
