@@ -2,7 +2,7 @@
 // ==================================================
 // 📩 ConfirmMessageModal — Patient arrival time
 // ==================================================
-// ✅ English message only (matches server.js)
+// ✅ English short message — 1 SMS fit (< 160 chars)
 // ✅ Uses nameEn / doctorNameEn (no transliteration)
 // ✅ API endpoint: https://api.alafiyahhospital.com
 // ==================================================
@@ -44,7 +44,7 @@ const TIME_PRESETS = [
 ];
 
 // ==================================================
-// ✅ Helper: Format date as DD/MM/YY (short English)
+// ✅ Helper: Format date as DD/MM/YY
 // ==================================================
 const formatDateShort = (dateStr) => {
   if (!dateStr) return '';
@@ -69,12 +69,10 @@ export default function ConfirmMessageModal({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
 
-  // Appointment থেকে প্রাথমিক মান লোড
   useEffect(() => {
     if (appointment) {
       setSerialNo(appointment.serialNo || '');
 
-      // Default arrival time — বর্তমান সময়ের পরবর্তী ঘন্টা
       const now = new Date();
       const nextHour = now.getHours() + 1;
       const hour12 =
@@ -86,9 +84,6 @@ export default function ConfirmMessageModal({
 
   if (!appointment) return null;
 
-  // ==================================================
-  // ✅ English fields — prefer nameEn / doctorNameEn
-  // ==================================================
   const englishPatientName =
     appointment.nameEn || appointment.name || 'Patient';
   const englishDoctorName =
@@ -97,19 +92,15 @@ export default function ConfirmMessageModal({
   const formattedDate = formatDateShort(bookingDate);
 
   // ==================================================
-  // ✅ Preview Message — হুবহু server.js এর সাথে মিল
+  // ✅ Preview Message — SHORT VERSION (1 SMS fit)
   // ==================================================
-  const previewMessage = `Assalamu Alaikum. Your appointment with ${englishDoctorName} at ${HOSPITAL_NAME_EN} is confirmed.
-
-Patient: ${englishPatientName}
-Serial: ${serialNo || appointment.serialNo}
-Date: ${formattedDate}
-Arrival Time: ${arrivalTime}
-
-Please arrive on time. Contact: ${HOSPITAL_CONTACT}`;
+  const previewMessage = `${HOSPITAL_NAME_EN}: Appointment Confirmed.
+Patient: ${englishPatientName} | Serial: ${serialNo || appointment.serialNo}
+Doctor: ${englishDoctorName}
+Date: ${formattedDate} | Time: ${arrivalTime}
+Contact: ${HOSPITAL_CONTACT}`;
 
   // ✅ Estimated SMS segments (English = GSM-7)
-  // 160 chars single, 153 chars per segment for multi-part
   const estimatedSegments =
     previewMessage.length <= 160
       ? 1

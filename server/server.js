@@ -8,6 +8,7 @@
 // ✅ FCM Push Notifications
 // ✅ Bot login: 8801898792301
 // ✅ Notification target: 8801886776513
+// ✅ Short SMS (1 SMS fit) for cost savings
 // ==================================================
 require('dotenv').config();
 const express = require('express');
@@ -268,7 +269,7 @@ async function sendSMS(phoneNumber, message) {
       number = '0' + number;
     }
 
-    // ✅ Auto-detect message length: 'long' if > 160 chars
+    // ✅ Auto-detect message length
     const isLongMessage = message.length > 160;
     const messageType = isLongMessage ? 'long' : 'text';
 
@@ -276,14 +277,13 @@ async function sendSMS(phoneNumber, message) {
       `📤 Sending SMS to: ${number} via ${apiUrl} (${message.length} chars, type=${messageType})`
     );
 
-    // ✅ Automas সঠিক body format
     const payload = {
       api_key: apiKey,
       senderid: senderId,
       type: messageType,
       scheduledDateTime: '',
       msg: message,
-      contacts: number, // ⚠️ 'contacts' — 'number' নয়
+      contacts: number,
     };
 
     console.log(
@@ -291,7 +291,7 @@ async function sendSMS(phoneNumber, message) {
       JSON.stringify({
         ...payload,
         api_key: '***',
-        msg: payload.msg.substring(0, 40) + '...',
+        msg: payload.msg.substring(0, 50) + '...',
       })
     );
 
@@ -302,12 +302,20 @@ async function sendSMS(phoneNumber, message) {
 
     console.log(`📥 Automas response:`, JSON.stringify(response.data, null, 2));
 
-    // ✅ Automas response format:
-    // Success: { "response": [{ "status": 0, "id": xxx, "msisdn": "..." }] }
+    // ✅ Automas response — BOTH formats handle:
+    // Format 1: { "response": [{ "status": 0, "id": xxx, "msisdn": "..." }] }
+    // Format 2: [{ "status": 0, "id": xxx, "msisdn": "..." }]
     const resp = response.data;
+    let resultsArray = null;
 
     if (resp && Array.isArray(resp.response) && resp.response.length > 0) {
-      const firstResult = resp.response[0];
+      resultsArray = resp.response;
+    } else if (Array.isArray(resp) && resp.length > 0) {
+      resultsArray = resp;
+    }
+
+    if (resultsArray && resultsArray.length > 0) {
+      const firstResult = resultsArray[0];
       const status = firstResult.status;
 
       if (status === 0) {
@@ -486,15 +494,12 @@ async function sendPatientConfirmation(data, appointmentId) {
   const serial = data.serialNo || '';
   const arrivalTime = data.doctorTime || 'As scheduled';
 
-  // ✅ Unified SMS text — matches ConfirmMessageModal preview
-  const smsText = `Assalamu Alaikum. Your appointment with ${englishDoctorName} at ${HOSPITAL_NAME_EN} is confirmed.
-
-Patient: ${englishPatientName}
-Serial: ${serial}
-Date: ${formattedDate}
-Arrival Time: ${arrivalTime}
-
-Please arrive on time. Contact: ${HOSPITAL_CONTACT}`;
+  // ✅ SHORT SMS text — 1 SMS fit (< 160 chars)
+  const smsText = `${HOSPITAL_NAME_EN}: Appointment Confirmed.
+Patient: ${englishPatientName} | Serial: ${serial}
+Doctor: ${englishDoctorName}
+Date: ${formattedDate} | Time: ${arrivalTime}
+Contact: ${HOSPITAL_CONTACT}`;
 
   const emailHtml = `
     <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; border: 1px solid #e2e8f0; padding: 24px; border-radius: 12px;">
