@@ -3,7 +3,7 @@
 // 🏥 আল-আফিয়া হাসপাতাল — Backend Server
 // ==================================================
 // ✅ WhatsApp via Baileys
-// ✅ SMS via Automas Technologies (api.automas.com.bd/api/tm/onetomany)
+// ✅ SMS via Automas Technologies (api.automas.com.bd/smsapiv4)
 // ✅ Email via Gmail
 // ✅ FCM Push Notifications
 // ✅ Bot login: 8801898792301
@@ -100,6 +100,8 @@ app.use(express.json());
 // ---------- কনস্ট্যান্ট ----------
 // ==================================================
 const HOSPITAL_ID = process.env.HOSPITAL_ID || 'alafiyah_main';
+const HOSPITAL_NAME_EN = 'Al-Afiyah Hospital';
+const HOSPITAL_CONTACT = '01886-776512';
 
 // ✅ Bot login number — এই number দিয়ে WhatsApp-এ login করবেন
 const HOSPITAL_WHATSAPP = '8801898792301';
@@ -129,6 +131,18 @@ function formatDateDDMMYYYY(dateStr) {
   const parts = String(dateStr).split('-');
   if (parts.length === 3 && parts[0].length === 4) {
     return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  }
+  return dateStr;
+}
+
+// ==================================================
+// ✅ Helper: Format date as DD/MM/YY (short, used in SMS/Email)
+// ==================================================
+function formatDateShort(dateStr) {
+  if (!dateStr) return '';
+  const parts = String(dateStr).split('-');
+  if (parts.length === 3 && parts[0].length === 4) {
+    return `${parts[2]}/${parts[1]}/${parts[0].slice(-2)}`;
   }
   return dateStr;
 }
@@ -184,7 +198,7 @@ async function sendToDevice(fcmToken, notification, data = {}) {
     const message = {
       token: fcmToken,
       notification: {
-        title: notification.title || 'Al-Afiyah Hospital',
+        title: notification.title || HOSPITAL_NAME_EN,
         body: notification.body || '',
       },
       data: {
@@ -230,36 +244,56 @@ async function sendToDevice(fcmToken, notification, data = {}) {
 }
 
 // ==================================================
-// 📱 SMS পাঠানোর ফাংশন (Automas Technologies)
+// 📱 SMS পাঠানোর ফাংশন (Automas Technologies — smsapiv4)
 // ==================================================
 async function sendSMS(phoneNumber, message) {
   try {
     const apiKey = process.env.AUTOMAS_API_KEY;
-    const apiUrl = process.env.AUTOMAS_API_URL || 'https://api.automas.com.bd/api/tm/onetomany';
     const senderId = process.env.AUTOMAS_SENDER_ID || 'AL AFIYAH';
+
+    // ✅ সঠিক URL (documentation অনুযায়ী)
+    const apiUrl = 'https://api.automas.com.bd/smsapiv4';
 
     if (!apiKey) {
       console.error('❌ AUTOMAS_API_KEY not set');
       return false;
     }
 
+    // ✅ Number format: Automas চায় 01XXXXXXXXX (no 88 prefix)
     let number = phoneNumber.replace(/[^0-9]/g, '');
-    if (number.startsWith('0')) {
-      number = '88' + number.substring(1);
-    } else if (!number.startsWith('88')) {
-      number = '88' + number;
+    if (number.startsWith('88')) {
+      number = number.substring(2); // 8801898792301 → 01898792301
+    }
+    if (!number.startsWith('0')) {
+      number = '0' + number;
     }
 
-    console.log(`📤 Sending SMS to: ${number} via ${apiUrl}`);
+    // ✅ Auto-detect message length: 'long' if > 160 chars
+    const isLongMessage = message.length > 160;
+    const messageType = isLongMessage ? 'long' : 'text';
 
+    console.log(
+      `📤 Sending SMS to: ${number} via ${apiUrl} (${message.length} chars, type=${messageType})`
+    );
+
+    // ✅ Automas সঠিক body format
     const payload = {
       api_key: apiKey,
       senderid: senderId,
-      number: number,
-      message: message,
+      type: messageType,
+      scheduledDateTime: '',
+      msg: message,
+      contacts: number, // ⚠️ 'contacts' — 'number' নয়
     };
 
-    console.log(`📦 SMS Payload:`, JSON.stringify({ ...payload, api_key: '***' }));
+    console.log(
+      `📦 SMS Payload:`,
+      JSON.stringify({
+        ...payload,
+        api_key: '***',
+        msg: payload.msg.substring(0, 40) + '...',
+      })
+    );
 
     const response = await axios.post(apiUrl, payload, {
       headers: { 'Content-Type': 'application/json' },
@@ -268,34 +302,44 @@ async function sendSMS(phoneNumber, message) {
 
     console.log(`📥 Automas response:`, JSON.stringify(response.data, null, 2));
 
-    // ✅ Automas response check — `[]` (empty array) is also SUCCESS
-    const data = response.data;
+    // ✅ Automas response format:
+    // Success: { "response": [{ "status": 0, "id": xxx, "msisdn": "..." }] }
+    const resp = response.data;
 
-    // Success cases:
-    // 1. Empty array `[]` — Automas sends this on success
-    // 2. Object with status: 'success' / 200 / 'SUCCESS'
-    // 3. Object with success: true
-    // 4. Object with response_code: 200
-    const isEmptyArray = Array.isArray(data) && data.length === 0;
-    const isSuccessObject =
-      data &&
-      !Array.isArray(data) &&
-      (data.status === 'success' ||
-        data.status === 200 ||
-        data.status === 'SUCCESS' ||
-        data.success === true ||
-        data.response_code === 200 ||
-        data.responseCode === 200);
+    if (resp && Array.isArray(resp.response) && resp.response.length > 0) {
+      const firstResult = resp.response[0];
+      const status = firstResult.status;
 
-    if (isEmptyArray || isSuccessObject) {
-      console.log(`📱 SMS sent successfully`);
-      return true;
+      if (status === 0) {
+        console.log(`📱 SMS sent successfully | ID: ${firstResult.id}`);
+        return true;
+      } else {
+        const statusMessages = {
+          101: 'Invalid Message Length',
+          102: 'Sender Not Valid',
+          103: 'Authentication Failed',
+          104: 'Invalid User',
+          105: 'Invalid MSISDN',
+          106: 'Incorrect API Key',
+          107: 'User Account Suspended',
+          108: 'IP Address Not Allowed',
+          109: 'API Access Not Allowed',
+          110: 'Do Not Disturb (DND)',
+          111: 'Spam Word Detected in Message',
+          1000: 'Insufficient Balance',
+          2300: 'Destination Route Issue',
+          2400: 'Destination Route Not Permitted',
+          3300: 'System Error',
+        };
+        const errorMsg = statusMessages[status] || `Unknown status: ${status}`;
+        console.error(`❌ SMS failed — status ${status}: ${errorMsg}`);
+        return false;
+      }
     } else {
-      const errorMsg =
-        (data && data.message) ||
-        (data && data.error) ||
-        JSON.stringify(data);
-      console.error(`❌ SMS send failed: ${errorMsg}`);
+      console.error(
+        `❌ SMS send failed — invalid response:`,
+        JSON.stringify(resp)
+      );
       return false;
     }
   } catch (error) {
@@ -313,7 +357,9 @@ async function sendSMS(phoneNumber, message) {
 // ==================================================
 async function connectToWhatsApp() {
   try {
-    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
+    const { state, saveCreds } = await useMultiFileAuthState(
+      'auth_info_baileys'
+    );
     const { version } = await fetchLatestBaileysVersion();
 
     sock = makeWASocket({
@@ -343,16 +389,22 @@ async function connectToWhatsApp() {
         const statusCode = lastDisconnect?.error?.output?.statusCode;
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
-        console.log(`\n🔌 Connection closed | statusCode: ${statusCode} | reconnect: ${shouldReconnect}`);
+        console.log(
+          `\n🔌 Connection closed | statusCode: ${statusCode} | reconnect: ${shouldReconnect}`
+        );
 
         if (shouldReconnect) {
           reconnectAttempts++;
           if (reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
             const delay = Math.min(3000 * reconnectAttempts, 15000);
-            console.log(`🔄 Reconnecting in ${delay / 1000}s (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+            console.log(
+              `🔄 Reconnecting in ${delay / 1000}s (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`
+            );
             setTimeout(() => connectToWhatsApp(), delay);
           } else {
-            console.error(`❌ Failed after ${MAX_RECONNECT_ATTEMPTS} attempts!`);
+            console.error(
+              `❌ Failed after ${MAX_RECONNECT_ATTEMPTS} attempts!`
+            );
           }
         } else {
           console.log('\n❌ WhatsApp logged out!');
@@ -378,7 +430,9 @@ async function connectToWhatsApp() {
 // ==================================================
 async function sendHospitalNotification(data, appointmentId) {
   if (!isConnected || !sock) {
-    console.log(`⚠️ WhatsApp not connected! isConnected=${isConnected}, sock=${!!sock}`);
+    console.log(
+      `⚠️ WhatsApp not connected! isConnected=${isConnected}, sock=${!!sock}`
+    );
     return;
   }
 
@@ -425,25 +479,28 @@ Admin confirm korle patient SMS/Email pabe.`;
 // 🆕 TRIGGER 2: Admin Confirm → Patient SMS + Email + In-App + FCM
 // ==================================================
 async function sendPatientConfirmation(data, appointmentId) {
-  const englishPatientName = data.nameEn || data.name || '';
-  const englishDoctorName = data.doctorNameEn || data.doctorName || '';
+  const englishPatientName = data.nameEn || data.name || 'Patient';
+  const englishDoctorName = data.doctorNameEn || data.doctorName || 'Doctor';
 
-  const formattedDate = formatDateDDMMYYYY(data.bookingDate);
+  const formattedDate = formatDateShort(data.bookingDate);
   const serial = data.serialNo || '';
   const arrivalTime = data.doctorTime || 'As scheduled';
 
-  const smsText = `Al-Afiyah Hospital
-Dear ${englishPatientName},
+  // ✅ Unified SMS text — matches ConfirmMessageModal preview
+  const smsText = `Assalamu Alaikum. Your appointment with ${englishDoctorName} at ${HOSPITAL_NAME_EN} is confirmed.
+
+Patient: ${englishPatientName}
 Serial: ${serial}
-Doctor: ${englishDoctorName}
 Date: ${formattedDate}
-Time: ${arrivalTime}
-Booking Confirmed. Thank you.`;
+Arrival Time: ${arrivalTime}
+
+Please arrive on time. Contact: ${HOSPITAL_CONTACT}`;
 
   const emailHtml = `
     <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; border: 1px solid #e2e8f0; padding: 24px; border-radius: 12px;">
-      <h2 style="color: #1c5fa8; margin-top: 0;">Al-Afiyah Hospital</h2>
-      <p><strong>Dear ${englishPatientName},</strong></p>
+      <h2 style="color: #1c5fa8; margin-top: 0;">${HOSPITAL_NAME_EN}</h2>
+      <p><strong>Assalamu Alaikum ${englishPatientName},</strong></p>
+      <p>Your appointment with <strong>${englishDoctorName}</strong> is confirmed.</p>
       <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
         <tr>
           <td style="padding: 6px 0; color: #475569;">Serial:</td>
@@ -458,11 +515,12 @@ Booking Confirmed. Thank you.`;
           <td style="padding: 6px 0; font-weight: 700;">${formattedDate}</td>
         </tr>
         <tr>
-          <td style="padding: 6px 0; color: #475569;">Time:</td>
+          <td style="padding: 6px 0; color: #475569;">Arrival Time:</td>
           <td style="padding: 6px 0; font-weight: 700;">${arrivalTime}</td>
         </tr>
       </table>
-      <p style="color: #16a34a; font-weight: 700;">Booking Confirmed. Thank you.</p>
+      <p>Please arrive on time.</p>
+      <p style="color: #16a34a; font-weight: 700;">Contact: ${HOSPITAL_CONTACT}</p>
     </div>
   `;
 
@@ -567,7 +625,9 @@ app.post('/api/queue/next', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing fields' });
     }
 
-    console.log(`📢 Queue Next API: Serial #${nextSerial} for doctor ${doctorId}`);
+    console.log(
+      `📢 Queue Next API: Serial #${nextSerial} for doctor ${doctorId}`
+    );
 
     const appointmentsRef = db
       .collection('hospitals')
@@ -589,7 +649,10 @@ app.post('/api/queue/next', async (req, res) => {
     const userId = appointment.userId;
 
     if (!userId) {
-      return res.json({ success: false, error: 'Patient has no user account' });
+      return res.json({
+        success: false,
+        error: 'Patient has no user account',
+      });
     }
 
     const userDoc = await db
@@ -614,7 +677,8 @@ app.post('/api/queue/next', async (req, res) => {
       fcmTokens = [userData.fcmToken];
     }
 
-    const englishDoctorName = appointment.doctorNameEn || appointment.doctorName || '';
+    const englishDoctorName =
+      appointment.doctorNameEn || appointment.doctorName || '';
 
     let fcmResult = { success: false, error: 'No FCM token' };
     if (fcmTokens.length > 0) {
@@ -873,7 +937,9 @@ db.collection(appointmentsPath).onSnapshot(
         const isFreshBooking = secondsSinceCreation < 300;
 
         console.log(
-          `➕ New appointment: ${docId} | status: ${currentStatus} | age: ${Math.round(secondsSinceCreation)}s | fresh: ${isFreshBooking}`
+          `➕ New appointment: ${docId} | status: ${currentStatus} | age: ${Math.round(
+            secondsSinceCreation
+          )}s | fresh: ${isFreshBooking}`
         );
 
         if (isFreshBooking) {
@@ -895,9 +961,7 @@ db.collection(appointmentsPath).onSnapshot(
 
         if (previousStatus === 'pending' && currentStatus === 'confirmed') {
           if (data.confirmedBy === 'admin') {
-            console.log(
-              `⏭️ API confirmed — listener skipping (already sent)`
-            );
+            console.log(`⏭️ API confirmed — listener skipping (already sent)`);
           } else {
             console.log(
               `\n✅ Direct Firestore confirm detected! Sending notification...`
@@ -906,7 +970,10 @@ db.collection(appointmentsPath).onSnapshot(
               await sendPatientConfirmation(data, docId);
               console.log(`✅ Patient notification sent\n`);
             } catch (err) {
-              console.error('❌ sendPatientConfirmation error:', err.message);
+              console.error(
+                '❌ sendPatientConfirmation error:',
+                err.message
+              );
             }
           }
         }

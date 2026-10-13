@@ -77,7 +77,8 @@ export default function ConfirmMessageModal({
       // Default arrival time — বর্তমান সময়ের পরবর্তী ঘন্টা
       const now = new Date();
       const nextHour = now.getHours() + 1;
-      const hour12 = nextHour > 12 ? nextHour - 12 : nextHour === 0 ? 12 : nextHour;
+      const hour12 =
+        nextHour > 12 ? nextHour - 12 : nextHour === 0 ? 12 : nextHour;
       const period = nextHour < 12 ? 'AM' : 'PM';
       setArrivalTime(`${String(hour12).padStart(2, '0')}:00 ${period}`);
     }
@@ -108,6 +109,7 @@ Arrival Time: ${arrivalTime}
 Please arrive on time. Contact: ${HOSPITAL_CONTACT}`;
 
   // ✅ Estimated SMS segments (English = GSM-7)
+  // 160 chars single, 153 chars per segment for multi-part
   const estimatedSegments =
     previewMessage.length <= 160
       ? 1
@@ -349,7 +351,8 @@ Please arrive on time. Contact: ${HOSPITAL_CONTACT}`;
                   onClick={() => setArrivalTime(preset.value)}
                   style={{
                     padding: '6px 12px',
-                    background: arrivalTime === preset.value ? '#1c5fa8' : '#fff',
+                    background:
+                      arrivalTime === preset.value ? '#1c5fa8' : '#fff',
                     color: arrivalTime === preset.value ? '#fff' : '#475569',
                     border:
                       '1px solid ' +
@@ -388,7 +391,9 @@ Please arrive on time. Contact: ${HOSPITAL_CONTACT}`;
                 flexWrap: 'wrap',
               }}
             >
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
                 📱 রোগী এই মেসেজ পাবেন
               </span>
               <span
