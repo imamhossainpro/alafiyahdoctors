@@ -3,7 +3,7 @@
 // 🏥 আল-আফিয়া হাসপাতাল — Backend Server
 // ==================================================
 // ✅ WhatsApp via Baileys
-// ✅ SMS via Automas Technologies (api.automas.com.bd)
+// ✅ SMS via Automas Technologies (api.automas.com.bd/api/tm/onetomany)
 // ✅ Email via Gmail
 // ✅ FCM Push Notifications
 // ✅ Bot login: 8801898792301
@@ -252,7 +252,6 @@ async function sendSMS(phoneNumber, message) {
 
     console.log(`📤 Sending SMS to: ${number} via ${apiUrl}`);
 
-    // ✅ Automas JSON API
     const payload = {
       api_key: apiKey,
       senderid: senderId,
@@ -269,23 +268,33 @@ async function sendSMS(phoneNumber, message) {
 
     console.log(`📥 Automas response:`, JSON.stringify(response.data, null, 2));
 
-    // ✅ Response check
-    if (
-      response.data &&
-      (response.data.status === 'success' ||
-        response.data.status === 200 ||
-        response.data.status === 'SUCCESS' ||
-        response.data.success === true ||
-        response.data.response_code === 200 ||
-        response.data.responseCode === 200)
-    ) {
+    // ✅ Automas response check — `[]` (empty array) is also SUCCESS
+    const data = response.data;
+
+    // Success cases:
+    // 1. Empty array `[]` — Automas sends this on success
+    // 2. Object with status: 'success' / 200 / 'SUCCESS'
+    // 3. Object with success: true
+    // 4. Object with response_code: 200
+    const isEmptyArray = Array.isArray(data) && data.length === 0;
+    const isSuccessObject =
+      data &&
+      !Array.isArray(data) &&
+      (data.status === 'success' ||
+        data.status === 200 ||
+        data.status === 'SUCCESS' ||
+        data.success === true ||
+        data.response_code === 200 ||
+        data.responseCode === 200);
+
+    if (isEmptyArray || isSuccessObject) {
       console.log(`📱 SMS sent successfully`);
       return true;
     } else {
       const errorMsg =
-        response.data?.message ||
-        response.data?.error ||
-        JSON.stringify(response.data);
+        (data && data.message) ||
+        (data && data.error) ||
+        JSON.stringify(data);
       console.error(`❌ SMS send failed: ${errorMsg}`);
       return false;
     }
@@ -373,7 +382,6 @@ async function sendHospitalNotification(data, appointmentId) {
     return;
   }
 
-  // ✅ Notification target number-এ message পাঠাবে
   const jid = NOTIFICATION_TARGET + '@s.whatsapp.net';
   const formattedDate = formatDateDDMMYYYY(data.bookingDate);
 
