@@ -76,79 +76,284 @@ function SaveIndicator({ status }) {
 }
 
 // ==================================================
-// ✅ Admin Panel
+// ✅ Admin Panel — Full User Management (with Email)
 // ==================================================
 function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
+  const [searchTerm, setSearchTerm] = React.useState('');
+
+  const filteredUsers = React.useMemo(() => {
+    if (!searchTerm.trim()) return users;
+    const term = searchTerm.toLowerCase().trim();
+    return users.filter(
+      (u) =>
+        (u.name || '').toLowerCase().includes(term) ||
+        (u.email || '').toLowerCase().includes(term) ||
+        (u.designation || '').toLowerCase().includes(term) ||
+        (u.role || '').toLowerCase().includes(term) ||
+        (u.id || '').toLowerCase().includes(term)
+    );
+  }, [users, searchTerm]);
+
   return (
     <div className="edit-panel content-fade-in" style={{ padding: '20px' }}>
       <section className="panel-section">
         <div className="section-header">
           <label>ইউজার ম্যানেজমেন্ট</label>
+          <span
+            style={{
+              background: '#eff6ff',
+              color: '#1c5fa8',
+              padding: '4px 12px',
+              borderRadius: '20px',
+              fontSize: '12px',
+              fontWeight: '700',
+            }}
+          >
+            মোট: {users.length} জন
+          </span>
         </div>
         <div className="section-hint">
           রেজিস্ট্রেশন করা ইউজারদের এপ্রুভ, রোল সেট ও ডিলিট করুন।
         </div>
+
+        {/* ✅ Search Box */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            background: '#f1f5f9',
+            borderRadius: '8px',
+            padding: '4px 12px',
+            marginBottom: '16px',
+            maxWidth: '420px',
+            marginTop: '10px',
+          }}
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#64748b"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="text"
+            placeholder="নাম / ইমেইল / রোল / ডেসিগনেশন সার্চ..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              outline: 'none',
+              padding: '8px 10px',
+              fontSize: '13.5px',
+              width: '100%',
+              fontFamily: 'inherit',
+            }}
+          />
+        </div>
+
         {users.length === 0 ? (
           <div className="empty-state">এখনো কোনো ইউজার রেজিস্ট্রেশন করে নি।</div>
+        ) : filteredUsers.length === 0 ? (
+          <div className="empty-state">
+            &quot;{searchTerm}&quot; এর সাথে মিলে এমন কোনো ইউজার নেই।
+          </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid #e2e6ee', textAlign: 'left', color: '#6b7280', fontSize: '14px' }}>
-                <th style={{ padding: '10px' }}>নাম</th>
-                <th style={{ padding: '10px' }}>ডেসিগনেশন</th>
-                <th style={{ padding: '10px' }}>রোল</th>
-                <th style={{ padding: '10px' }}>স্ট্যাটাস</th>
-                <th style={{ padding: '10px' }}>অ্যাকশন</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.id} style={{ borderBottom: '1px solid #eef1f7', fontSize: '14px' }}>
-                  <td style={{ padding: '10px', fontWeight: '600' }}>{u.name}</td>
-                  <td style={{ padding: '10px' }}>{u.designation}</td>
-                  <td style={{ padding: '10px' }}>
-                    <select
-                      value={u.role}
-                      onChange={(e) => onSetRole(u.id, e.target.value)}
-                      style={{ padding: '6px', borderRadius: '8px', border: '1px solid #e2e6ee' }}
-                    >
-                      <option value="pending">পেন্ডিং</option>
-                      <option value="admin">অ্যাডমিন</option>
-                      <option value="sub-admin">সাব-অ্যাডমিন</option>
-                      <option value="editor">এডিটর</option>
-                      <option value="moderator">মডারেটর</option>
-                      <option value="viewer">ভিউয়ার</option>
-                    </select>
-                  </td>
-                  <td style={{ padding: '10px' }}>
-                    {u.approved ? (
-                      <span style={{ color: '#2f9e52', fontWeight: '700' }}>এপ্রুভড</span>
-                    ) : (
-                      <span style={{ color: '#dc2626', fontWeight: '700' }}>পেন্ডিং</span>
-                    )}
-                  </td>
-                  <td style={{ padding: '10px', display: 'flex', gap: '8px' }}>
-                    {!u.approved && (
-                      <button
-                        className="btn btn-primary btn-sm"
-                        onClick={() => onApprove(u.id)}
-                        style={{ padding: '6px 10px', fontSize: '12px' }}
-                      >
-                        <CheckCircle size={14} /> এপ্রুভ
-                      </button>
-                    )}
-                    <button
-                      className="btn btn-danger btn-sm"
-                      onClick={() => onDeleteUser(u.id)}
-                      style={{ padding: '6px 10px', fontSize: '12px' }}
-                    >
-                      <Trash2 size={14} /> ডিলিট
-                    </button>
-                  </td>
+          <div style={{ overflowX: 'auto' }}>
+            <table
+              style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                minWidth: '900px',
+              }}
+            >
+              <thead>
+                <tr
+                  style={{
+                    borderBottom: '2px solid #e2e6ee',
+                    textAlign: 'left',
+                    background: '#f8fafc',
+                    color: '#475569',
+                    fontSize: '12.5px',
+                  }}
+                >
+                  <th style={{ padding: '12px 10px' }}>নাম</th>
+                  <th style={{ padding: '12px 10px' }}>ইমেইল</th>
+                  <th style={{ padding: '12px 10px' }}>ডেসিগনেশন</th>
+                  <th style={{ padding: '12px 10px' }}>রোল</th>
+                  <th style={{ padding: '12px 10px' }}>স্ট্যাটাস</th>
+                  <th style={{ padding: '12px 10px' }}>অ্যাকশন</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filteredUsers.map((u) => (
+                  <tr
+                    key={u.id}
+                    style={{
+                      borderBottom: '1px solid #eef1f7',
+                      fontSize: '13.5px',
+                    }}
+                  >
+                    <td
+                      style={{
+                        padding: '12px 10px',
+                        fontWeight: '600',
+                        color: '#1e293b',
+                      }}
+                    >
+                      {u.name || u.displayName || 'নাম নেই'}
+                    </td>
+
+                    {/* ✅ Email Column */}
+                    <td
+                      style={{
+                        padding: '12px 10px',
+                        color: '#475569',
+                        fontSize: '12.5px',
+                      }}
+                    >
+                      {u.email ? (
+                        <a
+                          href={`mailto:${u.email}`}
+                          style={{
+                            color: '#1c5fa8',
+                            textDecoration: 'none',
+                          }}
+                        >
+                          {u.email}
+                        </a>
+                      ) : (
+                        <span style={{ color: '#94a3b8' }}>—</span>
+                      )}
+                    </td>
+
+                    <td
+                      style={{
+                        padding: '12px 10px',
+                        color: '#64748b',
+                        fontSize: '12.5px',
+                      }}
+                    >
+                      {u.designation || (
+                        <span style={{ color: '#cbd5e1' }}>—</span>
+                      )}
+                    </td>
+
+                    <td style={{ padding: '12px 10px' }}>
+                      <select
+                        value={u.role || 'pending'}
+                        onChange={(e) => onSetRole(u.id, e.target.value)}
+                        style={{
+                          padding: '6px 10px',
+                          borderRadius: '8px',
+                          border: '1px solid #e2e6ee',
+                          fontSize: '13px',
+                          background: '#fff',
+                          fontFamily: 'inherit',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <option value="pending">পেন্ডিং</option>
+                        <option value="admin">অ্যাডমিন</option>
+                        <option value="sub-admin">সাব-অ্যাডমিন</option>
+                        <option value="editor">এডিটর</option>
+                        <option value="moderator">মডারেটর</option>
+                        <option value="viewer">ভিউয়ার</option>
+                        <option value="doctor">ডাক্তার</option>
+                        <option value="patient">রোগী</option>
+                      </select>
+                    </td>
+
+                    <td style={{ padding: '12px 10px' }}>
+                      {u.approved ? (
+                        <span
+                          style={{
+                            color: '#166534',
+                            fontWeight: '700',
+                            background: '#dcfce7',
+                            padding: '3px 10px',
+                            borderRadius: '20px',
+                            fontSize: '11.5px',
+                          }}
+                        >
+                          এপ্রুভড
+                        </span>
+                      ) : (
+                        <span
+                          style={{
+                            color: '#991b1b',
+                            fontWeight: '700',
+                            background: '#fee2e2',
+                            padding: '3px 10px',
+                            borderRadius: '20px',
+                            fontSize: '11.5px',
+                          }}
+                        >
+                          পেন্ডিং
+                        </span>
+                      )}
+                    </td>
+
+                    <td
+                      style={{
+                        padding: '12px 10px',
+                        display: 'flex',
+                        gap: '6px',
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      {!u.approved && (
+                        <button
+                          onClick={() => onApprove(u.id)}
+                          style={{
+                            padding: '6px 12px',
+                            fontSize: '12px',
+                            background: '#1c5fa8',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontWeight: '600',
+                          }}
+                        >
+                          ✓ এপ্রুভ
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `"${u.name || 'ইউজার'}"-কে ডিলিট করতে চান?`
+                            )
+                          )
+                            onDeleteUser(u.id);
+                        }}
+                        style={{
+                          padding: '6px 12px',
+                          fontSize: '12px',
+                          background: '#dc2626',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontWeight: '600',
+                        }}
+                      >
+                        🗑 ডিলিট
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>
