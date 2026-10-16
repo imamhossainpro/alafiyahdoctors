@@ -20,16 +20,13 @@ const NotFoundPage = lazy(() => import('./components/NotFoundPage'));
 const CheckIn = lazy(() => import('./components/CheckIn'));
 const BookingSuccess = lazy(() => import('./components/BookingSuccess'));
 
-// ✅ NEW — Patient dashboard pages
+// ✅ Patient dashboard pages
 const PatientDashboard = lazy(() => import('./components/patient/PatientDashboard'));
 const AddMobilePage = lazy(() => import('./components/AddMobilePage'));
 const UserProfile = lazy(() => import('./components/UserProfile'));
 
-// ✅ NEW — Doctor dashboard
+// ✅ Doctor dashboard
 const DoctorDashboard = lazy(() => import('./components/DoctorDashboard'));
-
-// ✅ NEW — MOU
-const MouPage = lazy(() => import('./components/MouPage'));
 
 // ==================================================
 // ✅ Loading Fallback
@@ -56,7 +53,7 @@ const Loader = () => (
 function App() {
   return (
     <>
-      {/* ✅ GA4 + Meta Pixel page_view tracking (route change-এ auto fire) */}
+      {/* ✅ GA4 + Meta Pixel page_view tracking */}
       <AnalyticsTracker />
 
       <Suspense fallback={<Loader />}>
@@ -67,13 +64,9 @@ function App() {
           <Route path="/" element={<DoctorPanelBuilder />} />
           <Route path="/login" element={<DoctorPanelBuilder />} />
 
-          {/* Doctor-specific booking — MUST come BEFORE /booking */}
           <Route path="/booking/:doctorId" element={<DoctorPanelBuilder />} />
-
-          {/* Generic booking (all doctors) */}
           <Route path="/booking" element={<DoctorPanelBuilder />} />
 
-          {/* Booking success thank-you page */}
           <Route
             path="/booking-success/:appointmentId"
             element={<BookingSuccess />}
@@ -85,7 +78,7 @@ function App() {
           <Route path="/dashboard" element={<DoctorPanelBuilder />} />
           <Route path="/admin" element={<DoctorPanelBuilder />} />
 
-          {/* ✅ MOU (Memorandum of Understanding) routes */}
+          {/* ✅ MOU routes (handled by DoctorPanelBuilder → MoUClientManager) */}
           <Route path="/mou" element={<DoctorPanelBuilder />} />
           <Route path="/mou/:mouId" element={<DoctorPanelBuilder />} />
 
@@ -100,7 +93,6 @@ function App() {
           <Route path="/my-bookings" element={<PatientDashboard />} />
           <Route path="/add-mobile" element={<AddMobilePage />} />
           <Route path="/profile" element={<UserProfile />} />
-          <Route path="/mou-public" element={<MouPage />} />
 
           {/* ==============================================
               🩺 Doctor Dashboard
