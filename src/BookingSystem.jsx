@@ -16,6 +16,7 @@
 // ✅ Patient-side location details popup
 // ✅ Booking summary shows AGE
 // ✅ Redirect to /booking-success/:appointmentId on submit
+// ✅ Location-fail warning REMOVED (only show success badge)
 // ==================================================
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -186,7 +187,6 @@ const BookingCSS = `
   .location-status-badge.captured { background: #dcfce7; color: #166534; }
   .location-status-badge.captured.clickable { cursor: pointer; border: none; font-family: inherit; }
   .location-status-badge.captured.clickable:hover { transform: scale(1.03); box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25); }
-  .location-status-badge.failed { background: #fee2e2; color: #991b1b; }
 
   .doctor-profile-card { background: linear-gradient(135deg, #1565C0 0%, #1976D2 50%, #2196F3 100%); border-radius: 16px; padding: 20px; margin-bottom: 24px; color: #fff; box-shadow: 0 8px 20px rgba(13,148,136,0.25); text-align: center; }
   .doctor-profile-avatar { width: 80px; height: 80px; border-radius: 50%; background: rgba(255,255,255,0.2); border: 3px solid rgba(255,255,255,0.5); margin: 0 auto 12px; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 800; overflow: hidden; padding: 0; transition: transform 0.2s ease, box-shadow 0.2s ease; }
@@ -772,7 +772,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
         <form onSubmit={handleSubmit}>
           <h2 className="booking-title">রোগীর ডাক্তার বুকিং ফর্ম</h2>
 
-          {/* ✅ Location Status Badge — Clickable for patient */}
+          {/* ✅ Location Status Badge — only show "loading" and "captured" */}
           {locationStatus !== 'idle' && (
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
               {locationStatus === 'loading' && (
@@ -838,26 +838,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
                 </button>
               )}
 
-              {locationStatus === 'failed' && (
-                <button
-                  type="button"
-                  className="location-status-badge failed"
-                  onClick={async () => {
-                    setLocationStatus('loading');
-                    try {
-                      const location = await captureCompleteLocation();
-                      setBookingLocation(location);
-                      setLocationStatus(location.gps ? 'captured' : 'failed');
-                    } catch {
-                      setLocationStatus('failed');
-                    }
-                  }}
-                  style={{ cursor: 'pointer', border: 'none', fontFamily: 'inherit' }}
-                  title="আবার চেষ্টা করুন"
-                >
-                  ⚠️ লোকেশন পাওয়া যায়নি — আবার চেষ্টা করুন
-                </button>
-              )}
+              {/* ❌ 'failed' block removed — no warning shown */}
             </div>
           )}
 
