@@ -1,12 +1,13 @@
 // src/services/activityLogService.js
 // ==================================================
-// 📋 Activity Log Service — Enhanced
+// 📋 Activity Log Service — Enhanced (Fixed undefined)
 // ==================================================
 // ✅ Captures: userId, userName, userEmail, userRole, userDesignation
 // ✅ Rich diff: oldValue, newValue, changedFields
 // ✅ Metadata: userAgent, timestamp (both ISO + serverTimestamp)
 // ✅ Search, filter helpers
 // ✅ Statistics & retention
+// ✅ FIX: undefined values auto-filtered (Firestore safe)
 // ==================================================
 import {
   db,
@@ -36,6 +37,7 @@ export const LOG_MODULES = {
   USER: 'User Management',
   DISPLAY: 'Display Settings',
   AUTH: 'Authentication',
+  MOU: 'MOU Manager',
 };
 
 export const LOG_ACTIONS = {
@@ -50,6 +52,9 @@ export const LOG_ACTIONS = {
   UNASSIGN: 'UNASSIGN',
   LOGIN: 'LOGIN',
   LOGOUT: 'LOGOUT',
+  ARCHIVE: 'ARCHIVE',
+  RESTORE: 'RESTORE',
+  PERMANENT_DELETE: 'PERMANENT_DELETE',
 };
 
 // ==================================================
@@ -67,31 +72,68 @@ const BLOCKED_KEYS = [
   'accessToken',
 ];
 
+// ✅ FIX: undefined values skip করা হয় — Firestore সাপোর্ট করে না
 const sanitize = (val, depth = 0) => {
   if (depth > 5) return '[deep-object]';
-  if (val === null || val === undefined) return val;
+
+  // ✅ undefined → skip (Firestore support করে না)
+  if (val === undefined) return undefined;
+  if (val === null) return null;
+
+  // Primitives
+  if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') {
+    return val;
+  }
+
   if (typeof val !== 'object') return val;
 
-  // Firestore Timestamp — convert to ISO
+  // Firestore Timestamp → ISO string
   if (val.toDate && typeof val.toDate === 'function') {
     try {
       return val.toDate().toISOString();
     } catch {
-      return val;
+      return undefined;
     }
   }
 
-  if (Array.isArray(val)) {
-    return val.map((v) => sanitize(v, depth + 1));
+  // Firestore Geopoint / other special types → skip
+  if (val._latitude !== undefined || val._longitude !== undefined) {
+    return undefined;
   }
 
+  // Date → ISO string
+  if (val instanceof Date) {
+    try {
+      return val.toISOString();
+    } catch {
+      return undefined;
+    }
+  }
+
+  // Array → filter out undefined values
+  if (Array.isArray(val)) {
+    const cleaned = val
+      .map((v) => sanitize(v, depth + 1))
+      .filter((v) => v !== undefined);
+    return cleaned.length > 0 ? cleaned : undefined;
+  }
+
+  // Object → recursively sanitize, skip undefined values
   try {
     const copy = {};
+    let hasKeys = false;
+
     Object.keys(val).forEach((key) => {
       if (BLOCKED_KEYS.includes(key)) return; // skip sensitive
-      copy[key] = sanitize(val[key], depth + 1);
+
+      const sanitized = sanitize(val[key], depth + 1);
+      if (sanitized !== undefined) {
+        copy[key] = sanitized;
+        hasKeys = true;
+      }
     });
-    return copy;
+
+    return hasKeys ? copy : undefined;
   } catch {
     return String(val);
   }
@@ -103,6 +145,7 @@ const sanitize = (val, depth = 0) => {
 const calculateChangedFields = (oldVal, newVal) => {
   if (!oldVal || !newVal) return null;
   if (typeof oldVal !== 'object' || typeof newVal !== 'object') return null;
+  if (Array.isArray(oldVal) || Array.isArray(newVal)) return null;
 
   const changed = {};
   const allKeys = new Set([
@@ -113,8 +156,16 @@ const calculateChangedFields = (oldVal, newVal) => {
   allKeys.forEach((key) => {
     const o = oldVal?.[key];
     const n = newVal?.[key];
-    if (JSON.stringify(o) !== JSON.stringify(n)) {
-      changed[key] = { old: o, new: n };
+
+    // ✅ undefined value skip করুন
+    if (o === undefined || n === undefined) return;
+
+    try {
+      if (JSON.stringify(o) !== JSON.stringify(n)) {
+        changed[key] = { old: o, new: n };
+      }
+    } catch {
+      // Circular reference or serialization error → skip
     }
   });
 
@@ -171,7 +222,7 @@ export const logActivity = async ({
     const userRole = user.role || 'unknown';
     const userDesignation = user.designation || null;
 
-    // ✅ Sanitize values
+    // ✅ Sanitize values (undefined filtered out)
     const cleanOld = sanitize(oldValue);
     const cleanNew = sanitize(newValue);
 
@@ -189,7 +240,8 @@ export const logActivity = async ({
       'activityLogs'
     );
 
-    const docRef = await addDoc(ref, {
+    // ✅ Build payload — only non-undefined values
+    const payload = {
       // Identity
       userId,
       userName,
@@ -204,9 +256,9 @@ export const logActivity = async ({
       description,
 
       // Diff
-      oldValue: cleanOld,
-      newValue: cleanNew,
-      changedFields, // ✅ NEW
+      oldValue: cleanOld !== undefined ? cleanOld : null,
+      newValue: cleanNew !== undefined ? cleanNew : null,
+      changedFields: changedFields || null,
 
       // Extra metadata
       metadata: {
@@ -215,26 +267,31 @@ export const logActivity = async ({
       },
 
       // Timestamps
-      timestamp: serverTimestamp(),               // ✅ server time
-      clientTimestamp: new Date().toISOString(),  // ✅ fallback for offline
+      timestamp: serverTimestamp(),
+      clientTimestamp: new Date().toISOString(),
+    };
+
+    // ✅ Remove any remaining undefined fields (safety net)
+    const safePayload = {};
+    Object.keys(payload).forEach((key) => {
+      if (payload[key] !== undefined) {
+        safePayload[key] = payload[key];
+      }
     });
+
+    const docRef = await addDoc(ref, safePayload);
 
     return docRef.id;
   } catch (error) {
     console.error('❌ [logActivity] error:', error);
-    throw error;
+    // Don't throw — logging failure shouldn't break the main operation
+    return null;
   }
 };
 
 // ==================================================
 // ✅ Real-time listener (with filter support)
 // ==================================================
-/**
- * @param {string} hospitalId
- * @param {Function} callback
- * @param {Function} errorCallback
- * @param {number} limitCount
- */
 export const subscribeToActivityLogs = (
   hospitalId,
   callback,
@@ -274,7 +331,7 @@ export const subscribeToActivityLogs = (
             id: d.id,
             ...data,
             timestampISO: tsISO,
-            timestampDisplay: data.timestamp, // original for compatibility
+            timestampDisplay: data.timestamp,
           };
         });
 
@@ -295,10 +352,6 @@ export const subscribeToActivityLogs = (
 // ==================================================
 // ✅ Fetch logs (one-time, with filters)
 // ==================================================
-/**
- * @param {string} hospitalId
- * @param {Object} filters - { userId, module, action, startDate, endDate, limitCount }
- */
 export const fetchActivityLogs = async (hospitalId, filters = {}) => {
   if (!hospitalId) return [];
 

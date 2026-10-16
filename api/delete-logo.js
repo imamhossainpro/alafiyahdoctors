@@ -1,8 +1,11 @@
-// api/delete-logo.js
-// ==================================================
-// 🗑️ Delete Logo — Vercel Blob
-// ==================================================
-import { del } from '@vercel/blob';
+// api/upload-logo.js
+import { put } from '@vercel/blob';
+import { IncomingForm } from 'formidable';
+import fs from 'fs';
+
+export const config = {
+  api: { bodyParser: false },
+};
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -10,18 +13,51 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { url } = req.body || {};
+    const form = new IncomingForm({
+      maxFileSize: 2 * 1024 * 1024, // 2MB
+    });
 
-    if (!url || typeof url !== 'string') {
-      return res.status(400).json({ error: 'url is required' });
+    const [fields, files] = await new Promise((resolve, reject) => {
+      form.parse(req, (err, fields, files) => {
+        if (err) reject(err);
+        else resolve([fields, files]);
+      });
+    });
+
+    let file = files.file;
+    if (Array.isArray(file)) file = file[0];
+
+    if (!file) {
+      return res.status(400).json({ error: 'No file provided' });
     }
 
-    // Vercel Blob থেকে delete
-    await del(url);
+    if (!file.mimetype || !file.mimetype.startsWith('image/')) {
+      return res.status(400).json({ error: 'Only images allowed' });
+    }
 
-    return res.status(200).json({ success: true });
+    const fileBuffer = fs.readFileSync(file.filepath);
+
+    if (fileBuffer.length > 2 * 1024 * 1024) {
+      return res.status(400).json({ error: 'Max 2MB allowed for logo' });
+    }
+
+    // ✅ logos/ folder-এ আপলোড
+    const blob = await put(
+      `logos/${Date.now()}-${file.originalFilename || 'logo.png'}`,
+      fileBuffer,
+      {
+        access: 'public',
+        addRandomSuffix: true,
+        contentType: file.mimetype,
+      }
+    );
+
+    return res.status(200).json({
+      url: blob.url,
+      pathname: blob.pathname,
+    });
   } catch (error) {
-    console.error('Logo delete error:', error);
+    console.error('Logo upload error:', error);
     return res.status(500).json({ error: error.message });
   }
 }

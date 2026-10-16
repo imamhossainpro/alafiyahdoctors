@@ -9,6 +9,7 @@
 // ✅ Doctor quals + workplace + specialty shown
 // ✅ Referral source NOT auto-selected
 // ✅ GA4 booking_complete event
+// ✅ Meta Pixel — Schedule + CompleteRegistration with Advanced Matching
 // ✅ Mobile stored in international format (8801XXXXXXXXX)
 // ✅ Doctor image lightbox (click to view full size)
 // ✅ Location tracking (GPS + City + Distance + Device)
@@ -31,6 +32,7 @@ import { useAuth } from './context/AuthContext';
 import BangladeshMobileInput, {
   toDisplayFormat,
 } from './components/BangladeshMobileInput';
+import { trackMetaEvent } from './utils/metaPixel';
 import {
   Send,
   Loader2,
@@ -701,6 +703,41 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
         from_doctor_link: isDirectBooking,
         referral_source: finalReferralSource,
       });
+
+      // ==================================================
+      // ✅ Meta Pixel — Schedule + CompleteRegistration
+      //    with Advanced Matching (name + phone)
+      // ==================================================
+      trackMetaEvent(
+        'Schedule',
+        {
+          value: 0,
+          currency: 'BDT',
+          content_name: 'Doctor Appointment',
+          content_category: 'Healthcare',
+          content_ids: [selectedDoctor.id],
+          status: 'confirmed',
+        },
+        {
+          name: formData.nameEn,
+          phone: formData.mobile,
+        }
+      );
+
+      if (isNewPatient) {
+        trackMetaEvent(
+          'CompleteRegistration',
+          {
+            value: 0,
+            currency: 'BDT',
+            status: 'completed',
+          },
+          {
+            name: formData.nameEn,
+            phone: formData.mobile,
+          }
+        );
+      }
 
       // ✅ Redirect to Thank You page
       setTimeout(() => {

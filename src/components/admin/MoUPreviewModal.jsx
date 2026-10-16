@@ -2,6 +2,10 @@
 // ==================================================
 // 📄 MoU Preview Modal — A4 layout + Print + PDF
 // ==================================================
+// ✅ Full A4 layout (3 pages)
+// ✅ Logo watermark (from Vercel Blob via Firestore)
+// ✅ Print + PDF + PNG export
+// ==================================================
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   X,
@@ -16,6 +20,8 @@ import {
   downloadMoUAsPNG,
   printMoU,
 } from '../../utils/mouPdfExport';
+import { useHospital } from '../../context/HospitalContext';
+import { subscribeToLogo } from '../../services/logoService';
 
 // ==================================================
 // ✅ Escaping + variable substitution
@@ -35,28 +41,25 @@ const buildGetter = (data) => (key) => {
 };
 
 // ✅ Template syntax:
-//   {{var}}       → required value (empty হলে ________)
-//   @@var|prefix@@ → optional line (empty হলে পুরো line skip)
+//   {{var}}       → required value
+//   @@var|prefix@@ → optional line
 //   **bold**      → bold
 const substitute = (html, get) =>
   html
-    // optional line: @@key|prefix@@ → prefix + value + <br>
     .replace(/@@(\w+)\|?([^@]*)@@/g, (m, key, prefix) => {
       const v = get(key);
       return v ? `${prefix}{{${key}}}<br>` : '';
     })
-    // required variable
     .replace(/\{\{(\w+)\}\}/g, (m, key) => {
       const v = get(key);
       return v
         ? `<span class="mou-v">${esc(v)}</span>`
         : '<span class="mou-v mou-v-miss">________</span>';
     })
-    // bold
     .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
 
 // ==================================================
-// ✅ MoU Template Pages — আপনার HTML এর হুবহু কপি
+// ✅ MoU Template Pages
 // ==================================================
 const B1 = '**{{org1_name}}**';
 const B2 = '**{{org2_name}}**';
@@ -172,7 +175,7 @@ const PAGES = [
 ];
 
 // ==================================================
-// ✅ CSS (modal + A4 pages + print)
+// ✅ CSS (modal + A4 pages + watermark + print)
 // ==================================================
 const MoUCSS = `
 /* ===== Modal shell ===== */
@@ -242,13 +245,6 @@ const MoUCSS = `
 .mou-btn-secondary:hover:not(:disabled) {
   background: #e2e8f0;
 }
-.mou-btn-danger {
-  background: #fff; color: #dc2626;
-  border: 1px solid #fecaca;
-}
-.mou-btn-danger:hover:not(:disabled) {
-  background: #fee2e2;
-}
 .mou-btn-icon {
   padding: 8px; width: 34px; height: 34px;
   justify-content: center;
@@ -271,7 +267,7 @@ const MoUCSS = `
   align-items: center;
 }
 
-/* ===== A4 Page (595.32 x 841.92 pt) ===== */
+/* ===== A4 Page ===== */
 .mou-page {
   position: relative;
   width: 595.32pt;
@@ -283,7 +279,34 @@ const MoUCSS = `
   box-shadow: 0 2px 14px rgba(0,0,0,0.2);
   font: 14pt/18.5pt "Times New Roman", "Liberation Serif", Times, serif;
   text-align: justify;
+  overflow: hidden;
 }
+
+/* ✅ WATERMARK */
+.mou-watermark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 380pt;
+  height: 380pt;
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: contain;
+  opacity: 0.08;
+  pointer-events: none;
+  z-index: 0;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+  color-adjust: exact;
+}
+
+/* ✅ Content above watermark */
+.mou-page-content {
+  position: relative;
+  z-index: 1;
+}
+
 .mou-page p { margin: 0; }
 .mou-title p {
   font-size: 25pt; line-height: 33pt; text-align: center;
@@ -312,6 +335,7 @@ const MoUCSS = `
   font: 11pt Calibri, Carlito, "Segoe UI", sans-serif;
   line-height: 13pt;
   text-align: left;
+  z-index: 2;
 }
 .mou-foot .mou-foot-g {
   color: #7f7f7f; letter-spacing: 0.12em;
@@ -350,7 +374,7 @@ const MoUCSS = `
 }
 .mou-sg .mou-d { margin-bottom: 2.6pt; }
 
-/* ===== Value highlight (only in screen) ===== */
+/* ===== Value highlight ===== */
 .mou-v {
   background: rgba(31, 95, 139, 0.08);
   border-radius: 2px;
@@ -425,6 +449,13 @@ const MoUCSS = `
   body.mou-printing .mou-v-miss {
     background: none !important;
   }
+
+  /* ✅ Ensure watermark prints */
+  body.mou-printing .mou-watermark {
+    opacity: 0.08 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
 }
 
 /* ==================================================
@@ -463,10 +494,31 @@ export default function MoUPreviewModal({
   canPrint = true,
   canExportPDF = true,
 }) {
+  const { currentHospital } = useHospital();
+  const hospitalId = currentHospital?.id || 'alafiyah_main';
+
   const pagesRef = useRef(null);
   const wrapperRef = useRef(null);
   const [scale, setScale] = useState(1);
-  const [busy, setBusy] = useState(null); // 'pdf' | 'png' | null
+  const [busy, setBusy] = useState(null);
+  const [logoUrl, setLogoUrl] = useState(null);
+
+  // ✅ Subscribe to logo (real-time)
+  useEffect(() => {
+    if (!hospitalId) return;
+
+    const unsub = subscribeToLogo(
+      hospitalId,
+      (meta) => {
+        setLogoUrl(meta?.url || null);
+      },
+      (err) => {
+        console.warn('Logo subscribe error:', err);
+      }
+    );
+
+    return () => unsub();
+  }, [hospitalId]);
 
   // ✅ Escape key to close
   useEffect(() => {
@@ -482,7 +534,7 @@ export default function MoUPreviewModal({
     const recalc = () => {
       if (!wrapperRef.current) return;
       const containerWidth = wrapperRef.current.clientWidth - 40;
-      const pageWidthPx = (595.32 * 96) / 72; // 793.76 px
+      const pageWidthPx = (595.32 * 96) / 72;
       const s = Math.min(1, containerWidth / pageWidthPx);
       setScale(s > 0 ? s : 1);
     };
@@ -495,10 +547,7 @@ export default function MoUPreviewModal({
   const pagesHTML = useMemo(() => {
     if (!client) return [];
     const get = buildGetter(client);
-    return PAGES.map((raw, i) => {
-      const inner = substitute(raw, get);
-      return { index: i, html: inner };
-    });
+    return PAGES.map((raw) => substitute(raw, get));
   }, [client]);
 
   // ✅ Export handlers
@@ -567,6 +616,11 @@ export default function MoUPreviewModal({
                 </h3>
                 <p className="mou-modal-sub">
                   {client.org2_name || 'Untitled Client'}
+                  {logoUrl && (
+                    <span style={{ marginLeft: 8, color: '#16a34a', fontSize: 11 }}>
+                      ● ওয়াটারমার্ক সক্রিয়
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
@@ -641,18 +695,33 @@ export default function MoUPreviewModal({
               }
             >
               <div className="mou-pages" ref={pagesRef}>
-                {pagesHTML.map(({ index, html }) => (
+                {pagesHTML.map((html, i) => (
                   <section
-                    key={index}
+                    key={i}
                     className="mou-page"
-                    dangerouslySetInnerHTML={{
-                      __html: `${html}
-                        <div class="mou-foot">
-                          <b>${index + 1}</b>
-                          <span class="mou-foot-g"> | P a g e</span>
-                        </div>`,
-                    }}
-                  />
+                    style={{ position: 'relative' }}
+                  >
+                    {/* ✅ WATERMARK — logo background */}
+                    {logoUrl && (
+                      <div
+                        className="mou-watermark"
+                        aria-hidden="true"
+                        style={{
+                          backgroundImage: `url("${logoUrl}")`,
+                        }}
+                      />
+                    )}
+
+                    {/* ✅ Content above watermark */}
+                    <div
+                      className="mou-page-content"
+                      dangerouslySetInnerHTML={{
+                        __html:
+                          html +
+                          `<div class="mou-foot"><b>${i + 1}</b> <span class="mou-foot-g">| P a g e</span></div>`,
+                      }}
+                    />
+                  </section>
                 ))}
               </div>
             </div>

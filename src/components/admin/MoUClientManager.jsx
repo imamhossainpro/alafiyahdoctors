@@ -38,6 +38,9 @@ import {
   duplicateMouClient,
 } from '../../services/mouService';
 import {
+  subscribeToLogo,
+} from '../../services/logoService';
+import {
   logActivity,
   LOG_MODULES,
   LOG_ACTIONS,
@@ -49,11 +52,16 @@ import {
   getStatusInfo,
   formatDateLong,
 } from '../../utils/mouDefaults';
+
+// ✅ CRITICAL: MoUForm and MoUPreviewModal imports
 import MoUForm from './MoUForm';
 import MoUPreviewModal from './MoUPreviewModal';
 
+// ✅ LogoUploader import
+import LogoUploader from '../mou/LogoUploader';
+
 // ==================================================
-// ✅ CSS
+// ✅ CSS (একই আগের মতো)
 // ==================================================
 const ManagerCSS = `
 .moum-container {
@@ -81,7 +89,7 @@ const ManagerCSS = `
   font-size: 13px; color: #64748b;
 }
 .moum-header-actions {
-  display: flex; gap: 8px; flex-wrap: wrap;
+  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
 }
 
 /* Buttons */
@@ -411,10 +419,14 @@ export default function MoUClientManager({ user: propUser }) {
   const [filterStatus, setFilterStatus] = useState('all');
   const [showArchived, setShowArchived] = useState(false);
 
+  // ✅ Logo state
+  const [logoUrl, setLogoUrl] = useState(null);
+  const [logoLoading, setLogoLoading] = useState(true);
+
   // Modals
-  const [formModal, setFormModal] = useState(null);   // { mode: 'create' | 'edit', client? }
-  const [previewModal, setPreviewModal] = useState(null); // client object
-  const [confirmModal, setConfirmModal] = useState(null); // { type, client }
+  const [formModal, setFormModal] = useState(null);
+  const [previewModal, setPreviewModal] = useState(null);
+  const [confirmModal, setConfirmModal] = useState(null);
   const [saving, setSaving] = useState(false);
 
   // Toast
@@ -429,7 +441,7 @@ export default function MoUClientManager({ user: propUser }) {
   };
 
   // ==================================================
-  // ✅ Realtime subscribe
+  // ✅ Realtime subscribe — MOU clients
   // ==================================================
   useEffect(() => {
     if (!hospitalId) return;
@@ -449,27 +461,46 @@ export default function MoUClientManager({ user: propUser }) {
   }, [hospitalId]);
 
   // ==================================================
+  // ✅ Realtime subscribe — Logo
+  // ==================================================
+  useEffect(() => {
+    if (!hospitalId) return;
+    setLogoLoading(true);
+
+    const unsub = subscribeToLogo(
+      hospitalId,
+      (meta) => {
+        setLogoUrl(meta?.url || null);
+        setLogoLoading(false);
+      },
+      (err) => {
+        console.warn('Logo subscription error:', err);
+        setLogoUrl(null);
+        setLogoLoading(false);
+      }
+    );
+
+    return () => unsub();
+  }, [hospitalId]);
+
+  // ==================================================
   // ✅ Filtered list
   // ==================================================
   const filtered = useMemo(() => {
     let list = clients;
 
-    // archived filter
     list = list.filter((c) =>
       showArchived ? c.isArchived === true : c.isArchived !== true
     );
 
-    // type filter
     if (filterType !== 'all') {
       list = list.filter((c) => c.clientType === filterType);
     }
 
-    // status filter
     if (filterStatus !== 'all') {
       list = list.filter((c) => c.status === filterStatus);
     }
 
-    // search
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase().trim();
       list = list.filter((c) => {
@@ -530,20 +561,20 @@ export default function MoUClientManager({ user: propUser }) {
       if (formModal.mode === 'create') {
         const created = await createMouClient(hospitalId, formData, user);
 
-        // ✅ activity log
         try {
+          const safeNewValue = {};
+          if (formData.org2_name) safeNewValue.name = formData.org2_name;
+          if (formData.clientType) safeNewValue.type = formData.clientType;
+          if (formData.status) safeNewValue.status = formData.status;
+
           await logActivity({
             hospitalId,
-            module: LOG_MODULES.BOOKING, // reuse module name string
+            module: LOG_MODULES.MOU,
             action: LOG_ACTIONS.CREATE,
             recordId: created.id,
-            description: `নতুন MoU ক্লায়েন্ট তৈরি: ${formData.org2_name}`,
+            description: `নতুন MoU ক্লায়েন্ট তৈরি: ${formData.org2_name || ''}`,
             oldValue: null,
-            newValue: {
-              name: formData.org2_name,
-              type: formData.clientType,
-              status: formData.status,
-            },
+            newValue: safeNewValue,
             user,
           });
         } catch (logErr) {
@@ -556,14 +587,22 @@ export default function MoUClientManager({ user: propUser }) {
         await updateMouClient(hospitalId, id, formData, user);
 
         try {
+          const safeOldValue = {};
+          if (formModal.client.org2_name) safeOldValue.name = formModal.client.org2_name;
+          if (formModal.client.status) safeOldValue.status = formModal.client.status;
+
+          const safeNewValue = {};
+          if (formData.org2_name) safeNewValue.name = formData.org2_name;
+          if (formData.status) safeNewValue.status = formData.status;
+
           await logActivity({
             hospitalId,
-            module: LOG_MODULES.BOOKING,
+            module: LOG_MODULES.MOU,
             action: LOG_ACTIONS.UPDATE,
             recordId: id,
-            description: `MoU ক্লায়েন্ট আপডেট: ${formData.org2_name}`,
-            oldValue: { name: formModal.client.org2_name, status: formModal.client.status },
-            newValue: { name: formData.org2_name, status: formData.status },
+            description: `MoU ক্লায়েন্ট আপডেট: ${formData.org2_name || ''}`,
+            oldValue: safeOldValue,
+            newValue: safeNewValue,
             user,
           });
         } catch (logErr) {
@@ -577,7 +616,7 @@ export default function MoUClientManager({ user: propUser }) {
     } catch (err) {
       console.error('Save MoU error:', err);
       showToast('error', '❌ সংরক্ষণ ব্যর্থ: ' + (err.message || 'unknown'));
-      throw err; // keep form open
+      throw err;
     } finally {
       setSaving(false);
     }
@@ -697,6 +736,14 @@ export default function MoUClientManager({ user: propUser }) {
           </div>
 
           <div className="moum-header-actions">
+            {/* ✅ Logo Uploader — NEW */}
+            <LogoUploader
+              hospitalId={hospitalId}
+              logoUrl={logoUrl}
+              user={user}
+              onChange={(newUrl) => setLogoUrl(newUrl)}
+            />
+
             <button
               className="moum-btn moum-btn-secondary"
               onClick={() => setShowArchived((v) => !v)}
@@ -971,7 +1018,6 @@ function MoUCard({
 
   return (
     <div className={`moum-card ${showArchived ? 'archived' : ''}`}>
-      {/* Top row: type + status */}
       <div className="moum-card-top">
         <span
           className="moum-card-type"
@@ -987,12 +1033,10 @@ function MoUCard({
         </span>
       </div>
 
-      {/* Name */}
       <div className="moum-card-name">
         {client.org2_name || 'Untitled Client'}
       </div>
 
-      {/* Info */}
       <div className="moum-card-info">
         {client.org2_contact_name && (
           <div className="moum-card-info-row">
@@ -1027,7 +1071,6 @@ function MoUCard({
         )}
       </div>
 
-      {/* Discount chips */}
       <div className="moum-card-discounts">
         {client.discount_pathology && (
           <span className="moum-chip">
@@ -1045,7 +1088,6 @@ function MoUCard({
         )}
       </div>
 
-      {/* Actions */}
       <div className="moum-card-actions">
         <button
           className="moum-btn-icon"

@@ -2,14 +2,11 @@
 // ==================================================
 // 🏥 Doctor Entry — Preview Panel Item
 // ==================================================
-// ✅ Used inside PreviewPanel to show each doctor
-// ✅ Has the NEW "সিরিয়াল দিন" button with icons
-// ✅ Books via external URL (opens in new tab)
-// ==================================================
 import React from 'react';
 import { CalendarPlus, ChevronRight } from 'lucide-react';
 import { buildBookingUrl } from './utils';
 import { trackEvent } from '../firebase';
+import { trackMetaEvent } from '../utils/metaPixel';
 
 export default function DoctorEntry({ doc, accentColor }) {
   const hasValidId =
@@ -54,7 +51,7 @@ export default function DoctorEntry({ doc, accentColor }) {
         </div>
       )}
 
-      {/* ✅ NEW "সিরিয়াল দিন" Button */}
+      {/* ✅ "সিরিয়াল দিন" Button with Meta Pixel */}
       {hasValidId && (
         <a
           href={bookingUrl}
@@ -63,12 +60,24 @@ export default function DoctorEntry({ doc, accentColor }) {
           className="serial-booking-button"
           aria-label={`${doc.name} এর সিরিয়াল দিন`}
           onClick={() => {
-            // GA4 tracking (same as before)
+            console.log('🎯 [DoctorEntry] Button clicked:', doc.name);
+
+            // ✅ GA4 tracking
             trackEvent('booking_button_click', {
               doctor_id: doc.id,
               doctor_name: doc.name,
               department: doc.deptName || 'unknown',
               source: 'website_button',
+            });
+
+            // ✅ Meta Pixel — InitiateCheckout
+            trackMetaEvent('InitiateCheckout', {
+              content_ids: [doc.id],
+              content_name: doc.name,
+              content_category: 'Doctor',
+              content_type: 'product',
+              currency: 'BDT',
+              value: 0,
             });
           }}
         >

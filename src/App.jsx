@@ -55,6 +55,11 @@ function App() {
             <Route path="/edit" element={<DoctorPanelBuilder />} />
             <Route path="/dashboard" element={<DoctorPanelBuilder />} />
             <Route path="/admin" element={<DoctorPanelBuilder />} />
+
+            {/* ✅ MoU (Memorandum of Understanding) routes */}
+            <Route path="/mou" element={<DoctorPanelBuilder />} />
+            <Route path="/mou/:mouId" element={<DoctorPanelBuilder />} />
+
             <Route path="/display" element={<QueueDisplay />} />
             <Route path="/checkin/:appointmentId" element={<CheckIn />} />
             <Route path="*" element={<NotFoundPage />} />

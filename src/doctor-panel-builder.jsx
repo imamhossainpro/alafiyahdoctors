@@ -2,7 +2,7 @@
 // ==================================================
 // 🏥 Doctor Panel Builder — Full File
 // ==================================================
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { AppShellSkeleton } from './components/ui/SkeletonScreens';
 import {
@@ -26,6 +26,9 @@ import NotFoundPage from './components/NotFoundPage';
 import { useHospital } from './context/HospitalContext';
 import { useAuth } from './context/AuthContext';
 import AuthPage from './components/AuthPage';
+
+// ✅ Lazy load — heavy components
+const MoUClientManager = lazy(() => import('./components/admin/MoUClientManager'));
 
 // ✅ NEW IMPORTS — Refactored dpb/ modules
 import { DPB_CSS } from './dpb/dpb.css';
@@ -56,7 +59,6 @@ import {
 // ==================================================
 // ✅ CSS
 // ==================================================
-
 const CSS = DPB_CSS;
 
 // ==================================================
@@ -1756,11 +1758,11 @@ export default function DoctorPanelBuilder() {
     else navigate(`/${view}`);
   };
 
-    // ✅ NEW: Mobile menu state
-    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // ✅ NEW: Mobile menu state
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-    // ✅ NEW: Hospital branding
-    const [branding, setBranding] = useState(DEFAULT_BRANDING);
+  // ✅ NEW: Hospital branding
+  const [branding, setBranding] = useState(DEFAULT_BRANDING);
 
   const [showAuth, setShowAuth] = useState(false);
   const [allUsers, setAllUsers] = useState([]);
@@ -1872,7 +1874,7 @@ export default function DoctorPanelBuilder() {
     loadData();
   }, [hospitalId, reloadKey]);
 
-    // ==================================================
+  // ==================================================
   // ✅ Load hospital branding (name + logo)
   // ==================================================
   useEffect(() => {
@@ -2327,6 +2329,12 @@ export default function DoctorPanelBuilder() {
       path === '/login'
     )
       return true;
+
+    // ✅ MOU রাউট অনুমোদন (শুধু লগইন করা ইউজারের জন্য)
+    if (path === '/mou' || path.startsWith('/mou/')) {
+      return !!user; // লগইন না থাকলে 404 → login এ redirect হবে
+    }
+
     if (bookingDoctorId) return true;
     if (path === '/edit' && (isEditor || isModerator || isSubAdmin || isAdmin)) return true;
     if (path === '/doctors' && (isSubAdmin || isAdmin)) return true;
@@ -2375,28 +2383,29 @@ export default function DoctorPanelBuilder() {
     <div className="dpb">
       <style>{CSS}</style>
 
-            {!isDirectBookingView && (
-              <Header
-                branding={branding}
-                user={user}
-                isGuest={isGuest}
-                isAdmin={isAdmin}
-                isSubAdmin={isSubAdmin}
-                isEditor={isEditor}
-                isModerator={isModerator}
-                isDoctorLoggedIn={isDoctorLoggedIn}
-                activeView={activeView}
-                onSetView={setActiveView}
-                onGoLogin={() => navigate('/login')}
-                onLogout={handleLogout}
-                onGoHome={() => navigate('/')}
-                onGoDoctorDashboard={() => navigate('/doctor')}
-                onGoMyBookings={() => navigate('/my-bookings')}
-                onGoMou={() => navigate('/mou')}
-                mobileMenuOpen={mobileMenuOpen}
-                setMobileMenuOpen={setMobileMenuOpen}
-              />
-            )}
+      {!isDirectBookingView && (
+        <Header
+          branding={branding}
+          user={user}
+          isGuest={isGuest}
+          isAdmin={isAdmin}
+          isSubAdmin={isSubAdmin}
+          isEditor={isEditor}
+          isModerator={isModerator}
+          isDoctorLoggedIn={isDoctorLoggedIn}
+          activeView={activeView}
+          onSetView={setActiveView}
+          onGoLogin={() => navigate('/login')}
+          onLogout={handleLogout}
+          onGoHome={() => navigate('/')}
+          onGoDoctorDashboard={() => navigate('/doctor')}
+          onGoMyBookings={() => navigate('/my-bookings')}
+          onGoMou={() => navigate('/mou')}
+          mobileMenuOpen={mobileMenuOpen}
+          setMobileMenuOpen={setMobileMenuOpen}
+        />
+      )}
+
       {!isDirectBookingView && (activeView === 'preview' || activeView === 'edit') && (
         <PanelSwitcher
           panels={panels}
@@ -2498,6 +2507,20 @@ export default function DoctorPanelBuilder() {
 
       {activeView === 'dashboard' && (isEditor || isModerator || isSubAdmin || isAdmin) && (
         <AdminDashboard user={user} />
+      )}
+
+      {/* ✅ MOU View — MoUClientManager (Admin only) */}
+      {activeView === 'mou' && (
+        <Suspense
+          fallback={
+            <div style={{ padding: '60px 20px', textAlign: 'center', color: '#64748b' }}>
+              <Loader2 size={32} className="spin" />
+              <p style={{ marginTop: 12, fontSize: 14 }}>MOU লোড হচ্ছে...</p>
+            </div>
+          }
+        >
+          <MoUClientManager user={user} />
+        </Suspense>
       )}
 
       {showAuth && <AuthPage onClose={() => setShowAuth(false)} />}

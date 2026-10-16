@@ -15,9 +15,13 @@
     <link rel="dns-prefetch" href="https://firestore.googleapis.com" />
     <link rel="dns-prefetch" href="https://identitytoolkit.googleapis.com" />
 
+    <!-- ✅ Meta Pixel Preconnect -->
+    <link rel="preconnect" href="https://connect.facebook.net" />
+    <link rel="dns-prefetch" href="https://www.facebook.com" />
+
     <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- ✅ Bengali Fonts – display=swap দিয়ে blocking কমায় -->
+    <!-- ✅ Bengali Fonts -->
     <link
       href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
@@ -31,7 +35,32 @@
     })(window,document,'script','dataLayer','GTM-KP4WTWMR');</script>
     <!-- End Google Tag Manager -->
 
-    <title>আল-আফিয়াহ হসপিটাল এন্ড ডায়াগনস্টিক সেন্টার</title>
+    <!-- ================================================== -->
+    <!-- ✅ Meta Pixel Code — Base + Advanced Matching      -->
+    <!-- ================================================== -->
+    <script>
+      !function(f,b,e,v,n,t,s)
+      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+      n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];
+      s.parentNode.insertBefore(t,s)}(window, document,'script',
+      'https://connect.facebook.net/en_US/fbevents.js');
+      
+      // ✅ আপনার Pixel ID
+      fbq('init', '878410400741654');
+      
+      // ✅ Initial PageView
+      fbq('track', 'PageView');
+    </script>
+    <noscript>
+      <img height="1" width="1" style="display:none"
+      src="https://www.facebook.com/tr?id=878410400741654&ev=PageView&noscript=1"/>
+    </noscript>
+    <!-- End Meta Pixel Code -->
+
+    <title>আল-আফিয়াহ হসপিটাল এন্ড ডায়াগনস্টিক সেন্টার</title>
   </head>
   <body>
     <div id="root"></div>
