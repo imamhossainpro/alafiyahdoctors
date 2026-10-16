@@ -2,10 +2,8 @@
 // ==================================================
 // 🚀 Application Entry Point
 // ==================================================
-// ✅ React 18+ createRoot
-// ✅ BrowserRouter for SPA routing
-// ✅ Context Providers (Auth, Hospital, Permission)
-// ✅ Global CSS imports
+// ⚠️ React.StrictMode সরানো হয়েছে duplicate effect এড়াতে
+//    (Meta Pixel, GA4 PageView)
 // ==================================================
 import React from 'react';
 import ReactDOM from 'react-dom/client';
@@ -18,15 +16,13 @@ import './index.css';
 import './fonts.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <HospitalProvider>
-          <PermissionProvider>
-            <App />
-          </PermissionProvider>
-        </HospitalProvider>
-      </AuthProvider>
-    </BrowserRouter>
-  </React.StrictMode>
+  <BrowserRouter>
+    <AuthProvider>
+      <HospitalProvider>
+        <PermissionProvider>
+          <App />
+        </PermissionProvider>
+      </HospitalProvider>
+    </AuthProvider>
+  </BrowserRouter>
 );

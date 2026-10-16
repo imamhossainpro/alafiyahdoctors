@@ -7,16 +7,21 @@
     <meta name="theme-color" content="#1c5fa8" />
     <meta name="description" content="আল-আফিয়া হাসপাতাল - স্বাস্থ্যসেবায় বিশ্বাস" />
 
+    <!-- ✅ Preconnect – দ্রুত DNS/TLS handshake -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://firestore.googleapis.com" />
     <link rel="preconnect" href="https://firebaseinstallations.googleapis.com" />
     <link rel="dns-prefetch" href="https://firestore.googleapis.com" />
     <link rel="dns-prefetch" href="https://identitytoolkit.googleapis.com" />
+
+    <!-- ✅ Meta Pixel Preconnect -->
     <link rel="preconnect" href="https://connect.facebook.net" />
     <link rel="dns-prefetch" href="https://www.facebook.com" />
 
     <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- ✅ Bengali Fonts -->
     <link
       href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
@@ -31,7 +36,10 @@
     <!-- End Google Tag Manager -->
 
     <!-- ================================================== -->
-    <!-- ✅ Meta Pixel Code — Base (PageView REMOVED)      -->
+    <!-- ✅ Meta Pixel Code — Base ONLY (NO PageView here)  -->
+    <!-- ================================================== -->
+    <!-- ⚠️ fbq('track', 'PageView') ইচ্ছাকৃতভাবে সরানো হয়েছে -->
+    <!--     কারণ SPA-তে AnalyticsTracker.jsx থেকে পাঠানো হয় -->
     <!-- ================================================== -->
     <script>
       !function(f,b,e,v,n,t,s)
@@ -43,24 +51,27 @@
       s.parentNode.insertBefore(t,s)}(window, document,'script',
       'https://connect.facebook.net/en_US/fbevents.js');
 
+      // ✅ Pixel init ONLY (PageView এখানে নেই)
       fbq('init', '878410400741654');
-      // ⚠️ fbq('track', 'PageView') ইচ্ছাকৃতভাবে সরানো হয়েছে
-      //    কারণ SPA-তে AnalyticsTracker.jsx থেকে পাঠানো হয়
     </script>
     <!-- End Meta Pixel Code -->
 
     <title>আল-আফিয়াহ হসপিটাল এন্ড ডায়াগনস্টিক সেন্টার</title>
   </head>
   <body>
-    <!-- Meta Pixel noscript fallback (JS disabled হলে) -->
+    <!-- ================================================== -->
+    <!-- ✅ Meta Pixel noscript fallback (JS disabled হলে)  -->
+    <!-- ================================================== -->
     <noscript>
       <img height="1" width="1" style="display:none"
       src="https://www.facebook.com/tr?id=878410400741654&ev=PageView&noscript=1"/>
     </noscript>
+    <!-- End Meta Pixel noscript -->
 
     <!-- Google Tag Manager (noscript) -->
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KP4WTWMR"
     height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <!-- End Google Tag Manager (noscript) -->
 
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
