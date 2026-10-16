@@ -6,7 +6,7 @@ import { useHospital } from '../context/HospitalContext';
 import { useAuth } from '../context/AuthContext';
 import { usePermission } from '../context/PermissionContext';
 import { db, updateDoc, doc, collection, getDocs, getDoc, onSnapshot } from '../firebase';
-import { RefreshCw, Shield, FileText, Search, FileSignature, UserCheck } from 'lucide-react';
+import { RefreshCw, Shield, FileText, Search, FileSignature, UserCheck, BarChart3 } from 'lucide-react';
 import {
   updateAppointmentStatus,
   archiveAppointment,
@@ -35,6 +35,8 @@ const QueueControlPanel = lazy(() => import('./admin/QueueControlPanel'));
 const PromoManager = lazy(() => import('./admin/PromoManager'));
 // ✅ NEW: Doctor Profile Edit Requests
 const ProfileEditRequests = lazy(() => import('./admin/ProfileEditRequests'));
+// ✅ NEW: Analytics Dashboard
+const AnalyticsDashboard = lazy(() => import('./admin/AnalyticsDashboard'));
 
 // ==================================================
 // ✅ Tab Loader
@@ -100,7 +102,6 @@ function AdminPanel({ users = [], onApprove, onSetRole, onDeleteUser }) {
         </span>
       </div>
 
-      {/* Search */}
       <div style={{ display: 'flex', alignItems: 'center', background: '#f1f5f9', borderRadius: '8px', padding: '4px 12px', marginBottom: '16px', maxWidth: '420px' }}>
         <Search size={16} color="#64748b" />
         <input
@@ -135,7 +136,6 @@ function AdminPanel({ users = [], onApprove, onSetRole, onDeleteUser }) {
                   <td style={{ padding: '12px 10px', fontWeight: '600', color: '#1e293b' }}>
                     {u.name || u.displayName || 'নাম নেই'}
                   </td>
-
                   <td style={{ padding: '12px 10px', color: '#475569', fontSize: '12.5px' }}>
                     {u.email ? (
                       <a href={`mailto:${u.email}`} style={{ color: '#1c5fa8', textDecoration: 'none' }}>
@@ -145,11 +145,9 @@ function AdminPanel({ users = [], onApprove, onSetRole, onDeleteUser }) {
                       <span style={{ color: '#94a3b8' }}>—</span>
                     )}
                   </td>
-
                   <td style={{ padding: '12px 10px', color: '#64748b', fontSize: '12.5px' }}>
                     {u.designation || <span style={{ color: '#cbd5e1' }}>—</span>}
                   </td>
-
                   <td style={{ padding: '12px 10px' }}>
                     <select
                       value={u.role || 'pending'}
@@ -166,7 +164,6 @@ function AdminPanel({ users = [], onApprove, onSetRole, onDeleteUser }) {
                       <option value="patient">রোগী</option>
                     </select>
                   </td>
-
                   <td style={{ padding: '12px 10px' }}>
                     {u.approved ? (
                       <span style={{ color: '#166534', fontWeight: '700', background: '#dcfce7', padding: '3px 10px', borderRadius: '20px', fontSize: '11.5px' }}>এপ্রুভড</span>
@@ -174,7 +171,6 @@ function AdminPanel({ users = [], onApprove, onSetRole, onDeleteUser }) {
                       <span style={{ color: '#991b1b', fontWeight: '700', background: '#fee2e2', padding: '3px 10px', borderRadius: '20px', fontSize: '11.5px' }}>পেন্ডিং</span>
                     )}
                   </td>
-
                   <td style={{ padding: '12px 10px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                     {!u.approved && (
                       <button
@@ -229,10 +225,8 @@ export default function AdminDashboard({ user: propUser }) {
   const [filterPreset, setFilterPreset] = useState('all');
   const [departments, setDepartments] = useState([]);
   const [panels, setPanels] = useState([]);
-  // ✅ NEW: pending profile request count for badge
   const [pendingProfileRequests, setPendingProfileRequests] = useState(0);
 
-  // ✅ NEW: Activity Log Filters
   const [logUserFilter, setLogUserFilter] = useState('all');
   const [logModuleFilter, setLogModuleFilter] = useState('all');
   const [logActionFilter, setLogActionFilter] = useState('all');
@@ -356,7 +350,7 @@ export default function AdminDashboard({ user: propUser }) {
   }, [hospitalId, can]);
 
   // ==================================================
-  // ✅ NEW: Real-time pending profile requests count
+  // ✅ Real-time pending profile requests count
   // ==================================================
   useEffect(() => {
     if (!hospitalId) return;
@@ -678,7 +672,7 @@ export default function AdminDashboard({ user: propUser }) {
   );
 
   // ==================================================
-  // ✅ NEW: Activity Log — unique users for filter
+  // ✅ Activity Log — unique users for filter
   // ==================================================
   const uniqueLogUsers = useMemo(() => {
     const map = new Map();
@@ -694,12 +688,11 @@ export default function AdminDashboard({ user: propUser }) {
   }, [activityLogs]);
 
   // ==================================================
-  // ✅ Filtered Activity Logs (with user, module, action, date)
+  // ✅ Filtered Activity Logs
   // ==================================================
   const filteredAuditLogs = useMemo(() => {
     if (!activityLogs || !Array.isArray(activityLogs)) return [];
     return activityLogs.filter((item) => {
-      // Date filter
       if (item.timestamp) {
         let logDate;
         if (item.timestamp?.seconds) logDate = new Date(item.timestamp.seconds * 1000);
@@ -710,11 +703,8 @@ export default function AdminDashboard({ user: propUser }) {
           if (logDateStr < startDate || logDateStr > endDate) return false;
         }
       }
-      // User filter
       if (logUserFilter !== 'all' && item.userId !== logUserFilter) return false;
-      // Module filter
       if (logModuleFilter !== 'all' && item.module !== logModuleFilter) return false;
-      // Action filter
       if (logActionFilter !== 'all' && item.action !== logActionFilter) return false;
       return true;
     });
@@ -764,6 +754,7 @@ export default function AdminDashboard({ user: propUser }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
         <h2>অ্যাডমিন ড্যাশবোর্ড</h2>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+
           {can('dashboard.view') && (
             <button
               onClick={() => { setShowArchived(false); setTab('overview'); }}
@@ -778,6 +769,27 @@ export default function AdminDashboard({ user: propUser }) {
               }}
             >
               পরিসংখ্যান
+            </button>
+          )}
+
+          {/* ✅ NEW: Analytics Dashboard Tab */}
+          {can('dashboard.view') && (
+            <button
+              onClick={() => { setShowArchived(false); setTab('analytics'); }}
+              style={{
+                padding: '8px 16px',
+                background: tab === 'analytics' ? '#1c5fa8' : '#ffffff',
+                color: tab === 'analytics' ? '#ffffff' : '#333333',
+                border: '1px solid #e2e8f0',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                fontWeight: '600',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <BarChart3 size={14} /> Analytics
             </button>
           )}
 
@@ -815,7 +827,6 @@ export default function AdminDashboard({ user: propUser }) {
             </button>
           )}
 
-          {/* ✅ NEW: Profile Edit Requests (admin/sub-admin only) */}
           {(user?.role === 'admin' || user?.role === 'sub-admin') && (
             <button
               onClick={() => { setShowArchived(false); setTab('profile_requests'); }}
@@ -985,6 +996,15 @@ export default function AdminDashboard({ user: propUser }) {
         </SafeArea>
       )}
 
+      {/* ✅ NEW: Analytics Dashboard Content */}
+      {tab === 'analytics' && can('dashboard.view') && (
+        <SafeArea>
+          <Suspense fallback={<TabLoader />}>
+            <AnalyticsDashboard user={user} />
+          </Suspense>
+        </SafeArea>
+      )}
+
       {tab === 'queue' && can('booking.view') && (
         <SafeArea>
           <Suspense fallback={<TabLoader />}>
@@ -1001,7 +1021,6 @@ export default function AdminDashboard({ user: propUser }) {
         </SafeArea>
       )}
 
-      {/* ✅ NEW: Profile Edit Requests tab */}
       {tab === 'profile_requests' &&
         (user?.role === 'admin' || user?.role === 'sub-admin') && (
           <SafeArea>
@@ -1081,30 +1100,11 @@ export default function AdminDashboard({ user: propUser }) {
         </SafeArea>
       )}
 
-      {/* ==================================================
-          ✅ ACTIVITY LOG — Full Featured (User Info + Filters)
-          ================================================== */}
+      {/* ✅ Activity Log */}
       {tab === 'logs' && can('activity_log.view') && (
         <SafeArea>
-          <div
-            style={{
-              background: '#fff',
-              padding: '20px',
-              borderRadius: '10px',
-              border: '1px solid #e2e8f0',
-            }}
-          >
-            {/* Header */}
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '16px',
-                flexWrap: 'wrap',
-                gap: '10px',
-              }}
-            >
+          <div style={{ background: '#fff', padding: '20px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
               <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                 📋 Activity Log
               </h3>
@@ -1113,54 +1113,22 @@ export default function AdminDashboard({ user: propUser }) {
               </div>
             </div>
 
-            {/* Filters */}
-            <div
-              style={{
-                display: 'flex',
-                gap: '10px',
-                marginBottom: '16px',
-                flexWrap: 'wrap',
-                padding: '12px',
-                background: '#f8fafc',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-              }}
-            >
-              {/* User Filter */}
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
               <select
                 value={logUserFilter}
                 onChange={(e) => setLogUserFilter(e.target.value)}
-                style={{
-                  padding: '6px 12px',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '6px',
-                  fontSize: '13px',
-                  background: '#fff',
-                  fontFamily: 'inherit',
-                  cursor: 'pointer',
-                }}
+                style={{ padding: '6px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', background: '#fff', fontFamily: 'inherit', cursor: 'pointer' }}
               >
                 <option value="all">👤 সব ইউজার</option>
                 {uniqueLogUsers.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                  </option>
+                  <option key={u.id} value={u.id}>{u.name}</option>
                 ))}
               </select>
 
-              {/* Module Filter */}
               <select
                 value={logModuleFilter}
                 onChange={(e) => setLogModuleFilter(e.target.value)}
-                style={{
-                  padding: '6px 12px',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '6px',
-                  fontSize: '13px',
-                  background: '#fff',
-                  fontFamily: 'inherit',
-                  cursor: 'pointer',
-                }}
+                style={{ padding: '6px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', background: '#fff', fontFamily: 'inherit', cursor: 'pointer' }}
               >
                 <option value="all">📦 সব Module</option>
                 <option value="Booking List">Booking List</option>
@@ -1171,19 +1139,10 @@ export default function AdminDashboard({ user: propUser }) {
                 <option value="User Management">User Management</option>
               </select>
 
-              {/* Action Filter */}
               <select
                 value={logActionFilter}
                 onChange={(e) => setLogActionFilter(e.target.value)}
-                style={{
-                  padding: '6px 12px',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '6px',
-                  fontSize: '13px',
-                  background: '#fff',
-                  fontFamily: 'inherit',
-                  cursor: 'pointer',
-                }}
+                style={{ padding: '6px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', background: '#fff', fontFamily: 'inherit', cursor: 'pointer' }}
               >
                 <option value="all">⚡ সব Action</option>
                 <option value="CREATE">CREATE</option>
@@ -1198,54 +1157,23 @@ export default function AdminDashboard({ user: propUser }) {
                 <option value="BOOKING_PERMANENTLY_DELETED">BOOKING_PERMANENTLY_DELETED</option>
               </select>
 
-              {/* Reset */}
               <button
                 onClick={() => {
                   setLogUserFilter('all');
                   setLogModuleFilter('all');
                   setLogActionFilter('all');
                 }}
-                style={{
-                  padding: '6px 14px',
-                  background: '#f1f5f9',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '12.5px',
-                  fontWeight: '600',
-                  fontFamily: 'inherit',
-                }}
+                style={{ padding: '6px 14px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', fontSize: '12.5px', fontWeight: '600', fontFamily: 'inherit' }}
               >
                 ✕ রিসেট
               </button>
             </div>
 
-            {/* Logs List */}
-            <div
-              style={{
-                maxHeight: '700px',
-                overflowY: 'auto',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
-                paddingRight: '4px',
-              }}
-            >
+            <div style={{ maxHeight: '700px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', paddingRight: '4px' }}>
               {logsLoading ? (
-                <div style={{ textAlign: 'center', color: '#64748b', padding: '30px' }}>
-                  লোড হচ্ছে...
-                </div>
+                <div style={{ textAlign: 'center', color: '#64748b', padding: '30px' }}>লোড হচ্ছে...</div>
               ) : filteredAuditLogs.length === 0 ? (
-                <div
-                  style={{
-                    textAlign: 'center',
-                    color: '#64748b',
-                    padding: '40px 20px',
-                    background: '#f8fafc',
-                    borderRadius: '10px',
-                    border: '1px dashed #cbd5e1',
-                  }}
-                >
+                <div style={{ textAlign: 'center', color: '#64748b', padding: '40px 20px', background: '#f8fafc', borderRadius: '10px', border: '1px dashed #cbd5e1' }}>
                   <div style={{ fontSize: '40px', marginBottom: '10px' }}>📭</div>
                   <p style={{ fontWeight: '600', color: '#475569' }}>কোনো লগ নেই</p>
                 </div>

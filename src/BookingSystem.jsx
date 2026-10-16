@@ -1,6 +1,6 @@
 // src/components/BookingSystem.jsx
 // ==================================================
-// 📅 BookingSystem — Booking Form + Success Screen
+// 📅 BookingSystem — Booking Form + Redirect to Success
 // ==================================================
 // ✅ Only ONE name field — English letters only
 // ✅ Direct doctor link support (preselectedDoctorId)
@@ -14,8 +14,10 @@
 // ✅ Location tracking (GPS + City + Distance + Device)
 // ✅ Patient-side location details popup
 // ✅ Booking summary shows AGE
+// ✅ Redirect to /booking-success/:appointmentId on submit
 // ==================================================
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { db, doc, getDoc, setDoc, addDoc, collection, trackEvent } from './firebase';
 import {
   findPatientByMobile,
@@ -177,7 +179,6 @@ const BookingCSS = `
   .booking-card { background: #fff; border-radius: 16px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06); padding: 30px; border: 1px solid #e2e8f0; min-height: 500px; position: relative; }
   .booking-title { text-align: center; color: #0f766e; font-size: 24px; font-weight: 700; margin-bottom: 25px!important; font-family:'Hind Siliguri','Noto Sans Bengali',Arial,sans-serif;}
 
-  /* ✅ Location status badge (clickable) */
   .location-status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; }
   .location-status-badge.loading { background: #fef3c7; color: #92400e; }
   .location-status-badge.captured { background: #dcfce7; color: #166534; }
@@ -185,7 +186,6 @@ const BookingCSS = `
   .location-status-badge.captured.clickable:hover { transform: scale(1.03); box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25); }
   .location-status-badge.failed { background: #fee2e2; color: #991b1b; }
 
-  /* Doctor profile card */
   .doctor-profile-card { background: linear-gradient(135deg, #1565C0 0%, #1976D2 50%, #2196F3 100%); border-radius: 16px; padding: 20px; margin-bottom: 24px; color: #fff; box-shadow: 0 8px 20px rgba(13,148,136,0.25); text-align: center; }
   .doctor-profile-avatar { width: 80px; height: 80px; border-radius: 50%; background: rgba(255,255,255,0.2); border: 3px solid rgba(255,255,255,0.5); margin: 0 auto 12px; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 800; overflow: hidden; padding: 0; transition: transform 0.2s ease, box-shadow 0.2s ease; }
   .doctor-profile-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
@@ -199,7 +199,6 @@ const BookingCSS = `
   .doctor-profile-times { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 10px; }
   .doctor-profile-time { background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
 
-  /* ✅ Doctor Image Lightbox */
   .lightbox-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 20px; animation: lightboxFadeIn 0.25s ease; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
   @keyframes lightboxFadeIn { from { opacity: 0; } to { opacity: 1; } }
   .lightbox-content { position: relative; max-width: 90vw; max-height: 90vh; display: flex; flex-direction: column; align-items: center; gap: 16px; animation: lightboxZoomIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
@@ -211,7 +210,6 @@ const BookingCSS = `
   .lightbox-caption { color: #fff; font-size: 16px; font-weight: 700; text-align: center; font-family: 'Hind Siliguri','Noto Sans Bengali',Arial,sans-serif; text-shadow: 0 2px 8px rgba(0,0,0,0.5); padding: 0 20px; line-height: 1.4; }
   .lightbox-caption-sub { font-size: 13px; font-weight: 500; opacity: 0.85; margin-top: 4px; font-style: italic; }
 
-  /* ✅ Location Details Popup */
   @keyframes locationFadeIn { from { opacity: 0; } to { opacity: 1; } }
   @keyframes locationSlideUp { from { opacity: 0; transform: translateY(20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
   .location-modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); z-index: 99998; display: flex; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); animation: locationFadeIn 0.2s ease; }
@@ -228,9 +226,6 @@ const BookingCSS = `
   .distance-big-label { font-size: 12px; opacity: 0.9; margin-bottom: 6px; font-weight: 600; letter-spacing: 0.5px; }
   .distance-big-value { font-size: 40px; font-weight: 900; line-height: 1; margin-bottom: 4px; }
   .distance-big-category { font-size: 13px; opacity: 0.9; font-weight: 600; }
-  .gps-info-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
-  .gps-badge { background: #dbeafe; border-radius: 8px; padding: 6px 8px; color: #1e40af; font-weight: 700; font-size: 11px; }
-  .gps-value { font-family: monospace; font-size: 13px; color: #334155; font-weight: 600; }
   .hospital-info-box { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; font-size: 12.5px; line-height: 1.6; color: #1e40af; }
   .hospital-info-title { font-weight: 700; margin-bottom: 4px; }
   .hospital-info-sub { font-size: 11.5px; opacity: 0.85; margin-top: 2px; }
@@ -238,7 +233,6 @@ const BookingCSS = `
   .directions-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(22, 163, 74, 0.4); }
   .location-helper-text { font-size: 11.5px; color: #94a3b8; text-align: center; margin-top: 12px; margin-bottom: 0; line-height: 1.5; }
 
-  /* Allowed days hint */
   .allowed-days-hint { background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; color: #0f766e; display: flex; align-items: center; gap: 8px; }
   .allowed-days-hint strong { color: #115e59; }
 
@@ -290,39 +284,12 @@ const BookingCSS = `
   .cal-day.not-allowed { opacity: 0.3; text-decoration: line-through; }
   .cal-day.not-allowed:hover { background: transparent; }
 
-  .success-screen { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; text-align: center; padding: 30px 20px 50px 20px; min-height: 500px; animation: fadeIn 0.5s ease; width: 100%; box-sizing: border-box; }
-  .lottie-container { width: 120px; height: 120px; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; }
-  .animated-checkmark { width: 100px; height: 100px; }
-  .animated-checkmark circle { fill: #22c55e; stroke: none; }
-  .animated-checkmark path { stroke: #ffffff; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; fill: none; stroke-dasharray: 48; stroke-dashoffset: 48; animation: stroke 0.5s ease forwards 0.3s; }
-  @keyframes stroke { 100% { stroke-dashoffset: 0; } }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-  .success-title { font-size: 28px; color: #166534; font-weight: 800; margin-bottom: 24px; line-height: 1.3; font-family: 'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif; }
-  .success-info-box { background: #f0f9ff; border: 1.5px solid #bae6fd; border-radius: 14px; padding: 20px 22px; margin-bottom: 18px; max-width: 480px; width: 100%; box-sizing: border-box; display: flex; flex-direction: row; align-items: flex-start; gap: 14px; text-align: left; }
-  .success-info-icon { flex-shrink: 0; width: 46px; height: 46px; background: #e0f2fe; border-radius: 23px; display: flex; align-items: center; justify-content: center; }
-  .success-info-text { flex: 1; font-size: 15px; color: #0c4a6e; line-height: 1.7; margin: 0; font-family: 'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif; }
-  .success-info-text strong { color: #1c5fa8; font-weight: 700; }
-  .success-note-box { background: #fef9c3; border: 1px solid #fde68a; border-radius: 10px; padding: 12px 20px; margin-bottom: 32px; max-width: 480px; width: 100%; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 8px; }
-  .success-note-text { font-size: 13.5px; color: #92400e; margin: 0; font-family: 'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif; font-weight: 600; }
-  .success-buttons { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; width: 100%; max-width: 480px; }
-  .success-btn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 22px; border-radius: 10px; font-size: 14.5px; font-weight: 700; cursor: pointer; transition: all 0.2s; border: none; font-family: 'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif; flex: 1; min-width: 180px; }
-  .success-btn-primary { background: #1c5fa8; color: #fff; }
-  .success-btn-primary:hover { background: #154a82; transform: translateY(-2px); box-shadow: 0 6px 16px rgba(28, 95, 168, 0.3); }
-  .success-btn-secondary { background: #f1f5f9; color: #1e293b; border: 1.5px solid #cbd5e1; }
-  .success-btn-secondary:hover { background: #e2e8f0; transform: translateY(-2px); }
-
   @media (max-width: 600px) {
     .booking-wrapper { margin: 0; padding: 10px; }
     .booking-card { padding: 20px; }
     .summary-row { flex-direction: column; gap: 4px; }
     .summary-value { text-align: left; }
     .cal-day { width: 30px; height: 30px; font-size: 12px; }
-    .success-screen { padding: 20px 12px 40px 12px; min-height: auto; }
-    .success-title { font-size: 22px; }
-    .success-info-box { flex-direction: column; text-align: center; align-items: center; padding: 18px 16px; }
-    .success-info-text { text-align: center; font-size: 14px; }
-    .success-buttons { flex-direction: column; }
-    .success-btn { width: 100%; min-width: unset; }
     .lightbox-close-btn { top: -46px; right: 0; width: 38px; height: 38px; }
     .lightbox-image { max-height: 68vh; border-radius: 12px; }
     .lightbox-caption { font-size: 14px; }
@@ -332,6 +299,7 @@ const BookingCSS = `
 
 // ---------- মূল BookingSystem ----------
 export default function BookingSystem({ departments, panels, preselectedDoctorId, onBack }) {
+  const navigate = useNavigate();
   const { currentHospital } = useHospital();
   const hospitalId = currentHospital?.id || DEFAULT_HOSPITAL_ID;
   const { user } = useAuth();
@@ -356,11 +324,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
   const [availableDoctors, setAvailableDoctors] = useState([]);
   const [selectedDoctor, setSelectedDoctor] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [isBooked, setIsBooked] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
-  const [qrCode, setQrCode] = useState(null);
-  const [appointmentId, setAppointmentId] = useState(null);
-  const [bookedSerialNo, setBookedSerialNo] = useState(null);
 
   // ✅ Doctor Image Lightbox state
   const [showImageLightbox, setShowImageLightbox] = useState(false);
@@ -580,30 +544,6 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
     setSuccessMsg('');
   };
 
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      nameEn: '',
-      age: '',
-      mobile: '',
-      gender: 'পুরুষ',
-      address: '',
-      referralSource: '',
-      referredDoctorName: '',
-      otherReferralNote: '',
-      departmentId: isDirectBooking ? formData.departmentId : '',
-    });
-    setSelectedDate(getTodayString());
-    if (!isDirectBooking) {
-      setAvailableDoctors([]);
-      setSelectedDoctor(null);
-    }
-    setSuccessMsg('');
-    setQrCode(null);
-    setAppointmentId(null);
-    setBookedSerialNo(null);
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -699,7 +639,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
         });
       }
 
-      const finalReferralSource = formData.referralSource || 
+      const finalReferralSource = formData.referralSource ||
         (isDirectBooking ? 'Doctor Link' : 'Walk-in / নিজে এসেছেন');
 
       const appointmentData = {
@@ -737,8 +677,6 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
         collection(db, 'hospitals', hospitalId, 'appointments'),
         appointmentData
       );
-      setAppointmentId(docRef.id);
-      setBookedSerialNo(serialNo);
 
       if (formData.address && formData.address.trim()) {
         await addLocationFromBooking(hospitalId, formData.address, docRef.id);
@@ -746,7 +684,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
 
       try {
         const qrImage = await generateQRCode(docRef.id);
-        if (qrImage) setQrCode(qrImage);
+        if (qrImage) console.log('✅ QR generated');
       } catch (qrErr) {
         console.warn('QR generation failed (non-critical):', qrErr);
       }
@@ -755,6 +693,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
         'আপনার সিরিয়ালটি সফলভাবে কনফার্ম করা হয়েছে। চেক-ইন করতে QR কোড ব্যবহার করুন।'
       );
 
+      // ✅ GA4 booking_complete event
       trackEvent('booking_complete', {
         doctor_id: selectedDoctor.id,
         doctor_name: selectedDoctor.name,
@@ -763,25 +702,20 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
         referral_source: finalReferralSource,
       });
 
-      setIsBooked(true);
+      // ✅ Redirect to Thank You page
+      setTimeout(() => {
+        navigate(`/booking-success/${docRef.id}`, {
+          state: {
+            fromDoctorLink: isDirectBooking,
+            doctorId: selectedDoctor.id,
+          },
+        });
+      }, 100);
     } catch (error) {
       console.error('Booking error:', error);
       alert(error.message || 'বুকিং সম্পন্ন হয়নি। আবার চেষ্টা করুন।');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleNewBooking = () => {
-    resetForm();
-    setIsBooked(false);
-  };
-
-  const handleBackToDoctors = () => {
-    if (onBack) onBack();
-    else {
-      resetForm();
-      setIsBooked(false);
     }
   };
 
@@ -798,540 +732,483 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
     <div className="booking-wrapper">
       <style>{BookingCSS}</style>
       <div className="booking-card">
-        {isBooked ? (
-          <div className="success-screen">
-            <div className="lottie-container">
-              <svg className="animated-checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
-                <circle cx="26" cy="26" r="25" fill="none" />
-                <path fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8" />
-              </svg>
+        <form onSubmit={handleSubmit}>
+          <h2 className="booking-title">রোগীর ডাক্তার বুকিং ফর্ম</h2>
+
+          {/* ✅ Location Status Badge — Clickable for patient */}
+          {locationStatus !== 'idle' && (
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
+              {locationStatus === 'loading' && (
+                <div className="location-status-badge loading">
+                  <Loader2 size={13} className="spin" />
+                  লোড হচ্ছে...
+                </div>
+              )}
+
+              {locationStatus === 'captured' && bookingLocation?.geo && (
+                <button
+                  type="button"
+                  className="location-status-badge captured clickable"
+                  onClick={() => setShowLocationDetails(true)}
+                  title="বিস্তারিত দেখতে ক্লিক করুন"
+                  style={{
+                    cursor: 'pointer',
+                    border: 'none',
+                    fontFamily: 'inherit',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.2s ease',
+                    padding: '6px 12px',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'scale(1.02)';
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(22, 163, 74, 0.25)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'scale(1)';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
+                >
+                  <MapPin size={13} />
+                  <span>{bookingLocation.summary}</span>
+
+                  {bookingLocation.distance?.distanceText && (
+                    <span style={{ marginLeft: '2px' }}>
+                      · 🚗 {bookingLocation.distance.distanceText}
+                    </span>
+                  )}
+
+                  <span
+                    style={{
+                      marginLeft: '8px',
+                      padding: '3px 10px',
+                      background: '#166534',
+                      color: '#fff',
+                      borderRadius: '10px',
+                      fontSize: '10.5px',
+                      fontWeight: '700',
+                      letterSpacing: '0.3px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '3px',
+                      boxShadow: '0 1px 3px rgba(22, 101, 52, 0.3)',
+                    }}
+                  >
+                    <Info size={10} strokeWidth={2.5} />
+                    বিস্তারিত
+                  </span>
+                </button>
+              )}
+
+              {locationStatus === 'failed' && (
+                <button
+                  type="button"
+                  className="location-status-badge failed"
+                  onClick={async () => {
+                    setLocationStatus('loading');
+                    try {
+                      const location = await captureCompleteLocation();
+                      setBookingLocation(location);
+                      setLocationStatus(location.gps ? 'captured' : 'failed');
+                    } catch {
+                      setLocationStatus('failed');
+                    }
+                  }}
+                  style={{ cursor: 'pointer', border: 'none', fontFamily: 'inherit' }}
+                  title="আবার চেষ্টা করুন"
+                >
+                  ⚠️ লোকেশন পাওয়া যায়নি — আবার চেষ্টা করুন
+                </button>
+              )}
+            </div>
+          )}
+
+          {isDirectBooking && selectedDoctor && (
+            <div className="doctor-profile-card">
+              <div
+                className={`doctor-profile-avatar ${selectedDoctor.imageUrl ? 'clickable' : ''}`}
+                onClick={() => {
+                  if (selectedDoctor.imageUrl) setShowImageLightbox(true);
+                }}
+                title={selectedDoctor.imageUrl ? 'ছবিতে ক্লিক করে বড় দেখুন' : ''}
+              >
+                {selectedDoctor.imageUrl ? (
+                  <img
+                    src={selectedDoctor.imageUrl}
+                    alt={selectedDoctor.name}
+                  />
+                ) : (
+                  <User size={40} strokeWidth={1.5} color="#ffffff" />
+                )}
+              </div>
+              <div className="doctor-profile-name">{selectedDoctor.name}</div>
+
+              {selectedDoctor.specialty && (
+                <div className="doctor-profile-specialty">{selectedDoctor.specialty}</div>
+              )}
+
+              {selectedDoctor.quals && (
+                <div className="doctor-profile-quals">{selectedDoctor.quals}</div>
+              )}
+
+              {selectedDoctor.workplace && (
+                <div className="doctor-profile-workplace">{selectedDoctor.workplace}</div>
+              )}
+
+              {selectedDoctor.deptName && (
+                <div className="doctor-profile-dept">{selectedDoctor.deptName}</div>
+              )}
+
+              {selectedDoctor.timeSlots && selectedDoctor.timeSlots.length > 0 && (
+                <div className="doctor-profile-times">
+                  {selectedDoctor.timeSlots.map((slot, idx) => (
+                    <span key={idx} className="doctor-profile-time">
+                      ⏱ {slot.start} - {slot.end}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {isDirectBooking && doctorAllowedDays.length > 0 && (
+            <div className="allowed-days-hint">
+              <CalendarDays size={16} />
+              <span>
+                <strong>ডাক্তার চেম্বারে থাকেন:</strong> {allowedDaysText}
+                <br />
+                <span style={{ fontSize: '11.5px', opacity: 0.8 }}>
+                  শুধু এই দিনগুলোতে তারিখ নির্বাচন করা যাবে
+                </span>
+              </span>
+            </div>
+          )}
+
+          <div className="form-section">
+            <div className="section-title">
+              <CalendarDays size={18} /> বুকিং তারিখ নির্বাচন
+            </div>
+            <div className="form-group">
+              <CustomCalendar
+                selectedDate={selectedDate}
+                onDateChange={setSelectedDate}
+                allowedDays={isDirectBooking ? doctorAllowedDays : null}
+              />
+              {selectedDayName && (
+                <span className="day-badge">
+                  সপ্তাহের দিন: {selectedDayName}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="form-section">
+            <div className="section-title">
+              <User size={18} /> রোগীর তথ্য{' '}
+              <span className="required-asterisk">*</span>
             </div>
 
-            <h3 className="success-title">বুকিং সফল হয়েছে!</h3>
-
-            <div className="success-info-box">
-              <div className="success-info-icon">
-                <MessageSquare size={22} color="#1c5fa8" />
-              </div>
-              <p className="success-info-text">
-                আপনার সিরিয়াল নিশ্চিত হলে আপনার মোবাইল নাম্বারে{' '}
-                <strong>মেসেজের মাধ্যমে কনফার্মেশন</strong> পাবেন।
+            <div className="form-group">
+              <label>
+                রোগীর নাম <span className="required-asterisk">*</span>
+              </label>
+              <input
+                type="text"
+                className="input"
+                name="nameEn"
+                value={formData.nameEn}
+                onChange={handleChange}
+                onKeyDown={handleNameKeyDown}
+                onPaste={handleNamePaste}
+                required
+                placeholder="যেমন: Abdullah Mamun"
+                autoComplete="off"
+              />
+              <p style={{ fontSize: '11.5px', color: '#94a3b8', margin: '4px 0 0 0' }}>
+                শুধু ইংরেজি অক্ষরে নাম লিখুন
               </p>
             </div>
 
-            <div className="success-note-box">
-              <p className="success-note-title">যেকোনো জিজ্ঞাসায় যোগাযোগ করুন</p>
-              <div className="success-note-phones">
-                <a href="tel:01886776512" className="success-phone-link">
-                  <span className="success-phone-icon">
-                    <PhoneCall size={14} color="#fff" strokeWidth={2.5} />
-                  </span>
-                  <span className="success-phone-text">01886-776512</span>
-                </a>
-                <a href="tel:01886776513" className="success-phone-link">
-                  <span className="success-phone-icon">
-                    <PhoneCall size={14} color="#fff" strokeWidth={2.5} />
-                  </span>
-                  <span className="success-phone-text">01886-776513</span>
-                </a>
-              </div>
+            <div className="form-group">
+              <label>
+                বয়স (বাংলা বা ইংরেজি সংখ্যায়){' '}
+                <span className="required-asterisk">*</span>
+              </label>
+              <input
+                type="text"
+                className="input"
+                name="age"
+                value={formData.age}
+                onChange={handleChange}
+                required
+                placeholder="যেমনঃ ২৫ বা 25"
+              />
             </div>
 
-            <div className="success-buttons">
-              <button className="success-btn success-btn-secondary" onClick={handleBackToDoctors}>
-                <ArrowLeft size={18} /> ফিরে যান হোমপেইজে
-              </button>
-              <button className="success-btn success-btn-primary" onClick={handleNewBooking}>
-                <PlusCircle size={18} /> আরো একটি সিরিয়াল দিন
-              </button>
+            <BangladeshMobileInput
+              value={formData.mobile}
+              onChange={(val) =>
+                setFormData((prev) => ({ ...prev, mobile: val }))
+              }
+              label="মোবাইল নম্বর"
+              required={true}
+              placeholder="মোবাইল নম্বর লিখুন"
+              name="mobile"
+            />
+
+            <div className="form-group">
+              <label>
+                লিঙ্গ <span className="required-asterisk">*</span>
+              </label>
+              <select
+                className="select"
+                name="gender"
+                value={formData.gender}
+                onChange={handleChange}
+                required
+              >
+                <option value="পুরুষ">পুরুষ</option>
+                <option value="মহিলা">মহিলা</option>
+                <option value="অন্যান্য">অন্যান্য</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>বর্তমান ঠিকানা (ঐচ্ছিক)</label>
+              <textarea
+                className="textarea"
+                name="address"
+                value={formData.address}
+                onChange={handleChange}
+                placeholder="আপনার বর্তমান ঠিকানা লিখুন (যদি ইচ্ছা)"
+              />
             </div>
           </div>
-        ) : (
-          <form onSubmit={handleSubmit}>
-            <h2 className="booking-title">রোগীর ডাক্তার বুকিং ফর্ম</h2>
 
-            {/* ✅ Location Status Badge — Clickable for patient */}
-            {locationStatus !== 'idle' && (
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
-                {locationStatus === 'loading' && (
-                  <div className="location-status-badge loading">
-                    <Loader2 size={13} className="spin" />
-                    লোড হচ্ছে...
-                  </div>
-                )}
-
-                {locationStatus === 'captured' && bookingLocation?.geo && (
-                  <button
-                    type="button"
-                    className="location-status-badge captured clickable"
-                    onClick={() => setShowLocationDetails(true)}
-                    title="বিস্তারিত দেখতে ক্লিক করুন"
-                    style={{
-                      cursor: 'pointer',
-                      border: 'none',
-                      fontFamily: 'inherit',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      transition: 'all 0.2s ease',
-                      padding: '6px 12px',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'scale(1.02)';
-                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(22, 163, 74, 0.25)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'scale(1)';
-                      e.currentTarget.style.boxShadow = 'none';
-                    }}
-                  >
-                    <MapPin size={13} />
-                    <span>{bookingLocation.summary}</span>
-
-                    {bookingLocation.distance?.distanceText && (
-                      <span style={{ marginLeft: '2px' }}>
-                        · 🚗 {bookingLocation.distance.distanceText}
-                      </span>
-                    )}
-
-                    {/* ✅ NEW: "বিস্তারিত" Button */}
-                    <span
-                      style={{
-                        marginLeft: '8px',
-                        padding: '3px 10px',
-                        background: '#166534',
-                        color: '#fff',
-                        borderRadius: '10px',
-                        fontSize: '10.5px',
-                        fontWeight: '700',
-                        letterSpacing: '0.3px',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '3px',
-                        boxShadow: '0 1px 3px rgba(22, 101, 52, 0.3)',
-                      }}
-                    >
-                      <Info size={10} strokeWidth={2.5} />
-                      বিস্তারিত
-                    </span>
-                  </button>
-                )}
-
-                {locationStatus === 'failed' && (
-                  <button
-                    type="button"
-                    className="location-status-badge failed"
-                    onClick={async () => {
-                      setLocationStatus('loading');
-                      try {
-                        const location = await captureCompleteLocation();
-                        setBookingLocation(location);
-                        setLocationStatus(location.gps ? 'captured' : 'failed');
-                      } catch {
-                        setLocationStatus('failed');
-                      }
-                    }}
-                    style={{ cursor: 'pointer', border: 'none', fontFamily: 'inherit' }}
-                    title="আবার চেষ্টা করুন"
-                  >
-                    ⚠️ লোকেশন পাওয়া যায়নি — আবার চেষ্টা করুন
-                  </button>
-                )}
-              </div>
-            )}
-
-            {isDirectBooking && selectedDoctor && (
-              <div className="doctor-profile-card">
-                <div
-                  className={`doctor-profile-avatar ${selectedDoctor.imageUrl ? 'clickable' : ''}`}
-                  onClick={() => {
-                    if (selectedDoctor.imageUrl) setShowImageLightbox(true);
-                  }}
-                  title={selectedDoctor.imageUrl ? 'ছবিতে ক্লিক করে বড় দেখুন' : ''}
-                >
-                  {selectedDoctor.imageUrl ? (
-                    <img
-                      src={selectedDoctor.imageUrl}
-                      alt={selectedDoctor.name}
-                    />
-                  ) : (
-                    <User size={40} strokeWidth={1.5} color="#ffffff" />
-                  )}
-                </div>
-                <div className="doctor-profile-name">{selectedDoctor.name}</div>
-
-                {selectedDoctor.specialty && (
-                  <div className="doctor-profile-specialty">{selectedDoctor.specialty}</div>
-                )}
-
-                {selectedDoctor.quals && (
-                  <div className="doctor-profile-quals">{selectedDoctor.quals}</div>
-                )}
-
-                {selectedDoctor.workplace && (
-                  <div className="doctor-profile-workplace">{selectedDoctor.workplace}</div>
-                )}
-
-                {selectedDoctor.deptName && (
-                  <div className="doctor-profile-dept">{selectedDoctor.deptName}</div>
-                )}
-
-                {selectedDoctor.timeSlots && selectedDoctor.timeSlots.length > 0 && (
-                  <div className="doctor-profile-times">
-                    {selectedDoctor.timeSlots.map((slot, idx) => (
-                      <span key={idx} className="doctor-profile-time">
-                        ⏱ {slot.start} - {slot.end}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {isDirectBooking && doctorAllowedDays.length > 0 && (
-              <div className="allowed-days-hint">
-                <CalendarDays size={16} />
-                <span>
-                  <strong>ডাক্তার চেম্বারে থাকেন:</strong> {allowedDaysText}
-                  <br />
-                  <span style={{ fontSize: '11.5px', opacity: 0.8 }}>
-                    শুধু এই দিনগুলোতে তারিখ নির্বাচন করা যাবে
-                  </span>
-                </span>
-              </div>
-            )}
-
-            <div className="form-section">
-              <div className="section-title">
-                <CalendarDays size={18} /> বুকিং তারিখ নির্বাচন
-              </div>
-              <div className="form-group">
-                <CustomCalendar
-                  selectedDate={selectedDate}
-                  onDateChange={setSelectedDate}
-                  allowedDays={isDirectBooking ? doctorAllowedDays : null}
-                />
-                {selectedDayName && (
-                  <span className="day-badge">
-                    সপ্তাহের দিন: {selectedDayName}
-                  </span>
-                )}
-              </div>
+          <div className="form-section">
+            <div className="section-title">
+              <MapPin size={18} /> রেফারেল তথ্য (ঐচ্ছিক)
             </div>
+            <div className="form-group">
+              <label>রোগী কীভাবে/কার মাধ্যমে এসেছেন?</label>
+              <select
+                className="select"
+                name="referralSource"
+                value={formData.referralSource}
+                onChange={handleChange}
+              >
+                <option value="">-- নির্বাচন করুন --</option>
+                <option value="Walk-in / নিজে এসেছেন">Walk-in / নিজে এসেছেন</option>
+                <option value="Refer Doctor">Refer Doctor</option>
+                <option value="Facebook">Facebook</option>
+                <option value="Google">Google</option>
+                <option value="Campaign / Medical Camp">Campaign / Medical Camp</option>
+                <option value="Doctor Link">Doctor Link</option>
+                <option value="আত্মীয়/বন্ধু">আত্মীয়/বন্ধু</option>
+                <option value="অন্যান্য">অন্যান্য</option>
+              </select>
+            </div>
+            {formData.referralSource === 'Refer Doctor' && (
+              <div className="conditional-field">
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label>রেফারিং ডাক্তারের নাম লিখুন</label>
+                  <input
+                    type="text"
+                    className="input"
+                    name="referredDoctorName"
+                    value={formData.referredDoctorName}
+                    onChange={handleChange}
+                    placeholder="যেমনঃ ডাঃ কামরুল হাসান"
+                  />
+                </div>
+              </div>
+            )}
+            {formData.referralSource === 'অন্যান্য' && (
+              <div className="conditional-field">
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label>অন্যান্য উৎস সম্পর্কে লিখুন</label>
+                  <input
+                    type="text"
+                    className="input"
+                    name="otherReferralNote"
+                    value={formData.otherReferralNote}
+                    onChange={handleChange}
+                    placeholder="যেমনঃ ফেসবুক গ্রুপ, মাইক্রোব্লগ, পরিচিতজন ইত্যাদি"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
 
+          {!isDirectBooking && (
             <div className="form-section">
               <div className="section-title">
-                <User size={18} /> রোগীর তথ্য{' '}
+                <Stethoscope size={18} /> অ্যাপয়েন্টমেন্ট ডাক্তার নির্বাচন{' '}
                 <span className="required-asterisk">*</span>
               </div>
 
               <div className="form-group">
-                <label>
-                  রোগীর নাম <span className="required-asterisk">*</span>
-                </label>
-                <input
-                  type="text"
-                  className="input"
-                  name="nameEn"
-                  value={formData.nameEn}
-                  onChange={handleChange}
-                  onKeyDown={handleNameKeyDown}
-                  onPaste={handleNamePaste}
-                  required
-                  placeholder="যেমন: Abdullah Mamun"
-                  autoComplete="off"
-                />
-                <p style={{ fontSize: '11.5px', color: '#94a3b8', margin: '4px 0 0 0' }}>
-                  শুধু ইংরেজি অক্ষরে নাম লিখুন
-                </p>
-              </div>
-
-              <div className="form-group">
-                <label>
-                  বয়স (বাংলা বা ইংরেজি সংখ্যায়){' '}
-                  <span className="required-asterisk">*</span>
-                </label>
-                <input
-                  type="text"
-                  className="input"
-                  name="age"
-                  value={formData.age}
-                  onChange={handleChange}
-                  required
-                  placeholder="যেমনঃ ২৫ বা 25"
-                />
-              </div>
-
-              <BangladeshMobileInput
-                value={formData.mobile}
-                onChange={(val) =>
-                  setFormData((prev) => ({ ...prev, mobile: val }))
-                }
-                label="মোবাইল নম্বর"
-                required={true}
-                placeholder="মোবাইল নম্বর লিখুন"
-                name="mobile"
-              />
-
-              <div className="form-group">
-                <label>
-                  লিঙ্গ <span className="required-asterisk">*</span>
-                </label>
+                <label>বিভাগ নির্বাচন করুন</label>
                 <select
                   className="select"
-                  name="gender"
-                  value={formData.gender}
-                  onChange={handleChange}
-                  required
-                >
-                  <option value="পুরুষ">পুরুষ</option>
-                  <option value="মহিলা">মহিলা</option>
-                  <option value="অন্যান্য">অন্যান্য</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>বর্তমান ঠিকানা (ঐচ্ছিক)</label>
-                <textarea
-                  className="textarea"
-                  name="address"
-                  value={formData.address}
-                  onChange={handleChange}
-                  placeholder="আপনার বর্তমান ঠিকানা লিখুন (যদি ইচ্ছা)"
-                />
-              </div>
-            </div>
-
-            <div className="form-section">
-              <div className="section-title">
-                <MapPin size={18} /> রেফারেল তথ্য (ঐচ্ছিক)
-              </div>
-              <div className="form-group">
-                <label>রোগী কীভাবে/কার মাধ্যমে এসেছেন?</label>
-                <select
-                  className="select"
-                  name="referralSource"
-                  value={formData.referralSource}
+                  name="departmentId"
+                  value={formData.departmentId}
                   onChange={handleChange}
                 >
-                  <option value="">-- নির্বাচন করুন --</option>
-                  <option value="Walk-in / নিজে এসেছেন">Walk-in / নিজে এসেছেন</option>
-                  <option value="Refer Doctor">Refer Doctor</option>
-                  <option value="Facebook">Facebook</option>
-                  <option value="Google">Google</option>
-                  <option value="Campaign / Medical Camp">Campaign / Medical Camp</option>
-                  <option value="Doctor Link">Doctor Link</option>
-                  <option value="আত্মীয়/বন্ধু">আত্মীয়/বন্ধু</option>
-                  <option value="অন্যান্য">অন্যান্য</option>
+                  <option value="">সব বিভাগ</option>
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </option>
+                  ))}
                 </select>
               </div>
-              {formData.referralSource === 'Refer Doctor' && (
-                <div className="conditional-field">
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label>রেফারিং ডাক্তারের নাম লিখুন</label>
-                    <input
-                      type="text"
-                      className="input"
-                      name="referredDoctorName"
-                      value={formData.referredDoctorName}
-                      onChange={handleChange}
-                      placeholder="যেমনঃ ডাঃ কামরুল হাসান"
-                    />
-                  </div>
-                </div>
-              )}
-              {formData.referralSource === 'অন্যান্য' && (
-                <div className="conditional-field">
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label>অন্যান্য উৎস সম্পর্কে লিখুন</label>
-                    <input
-                      type="text"
-                      className="input"
-                      name="otherReferralNote"
-                      value={formData.otherReferralNote}
-                      onChange={handleChange}
-                      placeholder="যেমনঃ ফেসবুক গ্রুপ, মাইক্রোব্লগ, পরিচিতজন ইত্যাদি"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
 
-            {!isDirectBooking && (
-              <div className="form-section">
-                <div className="section-title">
-                  <Stethoscope size={18} /> অ্যাপয়েন্টমেন্ট ডাক্তার নির্বাচন{' '}
+              <div className="form-group">
+                <label>
+                  ডাক্তার নির্বাচন করুন ({selectedDayName}){' '}
                   <span className="required-asterisk">*</span>
-                </div>
-
-                <div className="form-group">
-                  <label>বিভাগ নির্বাচন করুন</label>
-                  <select
-                    className="select"
-                    name="departmentId"
-                    value={formData.departmentId}
-                    onChange={handleChange}
-                  >
-                    <option value="">সব বিভাগ</option>
-                    {departments.map((dept) => (
-                      <option key={dept.id} value={dept.id}>
-                        {dept.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label>
-                    ডাক্তার নির্বাচন করুন ({selectedDayName}){' '}
-                    <span className="required-asterisk">*</span>
-                  </label>
-                  <div className="doctor-options">
-                    {filteredDoctors.length === 0 ? (
+                </label>
+                <div className="doctor-options">
+                  {filteredDoctors.length === 0 ? (
+                    <div
+                      style={{
+                        padding: '15px',
+                        textAlign: 'center',
+                        color: '#64748b',
+                        fontSize: '14px',
+                      }}
+                    >
+                      {availableDoctors.length === 0 ? (
+                        <div>
+                          <p>⚠️ এই দিনে ({selectedDayName}) কোনো ডাক্তারের সিরিয়াল নেই।</p>
+                          <p style={{ fontSize: '12px', marginTop: '5px', color: '#94a3b8' }}>
+                            {panels?.length === 0
+                              ? 'প্যানেল ডেটা পাওয়া যায়নি।'
+                              : 'অন্য কোনো দিন নির্বাচন করুন।'}
+                          </p>
+                        </div>
+                      ) : (
+                        <div>
+                          <p>⚠️ নির্বাচিত বিভাগে ডাক্তার নেই।</p>
+                          <p style={{ fontSize: '12px', marginTop: '5px', color: '#94a3b8' }}>
+                            অন্য বিভাগ নির্বাচন করুন।
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    filteredDoctors.map((doc) => (
                       <div
-                        style={{
-                          padding: '15px',
-                          textAlign: 'center',
-                          color: '#64748b',
-                          fontSize: '14px',
-                        }}
+                        key={doc.id}
+                        className={`doctor-option ${selectedDoctor?.id === doc.id ? 'selected' : ''}`}
+                        onClick={() => setSelectedDoctor(doc)}
                       >
-                        {availableDoctors.length === 0 ? (
-                          <div>
-                            <p>⚠️ এই দিনে ({selectedDayName}) কোনো ডাক্তারের সিরিয়াল নেই।</p>
-                            <p style={{ fontSize: '12px', marginTop: '5px', color: '#94a3b8' }}>
-                              {panels?.length === 0
-                                ? 'প্যানেল ডেটা পাওয়া যায়নি।'
-                                : 'অন্য কোনো দিন নির্বাচন করুন।'}
-                            </p>
+                        <div>
+                          <div className="doctor-name">{doc.name}</div>
+                          <div className="doctor-details">
+                            {doc.specialty || doc.quals || doc.deptName}
                           </div>
-                        ) : (
-                          <div>
-                            <p>⚠️ নির্বাচিত বিভাগে ডাক্তার নেই।</p>
-                            <p style={{ fontSize: '12px', marginTop: '5px', color: '#94a3b8' }}>
-                              অন্য বিভাগ নির্বাচন করুন।
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      filteredDoctors.map((doc) => (
-                        <div
-                          key={doc.id}
-                          className={`doctor-option ${selectedDoctor?.id === doc.id ? 'selected' : ''}`}
-                          onClick={() => setSelectedDoctor(doc)}
-                        >
-                          <div>
-                            <div className="doctor-name">{doc.name}</div>
-                            <div className="doctor-details">
-                              {doc.specialty || doc.quals || doc.deptName}
+                          {doc.timeSlots && doc.timeSlots.length > 0 && (
+                            <div className="slot-display">
+                              {doc.timeSlots.map((slot, idx) => (
+                                <span key={idx} className="slot-badge">
+                                  ⏱ {slot.start} - {slot.end}
+                                </span>
+                              ))}
                             </div>
-                            {doc.timeSlots && doc.timeSlots.length > 0 && (
-                              <div className="slot-display">
-                                {doc.timeSlots.map((slot, idx) => (
-                                  <span key={idx} className="slot-badge">
-                                    ⏱ {slot.start} - {slot.end}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                          {selectedDoctor?.id === doc.id && (
-                            <CheckCircle2 size={18} color="#0d9488" />
                           )}
                         </div>
-                      ))
-                    )}
-                  </div>
-
-                  {selectedDoctor && (
-                    <button
-                      type="button"
-                      className="clear-doctor-btn"
-                      onClick={() => setSelectedDoctor(null)}
-                    >
-                      ডাক্তার পরিবর্তন করুন (ডিসিলেক্ট)
-                    </button>
+                        {selectedDoctor?.id === doc.id && (
+                          <CheckCircle2 size={18} color="#0d9488" />
+                        )}
+                      </div>
+                    ))
                   )}
                 </div>
+
+                {selectedDoctor && (
+                  <button
+                    type="button"
+                    className="clear-doctor-btn"
+                    onClick={() => setSelectedDoctor(null)}
+                  >
+                    ডাক্তার পরিবর্তন করুন (ডিসিলেক্ট)
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ✅ Booking Summary */}
+          <div className="summary-box">
+            <div
+              className="section-title"
+              style={{
+                borderBottom: 'none',
+                marginBottom: '10px',
+                paddingBottom: '0',
+              }}
+            >
+              বুকিং সামারি
+            </div>
+            <div className="summary-row">
+              <span className="summary-label">তারিখ:</span>
+              <span className="summary-value">
+                {selectedDate} ({selectedDayName})
+              </span>
+            </div>
+            <div className="summary-row">
+              <span className="summary-label">রোগীর নাম:</span>
+              <span className="summary-value">{formData.nameEn || '-'}</span>
+            </div>
+            <div className="summary-row">
+              <span className="summary-label">বয়স:</span>
+              <span className="summary-value">{formData.age || '-'}</span>
+            </div>
+            <div className="summary-row">
+              <span className="summary-label">মোবাইল:</span>
+              <span className="summary-value">
+                {formData.mobile ? toDisplayFormat(formData.mobile) : '-'}
+              </span>
+            </div>
+            <div className="summary-row">
+              <span className="summary-label">লিঙ্গ:</span>
+              <span className="summary-value">{formData.gender || '-'}</span>
+            </div>
+            <div className="summary-row">
+              <span className="summary-label">নির্বাচিত ডাক্তার:</span>
+              <span className="summary-value">{selectedDoctor?.name || '-'}</span>
+            </div>
+            <div className="summary-row">
+              <span className="summary-label">রেফারেল সোর্স:</span>
+              <span className="summary-value">{formData.referralSource || '-'}</span>
+            </div>
+            {formData.address && (
+              <div className="summary-row">
+                <span className="summary-label">ঠিকানা:</span>
+                <span className="summary-value">{formData.address}</span>
               </div>
             )}
+            {formData.referredDoctorName && (
+              <div className="summary-row">
+                <span className="summary-label">রেফারিং ডাক্তার:</span>
+                <span className="summary-value">{formData.referredDoctorName}</span>
+              </div>
+            )}
+            {formData.otherReferralNote && (
+              <div className="summary-row">
+                <span className="summary-label">অন্যান্য নোট:</span>
+                <span className="summary-value">{formData.otherReferralNote}</span>
+              </div>
+            )}
+          </div>
 
-            {/* ✅ Booking Summary — Now with AGE */}
-            <div className="summary-box">
-              <div
-                className="section-title"
-                style={{
-                  borderBottom: 'none',
-                  marginBottom: '10px',
-                  paddingBottom: '0',
-                }}
-              >
-                বুকিং সামারি
-              </div>
-              <div className="summary-row">
-                <span className="summary-label">তারিখ:</span>
-                <span className="summary-value">
-                  {selectedDate} ({selectedDayName})
-                </span>
-              </div>
-              <div className="summary-row">
-                <span className="summary-label">রোগীর নাম:</span>
-                <span className="summary-value">{formData.nameEn || '-'}</span>
-              </div>
-
-              {/* ✅ AGE — now showing */}
-              <div className="summary-row">
-                <span className="summary-label">বয়স:</span>
-                <span className="summary-value">{formData.age || '-'}</span>
-              </div>
-
-              <div className="summary-row">
-                <span className="summary-label">মোবাইল:</span>
-                <span className="summary-value">
-                  {formData.mobile ? toDisplayFormat(formData.mobile) : '-'}
-                </span>
-              </div>
-
-              {/* ✅ GENDER — also added */}
-              <div className="summary-row">
-                <span className="summary-label">লিঙ্গ:</span>
-                <span className="summary-value">{formData.gender || '-'}</span>
-              </div>
-
-              <div className="summary-row">
-                <span className="summary-label">নির্বাচিত ডাক্তার:</span>
-                <span className="summary-value">{selectedDoctor?.name || '-'}</span>
-              </div>
-              <div className="summary-row">
-                <span className="summary-label">রেফারেল সোর্স:</span>
-                <span className="summary-value">{formData.referralSource || '-'}</span>
-              </div>
-              {formData.address && (
-                <div className="summary-row">
-                  <span className="summary-label">ঠিকানা:</span>
-                  <span className="summary-value">{formData.address}</span>
-                </div>
-              )}
-              {formData.referredDoctorName && (
-                <div className="summary-row">
-                  <span className="summary-label">রেফারিং ডাক্তার:</span>
-                  <span className="summary-value">{formData.referredDoctorName}</span>
-                </div>
-              )}
-              {formData.otherReferralNote && (
-                <div className="summary-row">
-                  <span className="summary-label">অন্যান্য নোট:</span>
-                  <span className="summary-value">{formData.otherReferralNote}</span>
-                </div>
-              )}
-            </div>
-
-            <button type="submit" className="submit-btn" disabled={loading}>
-              {loading ? <Loader2 className="spin" size={18} /> : <Send size={18} />}
-              সিরিয়াল নিশ্চিত করুন
-            </button>
-          </form>
-        )}
+          <button type="submit" className="submit-btn" disabled={loading}>
+            {loading ? <Loader2 className="spin" size={18} /> : <Send size={18} />}
+            সিরিয়াল নিশ্চিত করুন
+          </button>
+        </form>
       </div>
 
       {/* ✅ Doctor Image Lightbox */}
@@ -1371,7 +1248,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
         </div>
       )}
 
-      {/* ✅ NEW: Patient-side Location Details Popup */}
+      {/* ✅ Location Details Popup */}
       {showLocationDetails && bookingLocation && (
         <div
           className="location-modal-overlay"
@@ -1381,7 +1258,6 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
             className="location-modal-box"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
             <div className="location-modal-header">
               <h3>
                 <MapPin size={20} />
@@ -1396,9 +1272,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
               </button>
             </div>
 
-            {/* Body */}
             <div className="location-modal-body">
-              {/* Location Summary */}
               <div className="location-summary-box">
                 <div className="location-summary-label">🌍 আপনার লোকেশন</div>
                 <div className="location-summary-value">
@@ -1406,7 +1280,6 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
                 </div>
               </div>
 
-              {/* Distance — Big */}
               {bookingLocation.distance?.distanceText &&
                 bookingLocation.distance.distanceText !== '—' && (
                   <div className="distance-big-box">
@@ -1424,7 +1297,6 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
                   </div>
                 )}
 
-              {/* Hospital Info */}
               <div className="hospital-info-box">
                 <div className="hospital-info-title">🏥 হাসপাতাল</div>
                 <div>Al-Afiyah Hospital & Diagnostic Centre</div>
@@ -1433,7 +1305,6 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
                 </div>
               </div>
 
-              {/* Directions Button */}
               {bookingLocation.gps && (
                 <a
                   href={`https://www.google.com/maps/dir/?api=1&origin=${bookingLocation.gps.latitude},${bookingLocation.gps.longitude}&destination=22.3508119,91.8475064&travelmode=driving`}
@@ -1446,7 +1317,6 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
                 </a>
               )}
 
-              {/* Helper Text */}
               <p className="location-helper-text">
                 💡 এটি আপনার বর্তমান অবস্থান থেকে হাসপাতালের দূরত্ব।
                 <br />

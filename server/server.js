@@ -6,9 +6,9 @@
 // ✅ SMS via Automas Technologies (api.automas.com.bd/smsapiv4)
 // ✅ Email via Gmail
 // ✅ FCM Push Notifications
+// ✅ GA4 Analytics Data API (Phase 2)
 // ✅ Bot login: 8801898792301
 // ✅ Notification target: 8801886776513
-// ✅ Short SMS (1 SMS fit) for cost savings
 // ==================================================
 require('dotenv').config();
 const express = require('express');
@@ -22,6 +22,9 @@ const pino = require('pino');
 const qrcode = require('qrcode-terminal');
 const nodemailer = require('nodemailer');
 const axios = require('axios');
+
+// ---------- Google Analytics Data API ----------
+const { BetaAnalyticsDataClient } = require('@google-analytics/data');
 
 // ---------- Firebase Admin ----------
 const { initializeApp, cert } = require('firebase-admin/app');
@@ -103,6 +106,9 @@ app.use(express.json());
 const HOSPITAL_ID = process.env.HOSPITAL_ID || 'alafiyah_main';
 const HOSPITAL_NAME_EN = 'Al-Afiyah Hospital';
 const HOSPITAL_CONTACT = '01886-776512';
+
+// ✅ GA4 Property ID (numeric)
+const GA4_PROPERTY_ID = '551709872';
 
 // ✅ Bot login number — এই number দিয়ে WhatsApp-এ login করবেন
 const HOSPITAL_WHATSAPP = '8801898792301';
@@ -252,7 +258,6 @@ async function sendSMS(phoneNumber, message) {
     const apiKey = process.env.AUTOMAS_API_KEY;
     const senderId = process.env.AUTOMAS_SENDER_ID || 'AL AFIYAH';
 
-    // ✅ সঠিক URL (documentation অনুযায়ী)
     const apiUrl = 'https://api.automas.com.bd/smsapiv4';
 
     if (!apiKey) {
@@ -260,16 +265,14 @@ async function sendSMS(phoneNumber, message) {
       return false;
     }
 
-    // ✅ Number format: Automas চায় 01XXXXXXXXX (no 88 prefix)
     let number = phoneNumber.replace(/[^0-9]/g, '');
     if (number.startsWith('88')) {
-      number = number.substring(2); // 8801898792301 → 01898792301
+      number = number.substring(2);
     }
     if (!number.startsWith('0')) {
       number = '0' + number;
     }
 
-    // ✅ Auto-detect message length
     const isLongMessage = message.length > 160;
     const messageType = isLongMessage ? 'long' : 'text';
 
@@ -302,9 +305,6 @@ async function sendSMS(phoneNumber, message) {
 
     console.log(`📥 Automas response:`, JSON.stringify(response.data, null, 2));
 
-    // ✅ Automas response — BOTH formats handle:
-    // Format 1: { "response": [{ "status": 0, "id": xxx, "msisdn": "..." }] }
-    // Format 2: [{ "status": 0, "id": xxx, "msisdn": "..." }]
     const resp = response.data;
     let resultsArray = null;
 
@@ -494,7 +494,6 @@ async function sendPatientConfirmation(data, appointmentId) {
   const serial = data.serialNo || '';
   const arrivalTime = data.doctorTime || 'As scheduled';
 
-  // ✅ SHORT SMS text — 1 SMS fit (< 160 chars)
   const smsText = `${HOSPITAL_NAME_EN}: Appointment Confirmed.
 Patient: ${englishPatientName} | Serial: ${serial}
 Doctor: ${englishDoctorName}
@@ -618,6 +617,130 @@ Contact: ${HOSPITAL_CONTACT}`;
     }
   }
 }
+
+// ==================================================
+// 📊 GA4 Analytics Endpoint (Phase 2)
+// ==================================================
+app.get('/api/analytics/ga4', async (req, res) => {
+  try {
+    const { hospitalId, startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing startDate or endDate',
+      });
+    }
+
+    console.log(`📊 GA4 API: ${startDate} → ${endDate}`);
+
+    // ✅ Initialize GA4 client with existing serviceAccount
+    const analyticsDataClient = new BetaAnalyticsDataClient({
+      credentials: {
+        client_email: serviceAccount.client_email,
+        private_key: serviceAccount.private_key,
+      },
+      projectId: serviceAccount.project_id,
+    });
+
+    // ✅ Report 1: Overview metrics
+    const [overviewResponse] = await analyticsDataClient.runReport({
+      property: `properties/${GA4_PROPERTY_ID}`,
+      dateRanges: [{ startDate, endDate }],
+      metrics: [
+        { name: 'activeUsers' },
+        { name: 'newUsers' },
+        { name: 'screenPageViews' },
+        { name: 'sessions' },
+        { name: 'averageSessionDuration' },
+      ],
+    });
+
+    let overview = {
+      activeUsers: 0,
+      newUsers: 0,
+      pageViews: 0,
+      sessions: 0,
+      avgSessionDuration: 0,
+    };
+
+    if (
+      overviewResponse &&
+      overviewResponse.rows &&
+      overviewResponse.rows.length > 0
+    ) {
+      const values = overviewResponse.rows[0].metricValues;
+      overview = {
+        activeUsers: parseInt(values[0]?.value || '0', 10),
+        newUsers: parseInt(values[1]?.value || '0', 10),
+        pageViews: parseInt(values[2]?.value || '0', 10),
+        sessions: parseInt(values[3]?.value || '0', 10),
+        avgSessionDuration: parseFloat(values[4]?.value || '0'),
+      };
+    }
+
+    // ✅ Report 2: Top pages
+    const [pagesResponse] = await analyticsDataClient.runReport({
+      property: `properties/${GA4_PROPERTY_ID}`,
+      dateRanges: [{ startDate, endDate }],
+      dimensions: [{ name: 'pagePath' }],
+      metrics: [{ name: 'screenPageViews' }],
+      orderBys: [
+        {
+          metric: { metricName: 'screenPageViews' },
+          desc: true,
+        },
+      ],
+      limit: 10,
+    });
+
+    const topPages = [];
+    if (pagesResponse && pagesResponse.rows) {
+      pagesResponse.rows.forEach((row) => {
+        const path = row.dimensionValues[0]?.value || '/';
+        const views = parseInt(row.metricValues[0]?.value || '0', 10);
+        if (views > 0) {
+          topPages.push({ path, views });
+        }
+      });
+    }
+
+    // ✅ Report 3: Devices breakdown
+    const [devicesResponse] = await analyticsDataClient.runReport({
+      property: `properties/${GA4_PROPERTY_ID}`,
+      dateRanges: [{ startDate, endDate }],
+      dimensions: [{ name: 'deviceCategory' }],
+      metrics: [{ name: 'activeUsers' }],
+    });
+
+    const devices = [];
+    if (devicesResponse && devicesResponse.rows) {
+      devicesResponse.rows.forEach((row) => {
+        const category = row.dimensionValues[0]?.value || 'unknown';
+        const users = parseInt(row.metricValues[0]?.value || '0', 10);
+        devices.push({ category, users });
+      });
+    }
+
+    console.log(`✅ GA4 fetched: ${overview.activeUsers} active users`);
+
+    res.json({
+      success: true,
+      data: {
+        ...overview,
+        topPages,
+        devices,
+        fetchedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error('❌ GA4 API error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
 
 // ==================================================
 // 📢 Queue Next API (FCM)
@@ -897,6 +1020,7 @@ app.get('/', (req, res) => {
     hospital: HOSPITAL_ID,
     bot_number: HOSPITAL_WHATSAPP,
     notification_target: NOTIFICATION_TARGET,
+    ga4_property: GA4_PROPERTY_ID,
     whatsapp: isConnected ? 'connected' : 'disconnected',
     timestamp: new Date().toISOString(),
   });
@@ -1007,6 +1131,7 @@ app.listen(PORT, () => {
   console.log(`📁 Appointments path: ${appointmentsPath}`);
   console.log(`📞 Bot WhatsApp: ${HOSPITAL_WHATSAPP}`);
   console.log(`📢 Notification Target: ${NOTIFICATION_TARGET}`);
+  console.log(`📊 GA4 Property: ${GA4_PROPERTY_ID}`);
   console.log(`🌐 CORS allowed origins: ${ALLOWED_ORIGINS.join(', ')}\n`);
 });
 
