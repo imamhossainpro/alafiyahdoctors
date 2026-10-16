@@ -33,6 +33,10 @@ export const DPB_CSS = `
 .dpb .header-btn.btn-red{background:#dc2626;color:#fff;}
 .dpb .header-btn.btn-red:hover{background:#b91c1c;transform:translateY(-1px);box-shadow:0 4px 12px rgba(220,38,38,0.35);}
 
+/* ✅ NEW: "সকল ডাক্তার" header button */
+.dpb .header-btn.btn-all-doctors{background:#fff;color:#0d9488;border-color:#0d9488;}
+.dpb .header-btn.btn-all-doctors:hover{background:#ecfdf5;transform:translateY(-1px);box-shadow:0 3px 10px rgba(13,148,136,0.20);}
+
 .dpb .save-indicator{font-size:12.5px;color:#6b7280;white-space:nowrap;}
 
 /* ==================================================

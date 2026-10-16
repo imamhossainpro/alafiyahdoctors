@@ -6,8 +6,10 @@
 // ✅ Desktop: All buttons visible
 // ✅ Mobile: Logo + hamburger + 4-button grid
 // ✅ Mobile hamburger: extra options drawer
+// ✅ NEW: Public "সকল ডাক্তার" link (guests + non-doctor users)
 // ==================================================
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   CalendarPlus, CalendarCheck, Users, LayoutDashboard, Settings,
   Shield, LogIn, LogOut, Menu, X, Stethoscope, Ticket,
@@ -35,6 +37,17 @@ export default function Header({
   mobileMenuOpen,
   setMobileMenuOpen,
 }) {
+  const navigate = useNavigate();
+
+  // ✅ "সকল ডাক্তার" only shows for guests and non-doctor users
+  // (doctor dashboard users already have their own doctor tools)
+  const showAllDoctorsLink = isGuest || !isDoctorLoggedIn;
+
+  const handleGoAllDoctors = () => {
+    navigate('/all-doctors');
+    if (setMobileMenuOpen) setMobileMenuOpen(false);
+  };
+
   return (
     <>
       {/* ==================================================
@@ -78,6 +91,19 @@ export default function Header({
             <CalendarCheck size={16} />
             আজকের ডাক্তার সময়সূচি
           </button>
+
+          {/* ✅ NEW: Public All Doctors */}
+          {showAllDoctorsLink && (
+            <button
+              className="header-btn btn-all-doctors"
+              onClick={handleGoAllDoctors}
+              title="সকল ডাক্তার"
+              type="button"
+            >
+              <Users size={16} />
+              সকল ডাক্তার
+            </button>
+          )}
 
           {/* Panel Builder */}
           {!isGuest && (isEditor || isModerator || isSubAdmin || isAdmin) && (
@@ -184,7 +210,7 @@ export default function Header({
               <LogIn size={14} />
               লগইন
             </button>
-           ) : (
+          ) : (
             <button
               className="header-btn btn-red"
               onClick={onLogout}
@@ -235,18 +261,30 @@ export default function Header({
           </button>
         </div>
 
-        {/* Row 2: Report + Login/Logout */}
+        {/* Row 2: All Doctors + Report / Login-Logout */}
         <div className="mobile-button-row">
-          {!isGuest && (isEditor || isModerator || isSubAdmin || isAdmin) && (
+          {showAllDoctorsLink ? (
             <button
               className="mobile-action-btn btn-gray-outline"
-              onClick={() => onSetView('dashboard')}
+              onClick={handleGoAllDoctors}
               type="button"
             >
-              <ClipboardList size={16} />
-              <span>রিপোর্ট</span>
-              <ChevronDown size={14} />
+              <Users size={16} />
+              <span>সকল ডাক্তার</span>
+              <ChevronRight size={14} />
             </button>
+          ) : (
+            !isGuest && (isEditor || isModerator || isSubAdmin || isAdmin) && (
+              <button
+                className="mobile-action-btn btn-gray-outline"
+                onClick={() => onSetView('dashboard')}
+                type="button"
+              >
+                <ClipboardList size={16} />
+                <span>রিপোর্ট</span>
+                <ChevronDown size={14} />
+              </button>
+            )
           )}
 
           {isGuest && (
@@ -295,6 +333,18 @@ export default function Header({
         </div>
 
         <div className="mobile-nav-items">
+          {/* ✅ NEW: All Doctors — Mobile Drawer */}
+          {showAllDoctorsLink && (
+            <button
+              className="mobile-nav-item"
+              onClick={handleGoAllDoctors}
+              type="button"
+            >
+              <Users size={18} />
+              সকল ডাক্তার
+            </button>
+          )}
+
           {/* Panel Builder */}
           {!isGuest && (isEditor || isModerator || isSubAdmin || isAdmin) && (
             <button
