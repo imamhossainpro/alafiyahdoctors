@@ -1,4 +1,12 @@
 // src/main.jsx
+// ==================================================
+// 🚀 Application Entry Point
+// ==================================================
+// ✅ React 18+ createRoot
+// ✅ BrowserRouter for SPA routing
+// ✅ Context Providers (Auth, Hospital, Permission)
+// ✅ Global CSS imports
+// ==================================================
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';

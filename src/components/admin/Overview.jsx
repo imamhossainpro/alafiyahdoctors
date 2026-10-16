@@ -5,6 +5,7 @@
 // ✅ Date filter: Today / Yesterday / 7d / 30d / All / Custom
 // ✅ All KPIs, charts, trends respect the filter
 // ✅ Bengali date display
+// ✅ Location data: Multi-source priority matching (FIXED)
 // ==================================================
 import React, { useState, useEffect, useMemo } from 'react';
 import { OverviewSkeleton } from '../ui/SkeletonScreens';
@@ -364,6 +365,61 @@ const getPatientTypeForOverview = (appt, patientMap) => {
 };
 
 // ==================================================
+// ✅ Helper: Extract location key from appointment (multi-source)
+// ==================================================
+const extractLocationKey = (appt, locationIdToName) => {
+  // ---------- Priority 1: locationId → Location Manager name ----------
+  if (appt.locationId && locationIdToName[appt.locationId]) {
+    return locationIdToName[appt.locationId];
+  }
+
+  // ---------- Priority 2: locationName ----------
+  if (appt.locationName && String(appt.locationName).trim()) {
+    return String(appt.locationName).trim();
+  }
+
+  // ---------- Priority 3: bookingLocationSummary (GPS-derived) ----------
+  if (
+    appt.bookingLocationSummary &&
+    appt.bookingLocationSummary !== 'Location not captured' &&
+    appt.bookingLocationSummary !== 'Unknown Location'
+  ) {
+    // "Bakalia, Chattogram" → "Bakalia"
+    const first = String(appt.bookingLocationSummary).split(',')[0].trim();
+    if (first) return first;
+  }
+
+  // ---------- Priority 4: bookingLocation.area / city / district ----------
+  if (appt.bookingLocation) {
+    const bl = appt.bookingLocation;
+    const candidate =
+      (bl.area && String(bl.area).trim()) ||
+      (bl.city && String(bl.city).trim()) ||
+      (bl.district && String(bl.district).trim());
+    if (candidate) return candidate;
+  }
+
+  // ---------- Priority 5: Manual address (first segment) ----------
+  if (appt.address && String(appt.address).trim()) {
+    const first = String(appt.address).split(',')[0].trim();
+    if (first) return first;
+  }
+
+  // ---------- Priority 6: checkInLocationSummary ----------
+  if (
+    appt.checkInLocationSummary &&
+    appt.checkInLocationSummary !== 'Location not captured' &&
+    appt.checkInLocationSummary !== 'Unknown Location'
+  ) {
+    const first = String(appt.checkInLocationSummary).split(',')[0].trim();
+    if (first) return first;
+  }
+
+  // ---------- Final fallback ----------
+  return 'অন্যান্য';
+};
+
+// ==================================================
 // ✅ MAIN COMPONENT
 // ==================================================
 export default function Overview({ appointments }) {
@@ -471,24 +527,32 @@ export default function Overview({ appointments }) {
     };
   }, [filteredAppointments, patients]);
 
-  // ---------- Location data ----------
+  // ==================================================
+  // ✅ Location data — Multi-source priority matching (FIXED)
+  // ==================================================
   const locationData = useMemo(() => {
-    const activeLocationNames = new Set(locations.map((loc) => loc.name));
+    // Build lookup: locationId → name
+    const locationIdToName = {};
+    locations.forEach((loc) => {
+      if (loc.id && loc.name) {
+        locationIdToName[loc.id] = loc.name;
+      }
+    });
+
     const map = {};
 
     filteredAppointments.forEach((appt) => {
-      let locKey = appt.locationName || appt.address || appt.locationId || 'অজানা';
-
-      if (locKey === 'অজানা' || locKey === appt.locationId) {
-        const matchedLoc = locations.find((l) => l.id === appt.locationId);
-        if (matchedLoc) locKey = matchedLoc.name;
-        else return;
-      }
-      if (locKey !== 'অজানা' && !activeLocationNames.has(locKey)) return;
+      // ✅ Extract location key using multi-source priority
+      const locKey = extractLocationKey(appt, locationIdToName);
 
       if (!map[locKey]) {
-        map[locKey] = { name: locKey, count: 0, patients: [] };
+        map[locKey] = {
+          name: locKey,
+          count: 0,
+          patients: [],
+        };
       }
+
       map[locKey].count += 1;
       map[locKey].patients.push(appt);
     });
@@ -498,7 +562,9 @@ export default function Overview({ appointments }) {
       .sort((a, b) => b.count - a.count);
   }, [filteredAppointments, locations]);
 
-  // ---------- Trend data (uses filtered) ----------
+  // ==================================================
+  // ✅ Trend data (uses filtered + multi-source location)
+  // ==================================================
   const trendData = useMemo(() => {
     if (filteredAppointments.length === 0 || locationData.length === 0) return [];
 
@@ -510,27 +576,30 @@ export default function Overview({ appointments }) {
       dateArray.push(toDateString(d));
     }
 
-    const locationNames = locationData.map((loc) => loc.name);
+    // ✅ Top 5 locations only (for chart clarity)
+    const topLocations = locationData.slice(0, 5).map((loc) => loc.name);
+
+    const locationIdToName = {};
+    locations.forEach((loc) => {
+      if (loc.id && loc.name) locationIdToName[loc.id] = loc.name;
+    });
 
     return dateArray.map((dateStr) => {
       const dayData = { date: dateStr };
       let totalCount = 0;
-      locationNames.forEach((locName) => {
+
+      topLocations.forEach((locName) => {
         const count = filteredAppointments.filter((a) => {
           const apptDate = a.bookingDate ? String(a.bookingDate).split('T')[0] : '';
-          const locKey = a.locationName || a.address || a.locationId || 'অজানা';
-          let match = false;
-          if (locKey === a.locationId) {
-            const loc = locations.find((l) => l.id === a.locationId);
-            match = loc && loc.name === locName;
-          } else {
-            match = locKey === locName;
-          }
-          return match && apptDate === dateStr;
+          if (apptDate !== dateStr) return false;
+          const key = extractLocationKey(a, locationIdToName);
+          return key === locName;
         }).length;
+
         dayData[locName] = count;
         totalCount += count;
       });
+
       dayData.total = totalCount;
       return dayData;
     });
@@ -704,11 +773,9 @@ export default function Overview({ appointments }) {
   const handlePresetChange = (preset) => {
     setFilterPreset(preset);
     if (preset !== 'custom') {
-      // Clear custom dates when switching to preset
       setCustomStart('');
       setCustomEnd('');
     } else {
-      // Prefill custom with today if empty
       if (!customStart && !customEnd) {
         setCustomStart(getTodayStr());
         setCustomEnd(getTodayStr());
@@ -914,7 +981,7 @@ export default function Overview({ appointments }) {
             <MapPin size={18} color="#d97706" />
             লোকেশনভিত্তিক রোগী (ক্লিক করে রোগী দেখুন)
           </h4>
-          <ResponsiveContainer width="100%" height={250}>
+          <ResponsiveContainer width="100%" height={Math.max(250, locationData.length * 32)}>
             <BarChart data={locationData} layout="vertical" margin={{ left: 20 }}>
               <CartesianGrid strokeDasharray="3 3" horizontal={false} />
               <XAxis type="number" tick={{ fontSize: 12 }} allowDecimals={false} />
