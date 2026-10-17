@@ -27,7 +27,7 @@ import { useHospital } from './context/HospitalContext';
 import { useAuth } from './context/AuthContext';
 import AuthPage from './components/AuthPage';
 import DoctorOverrideModal from './components/admin/DoctorOverrideModal';
-
+import { usePermission } from './context/PermissionContext'; // ✅ এই লাইনটি যোগ করুন
 // ✅ Lazy load — heavy components
 const MoUClientManager = lazy(() => import('./components/admin/MoUClientManager'));
 
@@ -1624,6 +1624,8 @@ export default function DoctorPanelBuilder() {
   const { currentHospital } = useHospital();
   const hospitalId = currentHospital?.id || 'alafiyah_main';
   const { user, logout, loading: authLoading } = useAuth();
+
+  const { can } = usePermission(); 
 
   const isAdmin = user?.role === 'admin';
   const isSubAdmin = user?.role === 'sub-admin';
