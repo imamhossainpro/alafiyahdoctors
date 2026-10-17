@@ -7,13 +7,14 @@
 // ✅ Mobile: Logo + hamburger + 4-button grid
 // ✅ Mobile hamburger: extra options drawer
 // ✅ NEW: Public "সকল ডাক্তার" link (guests + non-doctor users)
+// ✅ NEW: Chamber Override button (Admin/Sub-admin/Editor/Moderator)
 // ==================================================
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CalendarPlus, CalendarCheck, Users, LayoutDashboard, Settings,
   Shield, LogIn, LogOut, Menu, X, Stethoscope, Ticket,
-  ClipboardList, ChevronDown, ChevronRight,
+  ClipboardList, ChevronDown, ChevronRight, Ban,
 } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 
@@ -36,12 +37,15 @@ export default function Header({
   onGoMou,
   mobileMenuOpen,
   setMobileMenuOpen,
+  onShowOverrideModal, // ✅ নতুন প্রপ
 }) {
   const navigate = useNavigate();
 
   // ✅ "সকল ডাক্তার" only shows for guests and non-doctor users
-  // (doctor dashboard users already have their own doctor tools)
   const showAllDoctorsLink = isGuest || !isDoctorLoggedIn;
+
+  // ✅ Permission check for Chamber Override
+  const canManageChamber = !isGuest && (isAdmin || isSubAdmin || isEditor || isModerator);
 
   const handleGoAllDoctors = () => {
     navigate('/all-doctors');
@@ -64,7 +68,7 @@ export default function Header({
             )}
           </div>
           <div className="hospital-brand-name">
-            {branding?.name || 'আল আফিয়াহ হাসপাতাল'}
+            {branding?.name || 'আল আফিয়া হাসপাতাল'}
           </div>
         </div>
 
@@ -115,6 +119,20 @@ export default function Header({
             >
               <Settings size={16} />
               প্যানেল বিল্ডার
+            </button>
+          )}
+
+          {/* ✅ NEW: Chamber Override (Desktop) */}
+          {canManageChamber && onShowOverrideModal && (
+            <button
+              className="header-btn"
+              onClick={onShowOverrideModal}
+              title="চেম্বার ওভাররাইড"
+              type="button"
+              style={{ background: 'linear-gradient(45deg, #dc2626, #f87171)', color: '#fff', border: 'none', fontWeight: 700 }}
+            >
+              <Ban size={16} />
+              চেম্বার ওভাররাইড
             </button>
           )}
 
@@ -261,7 +279,7 @@ export default function Header({
           </button>
         </div>
 
-        {/* Row 2: All Doctors + Report / Login-Logout */}
+        {/* Row 2: All Doctors / Override + Report / Login-Logout */}
         <div className="mobile-button-row">
           {showAllDoctorsLink ? (
             <button
@@ -285,6 +303,19 @@ export default function Header({
                 <ChevronDown size={14} />
               </button>
             )
+          )}
+
+          {/* ✅ NEW: Chamber Override (Mobile Bar) */}
+          {canManageChamber && onShowOverrideModal && (
+            <button
+              className="mobile-action-btn"
+              onClick={onShowOverrideModal}
+              type="button"
+              style={{ background: 'linear-gradient(45deg, #dc2626, #f87171)', color: '#fff', border: 'none' }}
+            >
+              <Ban size={16} />
+              <span>চেম্বার ওভাররাইড</span>
+            </button>
           )}
 
           {isGuest && (
@@ -359,6 +390,22 @@ export default function Header({
             >
               <Settings size={18} />
               প্যানেল বিল্ডার
+            </button>
+          )}
+
+          {/* ✅ NEW: Chamber Override (Mobile Drawer) */}
+          {canManageChamber && onShowOverrideModal && (
+            <button
+              className="mobile-nav-item"
+              onClick={() => {
+                onShowOverrideModal();
+                setMobileMenuOpen(false);
+              }}
+              type="button"
+              style={{ color: '#dc2626' }}
+            >
+              <Ban size={18} />
+              চেম্বার ওভাররাইড
             </button>
           )}
 

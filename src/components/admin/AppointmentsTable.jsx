@@ -6,6 +6,8 @@
 // ✅ departments + panels props for EditBookingModal
 // ✅ Location column: Booking location + Check-in location
 // ✅ Clickable location → Google Maps directions
+// ✅ UPDATED: Pending status shows Confirm, Check-in & Complete in dropdown
+// ✅ NEW: Chamber OFF badge for today's bookings
 // ==================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { AppointmentsTableSkeleton } from '../ui/SkeletonScreens';
@@ -31,6 +33,7 @@ import {
   Calendar,
   Filter,
   MapPin,
+  Ban,
 } from 'lucide-react';
 import { db, doc, getDoc, updateDoc } from '../../firebase';
 import { useHospital } from '../../context/HospitalContext';
@@ -47,6 +50,7 @@ import {
 import ConfirmMessageModal from './ConfirmMessageModal';
 import EditBookingModal from '../EditBookingModal';
 import { buildBestMapLink } from '../../utils/mapsLink';
+import { subscribeToOffDoctors } from '../../services/doctorOverrideService';
 
 // ==================================================
 // ✅ Status Badge
@@ -83,8 +87,8 @@ const StatusBadge = ({ status }) => {
 // ✅ Valid Status Transitions
 // ==================================================
 const validTransitions = {
-  pending: ['confirmed', 'cancelled'],
-  confirmed: ['checked-in', 'cancelled', 'no-show', 'pending'],
+  pending: ['confirmed', 'checked-in', 'completed', 'cancelled'],
+  confirmed: ['checked-in', 'completed', 'cancelled', 'no-show', 'pending'],
   'checked-in': ['completed', 'confirmed', 'pending', 'cancelled', 'no-show'],
   completed: ['checked-in', 'confirmed', 'pending', 'cancelled', 'no-show'],
   cancelled: ['pending', 'confirmed', 'checked-in', 'no-show'],
@@ -234,7 +238,6 @@ const calculatePatientType = (patient, appointment) => {
 // ✅ Location Cell — Clickable → Google Maps directions
 // ==================================================
 const LocationCell = ({ appt }) => {
-  // ✅ Priority: Check-in location > Booking location
   const hasCheckIn =
     appt.checkInLocation &&
     appt.checkInLocationSummary &&
@@ -247,16 +250,13 @@ const LocationCell = ({ appt }) => {
     appt.bookingLocationSummary !== 'Location not captured' &&
     appt.bookingLocationSummary !== 'Unknown Location';
 
-  // ✅ No location data
   if (!hasCheckIn && !hasBooking) {
     return <span style={{ color: '#cbd5e1', fontSize: '11px' }}>—</span>;
   }
 
-  // ✅ Build Google Maps link
   const mapLink = buildBestMapLink(appt);
   const canClick = !!mapLink;
 
-  // ✅ Get location details based on type
   const locationData = hasCheckIn
     ? {
         type: 'checkin',
@@ -315,9 +315,8 @@ const renderLocationInfo = ({
 
   const isCheckin = type === 'checkin';
 
-  // ✅ Click handler — open Google Maps in new tab
   const handleClick = (e) => {
-    e.stopPropagation(); // Prevent row click
+    e.stopPropagation(); 
     if (canClick && mapLink) {
       window.open(mapLink, '_blank', 'noopener,noreferrer');
     }
@@ -349,7 +348,6 @@ const renderLocationInfo = ({
           : ''
       }
     >
-      {/* Type badge */}
       <div
         style={{
           display: 'inline-block',
@@ -366,7 +364,6 @@ const renderLocationInfo = ({
         {isCheckin ? '📍 Check-in' : '📝 Booked'}
       </div>
 
-      {/* Location summary */}
       <div
         style={{
           display: 'flex',
@@ -394,7 +391,6 @@ const renderLocationInfo = ({
         </span>
       </div>
 
-      {/* Distance badge */}
       {distanceText && distanceText !== '—' && distanceKm !== null && distanceKm !== undefined && (
         <div
           style={{
@@ -426,7 +422,6 @@ const renderLocationInfo = ({
         </div>
       )}
 
-      {/* GPS coordinates */}
       {loc?.latitude && loc?.longitude && (
         <div
           style={{
@@ -442,7 +437,6 @@ const renderLocationInfo = ({
         </div>
       )}
 
-      {/* Device info */}
       {(loc?.deviceType || loc?.browser) && (
         <div
           style={{
@@ -471,7 +465,6 @@ const renderLocationInfo = ({
         </div>
       )}
 
-      {/* Click hint */}
       {canClick && (
         <div
           style={{
@@ -511,9 +504,15 @@ export default function AppointmentsTable({
   const hospitalId = currentHospital?.id;
   const { can } = usePermission();
 
-  // ==================================================
-  // ✅ Responsive screen detection
-  // ==================================================
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [offDoctorIdsToday, setOffDoctorIdsToday] = useState(new Set());
+
+  useEffect(() => {
+    if (!hospitalId) return;
+    const unsub = subscribeToOffDoctors(hospitalId, todayStr, (ids) => setOffDoctorIdsToday(ids));
+    return () => unsub();
+  }, [hospitalId, todayStr]);
+
   const [screenWidth, setScreenWidth] = useState(
     typeof window !== 'undefined' ? window.innerWidth : 1400
   );
@@ -564,9 +563,6 @@ export default function AppointmentsTable({
   const canRestore = can('archive.restore');
   const canPermanentDelete = can('archive.delete');
 
-  // ==================================================
-  // ✅ Date Preset Change Handler
-  // ==================================================
   const applyDatePreset = (preset) => {
     setDatePreset(preset);
     if (preset === 'all') {
@@ -581,9 +577,6 @@ export default function AppointmentsTable({
     }
   };
 
-  // ==================================================
-  // ✅ Filter & Sort
-  // ==================================================
   const uniqueDoctors = useMemo(() => {
     const doctors = new Set();
     appointments.forEach((a) => {
@@ -651,43 +644,18 @@ export default function AppointmentsTable({
 
     filtered = [...filtered].sort((a, b) => {
       if (isArchivedView) {
-        const timeA =
-          a.archivedAt?.toDate?.().getTime?.() ||
-          (a.archivedAt ? new Date(a.archivedAt).getTime() : 0);
-        const timeB =
-          b.archivedAt?.toDate?.().getTime?.() ||
-          (b.archivedAt ? new Date(b.archivedAt).getTime() : 0);
+        const timeA = a.archivedAt?.toDate?.().getTime?.() || (a.archivedAt ? new Date(a.archivedAt).getTime() : 0);
+        const timeB = b.archivedAt?.toDate?.().getTime?.() || (b.archivedAt ? new Date(b.archivedAt).getTime() : 0);
         return sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
       }
-      const timeA = a.createdAt?.toDate
-        ? a.createdAt.toDate().getTime()
-        : a.timestamp
-        ? new Date(a.timestamp).getTime()
-        : 0;
-      const timeB = b.createdAt?.toDate
-        ? b.createdAt.toDate().getTime()
-        : b.timestamp
-        ? new Date(b.timestamp).getTime()
-        : 0;
+      const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : a.timestamp ? new Date(a.timestamp).getTime() : 0;
+      const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : b.timestamp ? new Date(b.timestamp).getTime() : 0;
       return sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
     });
 
     return filtered;
-  }, [
-    appointments,
-    startDate,
-    endDate,
-    searchTerm,
-    filterOfficer,
-    filterStatus,
-    filterDoctor,
-    sortOrder,
-    isArchivedView,
-  ]);
+  }, [appointments, startDate, endDate, searchTerm, filterOfficer, filterStatus, filterDoctor, sortOrder, isArchivedView]);
 
-  // ==================================================
-  // ✅ Initial Load Detection
-  // ==================================================
   useEffect(() => {
     if (appointments.length > 0) {
       setInitialLoadDone(true);
@@ -697,9 +665,6 @@ export default function AppointmentsTable({
     return () => clearTimeout(timer);
   }, [appointments]);
 
-  // ==================================================
-  // ✅ Real-time Patients Subscription
-  // ==================================================
   useEffect(() => {
     if (!hospitalId) return;
     invalidatePatientsCache();
@@ -723,9 +688,6 @@ export default function AppointmentsTable({
     };
   }, [hospitalId]);
 
-  // ==================================================
-  // ✅ Compute Patient Types
-  // ==================================================
   useEffect(() => {
     if (!filteredAppointments.length) return;
 
@@ -746,9 +708,6 @@ export default function AppointmentsTable({
     setPatientTypes((prev) => ({ ...prev, ...types }));
   }, [filteredAppointments, allPatients]);
 
-  // ==================================================
-  // ✅ Row Highlight Click
-  // ==================================================
   const handleRowClick = async (apptId) => {
     if (!hospitalId) return;
     const appt = appointments.find((a) => a.id === apptId);
@@ -765,9 +724,6 @@ export default function AppointmentsTable({
     }
   };
 
-  // ==================================================
-  // ✅ Confirm Modal Handlers
-  // ==================================================
   const handleOpenConfirmModal = (appt) => {
     if (!canStatusChange) {
       alert('❌ আপনার status পরিবর্তন করার permission নেই।');
@@ -790,9 +746,6 @@ export default function AppointmentsTable({
     }
   };
 
-  // ==================================================
-  // ✅ Edit Booking Modal Handlers
-  // ==================================================
   const handleOpenEditBookingModal = (appt) => {
     if (!canEdit && !canStatusChange) {
       alert('❌ আপনার বুকিং পরিবর্তন করার permission নেই।');
@@ -811,9 +764,6 @@ export default function AppointmentsTable({
     }
   };
 
-  // ==================================================
-  // ✅ Patient Type Change
-  // ==================================================
   const handleManualCategoryChange = async (
     appointmentId,
     patientId,
@@ -946,9 +896,6 @@ export default function AppointmentsTable({
     setEndDate('');
   };
 
-  // ==================================================
-  // ✅ Inline Edit
-  // ==================================================
   const startEdit = (appt) => {
     if (!canEdit && !canReferralEdit && !canMarketingAssign) {
       alert('❌ আপনার edit permission নেই।');
@@ -1048,9 +995,6 @@ export default function AppointmentsTable({
     }
   };
 
-  // ==================================================
-  // ✅ Print
-  // ==================================================
   const printDoctorWise = (doctorName, patients) => {
     if (!canPrint) {
       alert('❌ আপনার print করার permission নেই।');
@@ -1131,9 +1075,6 @@ export default function AppointmentsTable({
     doctorWiseData[doctorName].patients.push(appt);
   });
 
-  // ==================================================
-  // ✅ QR View
-  // ==================================================
   const handleShowQR = (appointmentId) => {
     if (!canQR) {
       alert('❌ আপনার QR কোড দেখার permission নেই।');
@@ -1147,9 +1088,6 @@ export default function AppointmentsTable({
     window.open(url, '_blank');
   };
 
-  // ==================================================
-  // ✅ Render Actions
-  // ==================================================
   const renderActions = (appt) => {
     const actions = [];
 
@@ -1293,6 +1231,7 @@ export default function AppointmentsTable({
       );
     }
 
+    // ✅ Dropdown with all valid transitions (Pending now includes Check-in & Complete)
     if (canStatusChange && nextStatuses.length > 0) {
       actions.push(
         <select
@@ -1313,7 +1252,13 @@ export default function AppointmentsTable({
           </option>
           {nextStatuses.map((status) => (
             <option key={status} value={status}>
-              {status.replace('-', ' ')}
+              {status === 'checked-in'
+                ? 'Check-in'
+                : status === 'completed'
+                ? 'Complete'
+                : status === 'confirmed'
+                ? 'Confirm'
+                : status.replace('-', ' ')}
             </option>
           ))}
         </select>
@@ -1343,9 +1288,6 @@ export default function AppointmentsTable({
     );
   }
 
-  // ==================================================
-  // ✅ RENDER
-  // ==================================================
   return (
     <div
       className={initialLoadDone ? 'content-fade-in' : ''}
@@ -1921,7 +1863,6 @@ export default function AppointmentsTable({
                   <th style={{ padding: '8px 6px' }}>রিমার্কস</th>
                 )}
 
-                {/* ✅ Location column */}
                 {!isSmallScreen && (
                   <th style={{ padding: '8px 6px', whiteSpace: 'nowrap' }}>
                     📍 Location
@@ -1941,6 +1882,7 @@ export default function AppointmentsTable({
                 const patientType = patientTypes[appt.id] || 'লোড...';
                 const isUpdating = updatingPatient === appt.id;
                 const isNew = appt.isNew === true && !isArchivedView;
+                const isOffToday = offDoctorIdsToday.has(appt.doctorId) && appt.bookingDate === todayStr;
 
                 const archivedDate = appt.archivedAt?.toDate
                   ? appt.archivedAt.toDate().toLocaleDateString('bn-BD')
@@ -2001,6 +1943,14 @@ export default function AppointmentsTable({
                           >
                             ⏱ {appt.doctorTime}
                           </small>
+                        </div>
+                      )}
+                      {isOffToday && (
+                        <div style={{ marginTop: 6, padding: '6px 10px', background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: 8, fontSize: 11, color: '#991b1b', maxWidth: 220 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 700, marginBottom: 2 }}>
+                            <Ban size={11} /> আজ চেম্বার অফ
+                          </div>
+                          <div style={{ fontWeight: 400, fontSize: 10.5, lineHeight: 1.3 }}>পরবর্তী চেম্বারে দিন সিরিয়াল নিতে পারবেন</div>
                         </div>
                       )}
                     </td>
@@ -2173,8 +2123,7 @@ export default function AppointmentsTable({
                               alignItems: 'center',
                             }}
                           >
-                            <input
-                              type="text"
+                            <input                              type="text"
                               value={editData.remarks || ''}
                               onChange={(e) =>
                                 setEditData({
@@ -2248,7 +2197,6 @@ export default function AppointmentsTable({
                       </td>
                     )}
 
-                    {/* ✅ Location Cell */}
                     {!isSmallScreen && (
                       <td
                         style={{

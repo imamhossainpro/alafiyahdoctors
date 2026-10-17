@@ -10,7 +10,7 @@ import {
   MapPin, Globe, Phone, Loader2, Stethoscope, Scissors, Heart, Baby, Bone,
   Syringe, Pill, Activity, Brain, Eye, Utensils, Smile, Sparkles, User,
   Droplet, Thermometer, LogOut, CheckCircle, XCircle, RefreshCw, Link as LinkIcon,
-  Copy, QrCode, Check, Camera, Upload, Ticket,
+  Copy, QrCode, Check, Camera, Upload, Ticket, Ban,
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -26,6 +26,7 @@ import NotFoundPage from './components/NotFoundPage';
 import { useHospital } from './context/HospitalContext';
 import { useAuth } from './context/AuthContext';
 import AuthPage from './components/AuthPage';
+import DoctorOverrideModal from './components/admin/DoctorOverrideModal'; // ✅ নতুন মডাল
 
 // ✅ Lazy load — heavy components
 const MoUClientManager = lazy(() => import('./components/admin/MoUClientManager'));
@@ -1939,11 +1940,6 @@ export default function DoctorPanelBuilder() {
   const isDoctorLoggedIn =
     !!user && user.designation === 'Doctor' && !!user.doctorId;
 
-  console.log('🔍 [DPB] user.role =', user?.role);
-  console.log('🔍 [DPB] isRestrictedRole =', isRestrictedRole);
-  console.log('🔍 [DPB] canManagePanels =', canManagePanels);
-  console.log('🔍 [DPB] isDoctorLoggedIn =', isDoctorLoggedIn);
-
   const path = location.pathname;
 
   const bookingDoctorMatch = path.match(/^\/booking\/(.+)$/);
@@ -1983,6 +1979,7 @@ export default function DoctorPanelBuilder() {
   const [panelModal, setPanelModal] = useState(null);
   const [linkModalDoctor, setLinkModalDoctor] = useState(null);
   const [clearConfirm, setClearConfirm] = useState(false);
+  const [showOverrideModal, setShowOverrideModal] = useState(false); // ✅ নতুন স্টেট
   const debounceRef = useRef(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -2608,6 +2605,7 @@ export default function DoctorPanelBuilder() {
           onGoMou={() => navigate('/mou')}
           mobileMenuOpen={mobileMenuOpen}
           setMobileMenuOpen={setMobileMenuOpen}
+          onShowOverrideModal={() => setShowOverrideModal(true)} // ✅ নতুন প্রপ পাস করা হলো
         />
       )}
 
@@ -2761,6 +2759,14 @@ export default function DoctorPanelBuilder() {
         <DoctorLinkModal
           doctor={linkModalDoctor}
           onClose={() => setLinkModalDoctor(null)}
+        />
+      )}
+
+      {/* ✅ Chamber Override Modal */}
+      {showOverrideModal && (
+        <DoctorOverrideModal
+          departments={departments}
+          onClose={() => setShowOverrideModal(false)}
         />
       )}
     </div>
