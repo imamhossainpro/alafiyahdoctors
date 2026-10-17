@@ -1,20 +1,12 @@
 // src/components/admin/ConfirmMessageModal.jsx
 // ==================================================
-// 📩 ConfirmMessageModal — Patient arrival time
-// ==================================================
-// ✅ English short message — 1 SMS fit (< 160 chars)
-// ✅ Uses nameEn / doctorNameEn (no transliteration)
-// ✅ API endpoint: https://api.alafiyahhospital.com
+// 📩 ConfirmMessageModal — Patient arrival time & custom message preview
 // ==================================================
 import React, { useState, useEffect } from 'react';
 import { X, Send, Loader2, Edit3, AlertCircle, Clock } from 'lucide-react';
 
 // ✅ Nur Host — Production API
 const API_BASE_URL = 'https://api.alafiyahhospital.com';
-
-// ✅ Hospital Info — must match server.js
-const HOSPITAL_NAME_EN = 'Al-Afiyah Hospital';
-const HOSPITAL_CONTACT = '01886-776512';
 
 // ==================================================
 // ✅ Quick Time Preset Options
@@ -50,10 +42,10 @@ const formatDateShort = (dateStr) => {
   if (!dateStr) return '';
   const parts = String(dateStr).split('-');
   if (parts.length === 3 && parts[0].length === 4) {
-    const year = parts[0];
+    const year = parts[0].slice(-2);
     const month = parts[1];
     const day = parts[2];
-    return `${day}/${month}/${year.slice(-2)}`;
+    return `${day}/${month}/${year}`;
   }
   return dateStr;
 };
@@ -92,19 +84,16 @@ export default function ConfirmMessageModal({
   const formattedDate = formatDateShort(bookingDate);
 
   // ==================================================
-  // ✅ Preview Message — SHORT VERSION (1 SMS fit)
+  // ✅ নতুন মেসেজ ফরম্যাট (সার্ভারের সাথে মিল রাখা হয়েছে)
   // ==================================================
-  const previewMessage = `${HOSPITAL_NAME_EN}: Appointment Confirmed.
-Patient: ${englishPatientName} | Serial: ${serialNo || appointment.serialNo}
-Doctor: ${englishDoctorName}
-Date: ${formattedDate} | Time: ${arrivalTime}
-Contact: ${HOSPITAL_CONTACT}`;
+  const previewMessage = `Assalamu Alaikum. Your appointment with ${englishDoctorName} at Al-Afiyah Hospital is confirmed.
 
-  // ✅ Estimated SMS segments (English = GSM-7)
-  const estimatedSegments =
-    previewMessage.length <= 160
-      ? 1
-      : Math.ceil(previewMessage.length / 153);
+Patient: ${englishPatientName}
+Serial: ${serialNo || appointment.serialNo}
+Date: ${formattedDate}
+Arrival Time: ${arrivalTime}
+
+Please arrive on time. Contact: 01886-776512`;
 
   const handleConfirm = async () => {
     if (!serialNo.toString().trim()) {
@@ -299,7 +288,7 @@ Contact: ${HOSPITAL_CONTACT}`;
               type="text"
               value={arrivalTime}
               onChange={(e) => setArrivalTime(e.target.value)}
-              placeholder="যেমন: 08:30 PM"
+              placeholder="যেমন: 03:00 PM"
               style={{
                 width: '100%',
                 padding: '12px 14px',
@@ -318,7 +307,7 @@ Contact: ${HOSPITAL_CONTACT}`;
                 margin: '0 0 10px 0',
               }}
             >
-              💡 নিচের প্রিসেট থেকে বেছে নিন অথবা নিজে লিখুন (ফরম্যাট: 08:30 PM)
+              💡 নিচের প্রিসেট থেকে বেছে নিন অথবা নিজে লিখুন (ফরম্যাট: 03:00 PM)
             </p>
 
             {/* Quick Time Presets */}
@@ -386,18 +375,6 @@ Contact: ${HOSPITAL_CONTACT}`;
                 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
               >
                 📱 রোগী এই মেসেজ পাবেন
-              </span>
-              <span
-                style={{
-                  background: '#dbeafe',
-                  color: '#1e40af',
-                  padding: '2px 10px',
-                  borderRadius: '12px',
-                  fontSize: '11px',
-                  fontWeight: '700',
-                }}
-              >
-                {previewMessage.length} chars · {estimatedSegments} SMS
               </span>
             </div>
             <pre

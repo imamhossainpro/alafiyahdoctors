@@ -1,8 +1,8 @@
 // server.js
 // ==================================================
-// 🏥 আল-আফিয়া হাসপাতাল — Backend Server
+// 🏥 আল-আফিয়া হাসপাতাল — Backend Server (Updated)
 // ==================================================
-// ✅ WhatsApp via Baileys
+// ✅ WhatsApp via Baileys (Fixed: Waiting for message issue)
 // ✅ SMS via Automas Technologies (api.automas.com.bd/smsapiv4)
 // ✅ Email via Gmail
 // ✅ FCM Push Notifications
@@ -143,7 +143,7 @@ function formatDateDDMMYYYY(dateStr) {
 }
 
 // ==================================================
-// ✅ Helper: Format date as DD/MM/YY (short, used in SMS/Email)
+// ✅ Helper: Format date as DD/MM/YY (short, used in SMS/Email/WhatsApp)
 // ==================================================
 function formatDateShort(dateStr) {
   if (!dateStr) return '';
@@ -289,21 +289,10 @@ async function sendSMS(phoneNumber, message) {
       contacts: number,
     };
 
-    console.log(
-      `📦 SMS Payload:`,
-      JSON.stringify({
-        ...payload,
-        api_key: '***',
-        msg: payload.msg.substring(0, 50) + '...',
-      })
-    );
-
     const response = await axios.post(apiUrl, payload, {
       headers: { 'Content-Type': 'application/json' },
       timeout: 15000,
     });
-
-    console.log(`📥 Automas response:`, JSON.stringify(response.data, null, 2));
 
     const resp = response.data;
     let resultsArray = null;
@@ -322,40 +311,15 @@ async function sendSMS(phoneNumber, message) {
         console.log(`📱 SMS sent successfully | ID: ${firstResult.id}`);
         return true;
       } else {
-        const statusMessages = {
-          101: 'Invalid Message Length',
-          102: 'Sender Not Valid',
-          103: 'Authentication Failed',
-          104: 'Invalid User',
-          105: 'Invalid MSISDN',
-          106: 'Incorrect API Key',
-          107: 'User Account Suspended',
-          108: 'IP Address Not Allowed',
-          109: 'API Access Not Allowed',
-          110: 'Do Not Disturb (DND)',
-          111: 'Spam Word Detected in Message',
-          1000: 'Insufficient Balance',
-          2300: 'Destination Route Issue',
-          2400: 'Destination Route Not Permitted',
-          3300: 'System Error',
-        };
-        const errorMsg = statusMessages[status] || `Unknown status: ${status}`;
-        console.error(`❌ SMS failed — status ${status}: ${errorMsg}`);
+        console.error(`❌ SMS failed — status ${status}`);
         return false;
       }
     } else {
-      console.error(
-        `❌ SMS send failed — invalid response:`,
-        JSON.stringify(resp)
-      );
+      console.error(`❌ SMS send failed — invalid response`);
       return false;
     }
   } catch (error) {
     console.error('❌ SMS API error:', error.message);
-    if (error.response) {
-      console.error('   Status:', error.response.status);
-      console.error('   Response:', JSON.stringify(error.response.data));
-    }
     return false;
   }
 }
@@ -484,7 +448,7 @@ Admin confirm korle patient SMS/Email pabe.`;
 }
 
 // ==================================================
-// 🆕 TRIGGER 2: Admin Confirm → Patient SMS + Email + In-App + FCM
+// 🆕 TRIGGER 2: Admin Confirm → Patient WhatsApp + SMS + Email + In-App + FCM
 // ==================================================
 async function sendPatientConfirmation(data, appointmentId) {
   const englishPatientName = data.nameEn || data.name || 'Patient';
@@ -494,46 +458,50 @@ async function sendPatientConfirmation(data, appointmentId) {
   const serial = data.serialNo || '';
   const arrivalTime = data.doctorTime || 'As scheduled';
 
-  const smsText = `${HOSPITAL_NAME_EN}: Appointment Confirmed.
-Patient: ${englishPatientName} | Serial: ${serial}
-Doctor: ${englishDoctorName}
-Date: ${formattedDate} | Time: ${arrivalTime}
-Contact: ${HOSPITAL_CONTACT}`;
+  // ✅ নতুন মেসেজ ফরম্যাট (Patient will receive this)
+  const unifiedMessage = `Assalamu Alaikum. Your appointment with ${englishDoctorName} at Al-Afiyah Hospital is confirmed.
 
-  const emailHtml = `
-    <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; border: 1px solid #e2e8f0; padding: 24px; border-radius: 12px;">
-      <h2 style="color: #1c5fa8; margin-top: 0;">${HOSPITAL_NAME_EN}</h2>
-      <p><strong>Assalamu Alaikum ${englishPatientName},</strong></p>
-      <p>Your appointment with <strong>${englishDoctorName}</strong> is confirmed.</p>
-      <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
-        <tr>
-          <td style="padding: 6px 0; color: #475569;">Serial:</td>
-          <td style="padding: 6px 0; font-weight: 700;">${serial}</td>
-        </tr>
-        <tr>
-          <td style="padding: 6px 0; color: #475569;">Doctor:</td>
-          <td style="padding: 6px 0; font-weight: 700;">${englishDoctorName}</td>
-        </tr>
-        <tr>
-          <td style="padding: 6px 0; color: #475569;">Date:</td>
-          <td style="padding: 6px 0; font-weight: 700;">${formattedDate}</td>
-        </tr>
-        <tr>
-          <td style="padding: 6px 0; color: #475569;">Arrival Time:</td>
-          <td style="padding: 6px 0; font-weight: 700;">${arrivalTime}</td>
-        </tr>
-      </table>
-      <p>Please arrive on time.</p>
-      <p style="color: #16a34a; font-weight: 700;">Contact: ${HOSPITAL_CONTACT}</p>
-    </div>
-  `;
+Patient: ${englishPatientName}
+Serial: ${serial}
+Date: ${formattedDate}
+Arrival Time: ${arrivalTime}
 
-  // ---------- ১. এসএমএস ----------
+Please arrive on time. Contact: ${HOSPITAL_CONTACT}`;
+
+  // ---------- ১. WhatsApp ----------
+  if (isConnected && sock && data.mobile) {
+    try {
+      let waNumber = data.mobile.replace(/[^0-9]/g, '');
+      if (waNumber.startsWith('0')) waNumber = '88' + waNumber.substring(1);
+      else if (!waNumber.startsWith('88')) waNumber = '88' + waNumber;
+      
+      const jid = waNumber + '@s.whatsapp.net';
+      await sock.sendMessage(jid, { text: unifiedMessage });
+      console.log(`📱 WhatsApp sent to patient: ${waNumber}`);
+      
+      // ✅ FIX: হোয়াটসঅ্যাপে "Waiting for this message" সমস্যা এড়াতে ২ সেকেন্ড ডিলে
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    } catch (err) {
+      console.error('❌ WhatsApp error:', err.message);
+    }
+  } else {
+    console.log('⚠️ WhatsApp not connected or no mobile number provided.');
+  }
+
+  // ---------- ২. এসএমএস ----------
   let mobile = data.mobile;
   if (mobile) {
     mobile = mobile.replace(/[^0-9]/g, '');
     if (mobile.startsWith('0')) mobile = '88' + mobile.substring(1);
     else if (!mobile.startsWith('88')) mobile = '88' + mobile;
+
+    // SMS এর জন্য মেসেজটি একটু শর্ট করা হলো যাতে খরচ কম হয়
+    const smsText = `Assalamu Alaikum. Your appointment with ${englishDoctorName} at Al-Afiyah Hospital is confirmed.
+Patient: ${englishPatientName}
+Serial: ${serial}
+Date: ${formattedDate}
+Arrival Time: ${arrivalTime}
+Contact: ${HOSPITAL_CONTACT}`;
 
     const smsSent = await sendSMS(mobile, smsText);
     if (smsSent) {
@@ -543,9 +511,36 @@ Contact: ${HOSPITAL_CONTACT}`;
     }
   }
 
-  // ---------- ২. ইমেইল ----------
+  // ---------- ৩. ইমেইল ----------
   if (data.email) {
     try {
+      const emailHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; border: 1px solid #e2e8f0; padding: 24px; border-radius: 12px;">
+          <h2 style="color: #1c5fa8; margin-top: 0;">${HOSPITAL_NAME_EN}</h2>
+          <p><strong>Assalamu Alaikum ${englishPatientName},</strong></p>
+          <p>Your appointment with <strong>${englishDoctorName}</strong> at Al-Afiyah Hospital is confirmed.</p>
+          <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+            <tr>
+              <td style="padding: 6px 0; color: #475569;">Patient:</td>
+              <td style="padding: 6px 0; font-weight: 700;">${englishPatientName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #475569;">Serial:</td>
+              <td style="padding: 6px 0; font-weight: 700;">${serial}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #475569;">Date:</td>
+              <td style="padding: 6px 0; font-weight: 700;">${formattedDate}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #475569;">Arrival Time:</td>
+              <td style="padding: 6px 0; font-weight: 700;">${arrivalTime}</td>
+            </tr>
+          </table>
+          <p>Please arrive on time.</p>
+          <p style="color: #16a34a; font-weight: 700;">Contact: ${HOSPITAL_CONTACT}</p>
+        </div>
+      `;
       await transporter.sendMail({
         from: process.env.EMAIL_USER,
         to: data.email,
@@ -558,7 +553,7 @@ Contact: ${HOSPITAL_CONTACT}`;
     }
   }
 
-  // ---------- ৩. In-App Notification ----------
+  // ---------- ৪. In-App Notification ----------
   if (data.userId) {
     await saveInAppNotification(
       data.userId,
@@ -575,7 +570,7 @@ Contact: ${HOSPITAL_CONTACT}`;
       }
     );
 
-    // ---------- ৪. FCM Push Notification ----------
+    // ---------- ৫. FCM Push Notification ----------
     try {
       const userDoc = await db
         .collection('hospitals')
@@ -634,7 +629,6 @@ app.get('/api/analytics/ga4', async (req, res) => {
 
     console.log(`📊 GA4 API: ${startDate} → ${endDate}`);
 
-    // ✅ Initialize GA4 client with existing serviceAccount
     const analyticsDataClient = new BetaAnalyticsDataClient({
       credentials: {
         client_email: serviceAccount.client_email,
@@ -643,7 +637,6 @@ app.get('/api/analytics/ga4', async (req, res) => {
       projectId: serviceAccount.project_id,
     });
 
-    // ✅ Report 1: Overview metrics
     const [overviewResponse] = await analyticsDataClient.runReport({
       property: `properties/${GA4_PROPERTY_ID}`,
       dateRanges: [{ startDate, endDate }],
@@ -679,7 +672,6 @@ app.get('/api/analytics/ga4', async (req, res) => {
       };
     }
 
-    // ✅ Report 2: Top pages
     const [pagesResponse] = await analyticsDataClient.runReport({
       property: `properties/${GA4_PROPERTY_ID}`,
       dateRanges: [{ startDate, endDate }],
@@ -705,7 +697,6 @@ app.get('/api/analytics/ga4', async (req, res) => {
       });
     }
 
-    // ✅ Report 3: Devices breakdown
     const [devicesResponse] = await analyticsDataClient.runReport({
       property: `properties/${GA4_PROPERTY_ID}`,
       dateRanges: [{ startDate, endDate }],
@@ -722,8 +713,6 @@ app.get('/api/analytics/ga4', async (req, res) => {
       });
     }
 
-    console.log(`✅ GA4 fetched: ${overview.activeUsers} active users`);
-
     res.json({
       success: true,
       data: {
@@ -735,10 +724,7 @@ app.get('/api/analytics/ga4', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ GA4 API error:', error.message);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -752,10 +738,6 @@ app.post('/api/queue/next', async (req, res) => {
     if (!hospitalId || !doctorId || !date) {
       return res.status(400).json({ success: false, error: 'Missing fields' });
     }
-
-    console.log(
-      `📢 Queue Next API: Serial #${nextSerial} for doctor ${doctorId}`
-    );
 
     const appointmentsRef = db
       .collection('hospitals')
@@ -777,10 +759,7 @@ app.post('/api/queue/next', async (req, res) => {
     const userId = appointment.userId;
 
     if (!userId) {
-      return res.json({
-        success: false,
-        error: 'Patient has no user account',
-      });
+      return res.json({ success: false, error: 'Patient has no user account' });
     }
 
     const userDoc = await db
@@ -838,7 +817,6 @@ app.post('/api/queue/next', async (req, res) => {
       }
     );
 
-    console.log(`✅ FCM: ${fcmResult.success} | In-App: saved`);
     res.json({ success: true, result: fcmResult });
   } catch (error) {
     console.error('❌ Queue API error:', error);
@@ -865,10 +843,6 @@ app.post('/api/appointment/confirm-with-message', async (req, res) => {
         error: 'Missing hospitalId or appointmentId',
       });
     }
-
-    console.log(
-      `📢 Confirm API: ${appointmentId} | Serial: ${customSerial} | Time: ${customDoctorTime}`
-    );
 
     const apptRef = db
       .collection('hospitals')
@@ -955,8 +929,6 @@ app.post('/api/notification/send-promo', async (req, res) => {
       userIds = usersSnap.docs.map((d) => d.id);
     }
 
-    console.log(`📢 Sending promo to ${userIds.length} users`);
-
     const results = [];
 
     for (const userId of userIds) {
@@ -1034,12 +1006,10 @@ const appointmentsPath = `hospitals/${HOSPITAL_ID}/appointments`;
 
 console.log(`\n🔍 Firestore listener starting: ${appointmentsPath}`);
 console.log(`📢 Trigger 1: New booking → Hospital WhatsApp`);
-console.log(`📢 Trigger 2: Direct Firestore confirm → SMS + Email + In-App\n`);
+console.log(`📢 Trigger 2: Direct Firestore confirm → Patient WhatsApp + SMS + Email + In-App\n`);
 
 db.collection(appointmentsPath).onSnapshot(
   (snapshot) => {
-    console.log(`📊 Snapshot: ${snapshot.docChanges().length} changes`);
-
     snapshot.docChanges().forEach(async (change) => {
       const docId = change.doc.id;
       const data = change.doc.data();
@@ -1065,12 +1035,6 @@ db.collection(appointmentsPath).onSnapshot(
 
         const isFreshBooking = secondsSinceCreation < 300;
 
-        console.log(
-          `➕ New appointment: ${docId} | status: ${currentStatus} | age: ${Math.round(
-            secondsSinceCreation
-          )}s | fresh: ${isFreshBooking}`
-        );
-
         if (isFreshBooking) {
           console.log(`\n✅ New booking → Sending to Hospital WhatsApp...`);
           try {
@@ -1084,9 +1048,6 @@ db.collection(appointmentsPath).onSnapshot(
       // ---------- Modified ----------
       if (change.type === 'modified') {
         const previousStatus = previousStatuses.get(docId);
-        console.log(
-          `🔄 Modified: ${docId} | prev: ${previousStatus} → curr: ${currentStatus}`
-        );
 
         if (previousStatus === 'pending' && currentStatus === 'confirmed') {
           if (data.confirmedBy === 'admin') {
@@ -1099,10 +1060,7 @@ db.collection(appointmentsPath).onSnapshot(
               await sendPatientConfirmation(data, docId);
               console.log(`✅ Patient notification sent\n`);
             } catch (err) {
-              console.error(
-                '❌ sendPatientConfirmation error:',
-                err.message
-              );
+              console.error('❌ sendPatientConfirmation error:', err.message);
             }
           }
         }
@@ -1113,7 +1071,6 @@ db.collection(appointmentsPath).onSnapshot(
       // ---------- Removed ----------
       if (change.type === 'removed') {
         previousStatuses.delete(docId);
-        console.log(`➖ Appointment removed: ${docId}`);
       }
     });
   },
@@ -1127,12 +1084,6 @@ db.collection(appointmentsPath).onSnapshot(
 // ==================================================
 app.listen(PORT, () => {
   console.log(`🚀 Backend Server running on port: ${PORT}`);
-  console.log(`📁 Hospital ID: ${HOSPITAL_ID}`);
-  console.log(`📁 Appointments path: ${appointmentsPath}`);
-  console.log(`📞 Bot WhatsApp: ${HOSPITAL_WHATSAPP}`);
-  console.log(`📢 Notification Target: ${NOTIFICATION_TARGET}`);
-  console.log(`📊 GA4 Property: ${GA4_PROPERTY_ID}`);
-  console.log(`🌐 CORS allowed origins: ${ALLOWED_ORIGINS.join(', ')}\n`);
 });
 
 // ---------- WhatsApp কানেকশন শুরু ----------
