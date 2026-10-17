@@ -32,9 +32,11 @@ export const html2canvasIgnoreElements = (el) => {
   );
 };
 
+// ✅ FIXED: Robust sorting logic for department order
 export const getOrderedDepartments = (departments, panelDepartmentOrder) => {
   if (!departments || departments.length === 0) return [];
 
+  // যদি departmentOrder না থাকে বা খালি থাকে, তবে ডিফল্ট order অনুযায়ী সাজাও
   if (!panelDepartmentOrder || panelDepartmentOrder.length === 0) {
     return [...departments].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }

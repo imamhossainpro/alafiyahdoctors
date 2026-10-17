@@ -1,10 +1,6 @@
 // src/doctor-panel-builder.jsx
 // ==================================================
-// 🏥 Doctor Panel Builder — Full File
-// ==================================================
-// ✅ Chamber OFF support in Preview + Edit panels
-// ✅ One-time doctor merge (per-date only, not master)
-// ✅ All existing functionality preserved
+// 🏥 Doctor Panel Builder — Full File (Fixed)
 // ==================================================
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
@@ -36,7 +32,7 @@ import DoctorOverrideModal from './components/admin/DoctorOverrideModal';
 const MoUClientManager = lazy(() => import('./components/admin/MoUClientManager'));
 
 // ✅ DPB modules
-import { DPB_CSS } from './dpb/dpb.css';
+import { DPB_CSS } from './dpb/dpb.css.js';
 import Header from './dpb/Header';
 import DoctorEntry from './dpb/DoctorEntry';
 import {
@@ -415,7 +411,7 @@ function DoctorLinkModal({ doctor, onClose }) {
 }
 
 // ==================================================
-// ✅ DoctorRow (with chamber OFF badge)
+// ✅ DoctorRow
 // ==================================================
 function DoctorRow({
   doc, index, total, checked, onToggleChecked, onEdit, onDelete,
@@ -510,7 +506,7 @@ function DoctorRow({
 }
 
 // ==================================================
-// ✅ DepartmentCard (with chamber OFF support)
+// ✅ DepartmentCard
 // ==================================================
 function DepartmentCard({
   dept, index, total, checkedIds, onEdit, onDelete, onMoveUp, onMoveDown,
@@ -2032,17 +2028,31 @@ export default function DoctorPanelBuilder() {
     newPanels.forEach((p) => savePanelToFirebase(p));
   };
 
+  // ✅ FIXED: Robust Department move logic
   const handleMoveDept = (deptId, dir) => {
-    const currentOrder = activePanel.departmentOrder && activePanel.departmentOrder.length > 0
-      ? [...activePanel.departmentOrder]
-      : departments.map((d) => d.id);
+    // বর্তমান প্যানেলের অর্ডার নিন, যদি খালি থাকে তবে ডিফল্ট অর্ডার নিন
+    let currentOrder =
+      activePanel.departmentOrder && activePanel.departmentOrder.length > 0
+        ? [...activePanel.departmentOrder]
+        : departments.map((d) => d.id);
+
+    // যদি কোনো কারণে ডিপার্টমেন্ট লিস্টে নতুন ডিপার্টমেন্ট যুক্ত হয়ে departmentOrder-এ না থাকে, তবে সেগুলো অ্যাড করুন
+    departments.forEach((d) => {
+      if (!currentOrder.includes(d.id)) {
+        currentOrder.push(d.id);
+      }
+    });
 
     const idx = currentOrder.indexOf(deptId);
     if (idx === -1) return;
+    
     const ni = idx + dir;
     if (ni < 0 || ni >= currentOrder.length) return;
 
+    // Swap positions
     [currentOrder[idx], currentOrder[ni]] = [currentOrder[ni], currentOrder[idx]];
+    
+    // Update panel immediately
     updatePanel((p) => ({ ...p, departmentOrder: currentOrder }), true);
   };
 
