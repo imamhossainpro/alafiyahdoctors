@@ -2,23 +2,14 @@
 // ==================================================
 // 🏥 Doctor Entry — Preview Panel Item
 // ==================================================
-// ✅ Chamber OFF হলে লাল বক্স দেখায়
+// ✅ Chamber OFF হলে একটাই ক্লিয়ার মেসেজ (ডাক্তারের নাম সহ)
 // ✅ "সিরিয়াল দিন" বাটন disabled হয়
-// ✅ Next available date-এর জন্য বাটন দেখায়
 // ==================================================
-import React, { useState, useEffect } from 'react';
-import { CalendarPlus, ChevronRight, Ban, Calendar } from 'lucide-react';
+import React from 'react';
+import { CalendarPlus, ChevronRight, Ban } from 'lucide-react';
 import { buildBookingUrl } from './utils';
 import { trackEvent } from '../firebase';
 import { trackMetaEvent } from '../utils/metaPixel';
-import { useHospital } from '../context/HospitalContext';
-
-const getBDTodayString = () => {
-  const now = new Date();
-  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-  const bd = new Date(utc + 6 * 60 * 60000);
-  return `${bd.getFullYear()}-${String(bd.getMonth() + 1).padStart(2, '0')}-${String(bd.getDate()).padStart(2, '0')}`;
-};
 
 export default function DoctorEntry({ doc, accentColor, isOffToday = false }) {
   const hasValidId =
@@ -30,8 +21,6 @@ export default function DoctorEntry({ doc, accentColor, isOffToday = false }) {
 
   const handleBookClick = () => {
     if (!hasValidId || isOffToday) return;
-
-    console.log('🎯 [DoctorEntry] Button clicked:', doc.name);
 
     trackEvent('booking_button_click', {
       doctor_id: doc.id,
@@ -83,27 +72,27 @@ export default function DoctorEntry({ doc, accentColor, isOffToday = false }) {
         </div>
       )}
 
-      {/* ✅ Chamber OFF alert */}
+      {/* ✅ Chamber OFF alert — একটাই ক্লিয়ার মেসেজ */}
       {isOffToday && (
         <div
           style={{
-            marginTop: 12,
-            padding: '12px 14px',
+            marginTop: 14,
+            padding: '16px 18px',
             background: '#fef2f2',
             border: '2px solid #fca5a5',
-            borderRadius: 10,
+            borderRadius: 12,
             color: '#991b1b',
             display: 'flex',
             alignItems: 'flex-start',
-            gap: 10,
+            gap: 12,
           }}
         >
-          <Ban size={20} style={{ flexShrink: 0, marginTop: 2 }} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>
-              আজকে ডাক্তার চেম্বার অফ রেখেছেন
+          <Ban size={22} style={{ flexShrink: 0, marginTop: 2 }} />
+          <div style={{ flex: 1, minWidth: 0, lineHeight: 1.6 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>
+              আজকে {doc.name} এর চেম্বার অফ রেখেছেন
             </div>
-            <div style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+            <div style={{ fontSize: 13 }}>
               আপনি চাইলে পরবর্তী চেম্বারে দিন সিরিয়াল নিতে পারবেন।
             </div>
           </div>
@@ -114,7 +103,6 @@ export default function DoctorEntry({ doc, accentColor, isOffToday = false }) {
       {hasValidId && (
         <>
           {isOffToday ? (
-            // ❌ Disabled when OFF
             <div
               style={{
                 display: 'flex',
@@ -138,7 +126,6 @@ export default function DoctorEntry({ doc, accentColor, isOffToday = false }) {
               <span>আজ চেম্বার বন্ধ</span>
             </div>
           ) : (
-            // ✅ Active booking button
             <a
               href={bookingUrl}
               target="_blank"

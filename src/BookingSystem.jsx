@@ -488,57 +488,68 @@ export default function BookingSystem({
   }, [preselectedDoctorId, departments]);
 
   // ==================================================
-  // ✅ Direct booking — suggest next date if OFF today
-  // ==================================================
-  useEffect(() => {
-    if (!isDirectBooking || !selectedDoctor) {
-      setChamberOffAlert(null);
-      return;
-    }
-    if (!offDoctorIds.has(selectedDoctor.id)) {
-      setChamberOffAlert(null);
-      return;
-    }
+// ✅ Chamber OFF alert — সব ক্ষেত্রে (direct + normal booking)
+// ==================================================
+useEffect(() => {
+  if (!selectedDoctor) {
+    setChamberOffAlert(null);
+    return;
+  }
+  if (!offDoctorIds.has(selectedDoctor.id)) {
+    setChamberOffAlert(null);
+    return;
+  }
 
-    let cancelled = false;
-    (async () => {
-      const today = new Date();
-      let suggested = null;
+  let cancelled = false;
+  (async () => {
+    const today = new Date();
+    let suggested = null;
 
-      for (let i = 1; i <= MAX_DAYS_AHEAD; i++) {
-        const d = new Date(today);
-        d.setDate(today.getDate() + i);
-        const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        const dayName = BANGLA_DAYS[d.getDay()];
+    // Next available date — skip OFF days + skip non-chamber days
+    for (let i = 1; i <= MAX_DAYS_AHEAD; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const dayName = BANGLA_DAYS[d.getDay()];
 
-        // Skip if doctor doesn't chamber on this day
-        const allowed = doctorAllowedDays.length === 0 || doctorAllowedDays.includes(dayName);
-        if (!allowed) continue;
+      // Skip if doctor doesn't chamber on this day (only for direct booking)
+      if (isDirectBooking && doctorAllowedDays.length > 0) {
+        if (!doctorAllowedDays.includes(dayName)) continue;
+      }
 
-        try {
-          const { offIds } = await getOverridesForDate(hospitalId, dateStr);
-          if (!offIds.has(selectedDoctor.id)) {
-            suggested = dateStr;
-            break;
-          }
-        } catch {
+      // For normal booking — find a day where doctor has a panel
+      if (!isDirectBooking) {
+        const hasPanel = panels.some(
+          (p) => p.name === dayName && (p.activeDoctorIds || []).includes(selectedDoctor.id)
+        );
+        if (!hasPanel) continue;
+      }
+
+      // Check if doctor is OFF on this date
+      try {
+        const { offIds } = await getOverridesForDate(hospitalId, dateStr);
+        if (!offIds.has(selectedDoctor.id)) {
           suggested = dateStr;
           break;
         }
+      } catch {
+        suggested = dateStr;
+        break;
       }
+    }
 
-      if (!cancelled) {
-        setChamberOffAlert({
-          doctor: selectedDoctor,
-          suggestedDate: suggested,
-        });
-      }
-    })();
+    if (!cancelled) {
+      setChamberOffAlert({
+        doctor: selectedDoctor,
+        suggestedDate: suggested,
+      });
+    }
+  })();
 
-    return () => {
-      cancelled = true;
-    };
-  }, [isDirectBooking, selectedDoctor, offDoctorIds, hospitalId, doctorAllowedDays]);
+  return () => {
+    cancelled = true;
+  };
+}, [selectedDoctor, offDoctorIds, hospitalId, isDirectBooking, doctorAllowedDays, panels]);
 
   // ==================================================
   // ✅ Direct booking — auto-move to allowed date
@@ -975,58 +986,64 @@ export default function BookingSystem({
           <h2 className="booking-title">রোগীর ডাক্তার বুকিং ফর্ম</h2>
 
           {/* ✅ Chamber OFF alert (direct booking) */}
-          {isDirectBooking && selectedDoctor && chamberOffAlert && (
-            <div
-              style={{
-                background: '#fef2f2',
-                border: '2px solid #fca5a5',
-                borderRadius: 12,
-                padding: '16px 20px',
-                marginBottom: 20,
-                color: '#991b1b',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                <Ban size={22} style={{ flexShrink: 0, marginTop: 2 }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 6 }}>
-                    আজকে ডাক্তার চেম্বার অফ রেখেছেন
-                  </div>
-                  <div style={{ fontSize: 13.5, lineHeight: 1.6, marginBottom: 12 }}>
-                    আপনি চাইলে পরবর্তী চেম্বারে দিন সিরিয়াল নিতে পারবেন।
-                    {chamberOffAlert.suggestedDate && (
-                      <>
-                        {' '}পরবর্তী উপলব্ধ তারিখ:{' '}
-                        <strong>{chamberOffAlert.suggestedDate}</strong>
-                      </>
-                    )}
-                  </div>
-                  {chamberOffAlert.suggestedDate && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedDate(chamberOffAlert.suggestedDate);
-                        setChamberOffAlert(null);
-                      }}
-                      style={{
-                        padding: '9px 18px',
-                        background: '#1c5fa8',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: 8,
-                        fontSize: 13.5,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        fontFamily: 'inherit',
-                      }}
-                    >
-                      {chamberOffAlert.suggestedDate} তারিখে সিরিয়াল নিন →
-                    </button>
-                  )}
+          {/* ✅ Chamber OFF alert — একই মেসেজে সব ক্ষেত্রে */}
+        {selectedDoctor && offDoctorIds.has(selectedDoctor.id) && (
+          <div
+            style={{
+              background: '#fef2f2',
+              border: '2px solid #fca5a5',
+              borderRadius: 12,
+              padding: '16px 20px',
+              marginBottom: 20,
+              color: '#991b1b',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <Ban size={24} style={{ flexShrink: 0, marginTop: 2 }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 6 }}>
+                  আজকে {selectedDoctor.name} এর চেম্বার অফ রেখেছেন
                 </div>
+                <div style={{ fontSize: 13.5, lineHeight: 1.6, marginBottom: 14 }}>
+                  আপনি চাইলে পরবর্তী চেম্বারে দিন সিরিয়াল নিতে পারবেন।
+                </div>
+
+                {chamberOffAlert?.suggestedDate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedDate(chamberOffAlert.suggestedDate);
+                      // ✅ Alert আর দেখানোর দরকার নেই — নতুন tanggal সিলেক্ট হলেই ঠিক হবে
+                    }}
+                    style={{
+                      padding: '10px 20px',
+                      background: '#1c5fa8',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 8,
+                      fontSize: 14,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    <CalendarDays size={16} />
+                    {chamberOffAlert.suggestedDate} তারিখে সিরিয়াল নিন →
+                  </button>
+                )}
+
+                {!chamberOffAlert?.suggestedDate && (
+                  <div style={{ fontSize: 12.5, opacity: 0.85, fontStyle: 'italic' }}>
+                    পরবর্তী উপলব্ধ তারিখ খোঁজা হচ্ছে...
+                  </div>
+                )}
               </div>
             </div>
-          )}
+          </div>
+        )}
 
           {/* ✅ Location status badge */}
           {locationStatus !== 'idle' && (
@@ -1346,40 +1363,19 @@ export default function BookingSystem({
                       return (
                         <div
                           key={doc.id}
-                          className={`doctor-option ${
-                            selectedDoctor?.id === doc.id ? 'selected' : ''
-                          } ${isOff ? 'is-off' : ''}`}
+                          className={`doctor-option ${selectedDoctor?.id === doc.id ? 'selected' : ''} ${isOff ? 'is-off' : ''}`}
                           onClick={() => handleDoctorSelect(doc)}
                         >
                           <div>
                             <div className="doctor-name">
                               {doc.name}
                               {doc.isOneTime && (
-                                <span
-                                  style={{
-                                    marginLeft: 8,
-                                    fontSize: 10,
-                                    padding: '2px 8px',
-                                    background: '#dbeafe',
-                                    color: '#1e40af',
-                                    borderRadius: 10,
-                                    fontWeight: 600,
-                                  }}
-                                >
+                                <span style={{ marginLeft: 8, fontSize: 10, padding: '2px 8px', background: '#dbeafe', color: '#1e40af', borderRadius: 10, fontWeight: 600 }}>
                                   এই দিনে
                                 </span>
                               )}
                               {isOff && (
-                                <span
-                                  style={{
-                                    marginLeft: 8,
-                                    fontSize: 11,
-                                    padding: '2px 8px',
-                                    background: '#dc2626',
-                                    color: '#fff',
-                                    borderRadius: 10,
-                                  }}
-                                >
+                                <span style={{ marginLeft: 8, fontSize: 11, padding: '2px 8px', background: '#dc2626', color: '#fff', borderRadius: 10 }}>
                                   চেম্বার অফ
                                 </span>
                               )}
@@ -1394,25 +1390,6 @@ export default function BookingSystem({
                                     ⏱ {slot.start} - {slot.end}
                                   </span>
                                 ))}
-                              </div>
-                            )}
-                            {isOff && (
-                              <div
-                                style={{
-                                  marginTop: 6,
-                                  padding: '6px 10px',
-                                  background: '#fef2f2',
-                                  border: '1px solid #fca5a5',
-                                  borderRadius: 8,
-                                  fontSize: 11,
-                                  color: '#991b1b',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 4,
-                                }}
-                              >
-                                <Ban size={11} />
-                                আজ চেম্বার বন্ধ — পরবর্তী দিনে সিরিয়াল নিন
                               </div>
                             )}
                           </div>
