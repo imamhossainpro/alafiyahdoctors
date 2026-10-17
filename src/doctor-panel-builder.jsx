@@ -2,6 +2,10 @@
 // ==================================================
 // 🏥 Doctor Panel Builder — Full File
 // ==================================================
+// ✅ Chamber OFF support in Preview + Edit panels
+// ✅ One-time doctor merge (per-date only, not master)
+// ✅ All existing functionality preserved
+// ==================================================
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { AppShellSkeleton } from './components/ui/SkeletonScreens';
@@ -10,7 +14,7 @@ import {
   MapPin, Globe, Phone, Loader2, Stethoscope, Scissors, Heart, Baby, Bone,
   Syringe, Pill, Activity, Brain, Eye, Utensils, Smile, Sparkles, User,
   Droplet, Thermometer, LogOut, CheckCircle, XCircle, RefreshCw, Link as LinkIcon,
-  Copy, QrCode, Check, Camera, Upload, Ticket, Ban,
+  Copy, QrCode, Check, Camera, Upload, Ticket, Ban, CalendarX2,
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -26,12 +30,12 @@ import NotFoundPage from './components/NotFoundPage';
 import { useHospital } from './context/HospitalContext';
 import { useAuth } from './context/AuthContext';
 import AuthPage from './components/AuthPage';
-import DoctorOverrideModal from './components/admin/DoctorOverrideModal'; // ✅ নতুন মডাল
+import DoctorOverrideModal from './components/admin/DoctorOverrideModal';
 
 // ✅ Lazy load — heavy components
 const MoUClientManager = lazy(() => import('./components/admin/MoUClientManager'));
 
-// ✅ NEW IMPORTS — Refactored dpb/ modules
+// ✅ DPB modules
 import { DPB_CSS } from './dpb/dpb.css';
 import Header from './dpb/Header';
 import DoctorEntry from './dpb/DoctorEntry';
@@ -57,10 +61,28 @@ import {
   DEFAULT_BRANDING,
 } from './dpb/constants';
 
+// ✅ Chamber OFF + one-time doctor services
+import {
+  subscribeToOffDoctors,
+  subscribeToOneTimeDoctors,
+} from './services/doctorOverrideService';
+
 // ==================================================
 // ✅ CSS
 // ==================================================
 const CSS = DPB_CSS;
+
+// ==================================================
+// ✅ BD timezone helper
+// ==================================================
+const getBDTodayString = () => {
+  const now = new Date();
+  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+  const bd = new Date(utc + 6 * 60 * 60000);
+  return `${bd.getFullYear()}-${String(bd.getMonth() + 1).padStart(2, '0')}-${String(
+    bd.getDate()
+  ).padStart(2, '0')}`;
+};
 
 // ==================================================
 // ✅ Save Indicator
@@ -77,7 +99,7 @@ function SaveIndicator({ status }) {
 }
 
 // ==================================================
-// ✅ Admin Panel — Full User Management (with Email)
+// ✅ Admin Panel — Full User Management
 // ==================================================
 function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
   const [searchTerm, setSearchTerm] = React.useState('');
@@ -102,12 +124,9 @@ function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
           <label>ইউজার ম্যানেজমেন্ট</label>
           <span
             style={{
-              background: '#eff6ff',
-              color: '#1c5fa8',
-              padding: '4px 12px',
-              borderRadius: '20px',
-              fontSize: '12px',
-              fontWeight: '700',
+              background: '#eff6ff', color: '#1c5fa8',
+              padding: '4px 12px', borderRadius: '20px',
+              fontSize: '12px', fontWeight: '700',
             }}
           >
             মোট: {users.length} জন
@@ -117,29 +136,14 @@ function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
           রেজিস্ট্রেশন করা ইউজারদের এপ্রুভ, রোল সেট ও ডিলিট করুন।
         </div>
 
-        {/* ✅ Search Box */}
         <div
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            background: '#f1f5f9',
-            borderRadius: '8px',
-            padding: '4px 12px',
-            marginBottom: '16px',
-            maxWidth: '420px',
-            marginTop: '10px',
+            display: 'flex', alignItems: 'center', background: '#f1f5f9',
+            borderRadius: '8px', padding: '4px 12px', marginBottom: '16px',
+            maxWidth: '420px', marginTop: '10px',
           }}
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#64748b"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
@@ -149,12 +153,8 @@ function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
-              border: 'none',
-              background: 'transparent',
-              outline: 'none',
-              padding: '8px 10px',
-              fontSize: '13.5px',
-              width: '100%',
+              border: 'none', background: 'transparent', outline: 'none',
+              padding: '8px 10px', fontSize: '13.5px', width: '100%',
               fontFamily: 'inherit',
             }}
           />
@@ -163,28 +163,12 @@ function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
         {users.length === 0 ? (
           <div className="empty-state">এখনো কোনো ইউজার রেজিস্ট্রেশন করে নি।</div>
         ) : filteredUsers.length === 0 ? (
-          <div className="empty-state">
-            &quot;{searchTerm}&quot; এর সাথে মিলে এমন কোনো ইউজার নেই।
-          </div>
+          <div className="empty-state">&quot;{searchTerm}&quot; এর সাথে মিলে এমন কোনো ইউজার নেই।</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table
-              style={{
-                width: '100%',
-                borderCollapse: 'collapse',
-                minWidth: '900px',
-              }}
-            >
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '900px' }}>
               <thead>
-                <tr
-                  style={{
-                    borderBottom: '2px solid #e2e6ee',
-                    textAlign: 'left',
-                    background: '#f8fafc',
-                    color: '#475569',
-                    fontSize: '12.5px',
-                  }}
-                >
+                <tr style={{ borderBottom: '2px solid #e2e6ee', textAlign: 'left', background: '#f8fafc', color: '#475569', fontSize: '12.5px' }}>
                   <th style={{ padding: '12px 10px' }}>নাম</th>
                   <th style={{ padding: '12px 10px' }}>ইমেইল</th>
                   <th style={{ padding: '12px 10px' }}>ডেসিগনেশন</th>
@@ -195,70 +179,30 @@ function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
               </thead>
               <tbody>
                 {filteredUsers.map((u) => (
-                  <tr
-                    key={u.id}
-                    style={{
-                      borderBottom: '1px solid #eef1f7',
-                      fontSize: '13.5px',
-                    }}
-                  >
-                    <td
-                      style={{
-                        padding: '12px 10px',
-                        fontWeight: '600',
-                        color: '#1e293b',
-                      }}
-                    >
+                  <tr key={u.id} style={{ borderBottom: '1px solid #eef1f7', fontSize: '13.5px' }}>
+                    <td style={{ padding: '12px 10px', fontWeight: '600', color: '#1e293b' }}>
                       {u.name || u.displayName || 'নাম নেই'}
                     </td>
-
-                    {/* ✅ Email Column */}
-                    <td
-                      style={{
-                        padding: '12px 10px',
-                        color: '#475569',
-                        fontSize: '12.5px',
-                      }}
-                    >
+                    <td style={{ padding: '12px 10px', color: '#475569', fontSize: '12.5px' }}>
                       {u.email ? (
-                        <a
-                          href={`mailto:${u.email}`}
-                          style={{
-                            color: '#1c5fa8',
-                            textDecoration: 'none',
-                          }}
-                        >
+                        <a href={`mailto:${u.email}`} style={{ color: '#1c5fa8', textDecoration: 'none' }}>
                           {u.email}
                         </a>
                       ) : (
                         <span style={{ color: '#94a3b8' }}>—</span>
                       )}
                     </td>
-
-                    <td
-                      style={{
-                        padding: '12px 10px',
-                        color: '#64748b',
-                        fontSize: '12.5px',
-                      }}
-                    >
-                      {u.designation || (
-                        <span style={{ color: '#cbd5e1' }}>—</span>
-                      )}
+                    <td style={{ padding: '12px 10px', color: '#64748b', fontSize: '12.5px' }}>
+                      {u.designation || <span style={{ color: '#cbd5e1' }}>—</span>}
                     </td>
-
                     <td style={{ padding: '12px 10px' }}>
                       <select
                         value={u.role || 'pending'}
                         onChange={(e) => onSetRole(u.id, e.target.value)}
                         style={{
-                          padding: '6px 10px',
-                          borderRadius: '8px',
-                          border: '1px solid #e2e6ee',
-                          fontSize: '13px',
-                          background: '#fff',
-                          fontFamily: 'inherit',
-                          cursor: 'pointer',
+                          padding: '6px 10px', borderRadius: '8px',
+                          border: '1px solid #e2e6ee', fontSize: '13px',
+                          background: '#fff', fontFamily: 'inherit', cursor: 'pointer',
                         }}
                       >
                         <option value="pending">পেন্ডিং</option>
@@ -271,81 +215,31 @@ function AdminPanel({ users, onApprove, onSetRole, onDeleteUser }) {
                         <option value="patient">রোগী</option>
                       </select>
                     </td>
-
                     <td style={{ padding: '12px 10px' }}>
                       {u.approved ? (
-                        <span
-                          style={{
-                            color: '#166534',
-                            fontWeight: '700',
-                            background: '#dcfce7',
-                            padding: '3px 10px',
-                            borderRadius: '20px',
-                            fontSize: '11.5px',
-                          }}
-                        >
+                        <span style={{ color: '#166534', fontWeight: '700', background: '#dcfce7', padding: '3px 10px', borderRadius: '20px', fontSize: '11.5px' }}>
                           এপ্রুভড
                         </span>
                       ) : (
-                        <span
-                          style={{
-                            color: '#991b1b',
-                            fontWeight: '700',
-                            background: '#fee2e2',
-                            padding: '3px 10px',
-                            borderRadius: '20px',
-                            fontSize: '11.5px',
-                          }}
-                        >
+                        <span style={{ color: '#991b1b', fontWeight: '700', background: '#fee2e2', padding: '3px 10px', borderRadius: '20px', fontSize: '11.5px' }}>
                           পেন্ডিং
                         </span>
                       )}
                     </td>
-
-                    <td
-                      style={{
-                        padding: '12px 10px',
-                        display: 'flex',
-                        gap: '6px',
-                        flexWrap: 'wrap',
-                      }}
-                    >
+                    <td style={{ padding: '12px 10px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                       {!u.approved && (
                         <button
                           onClick={() => onApprove(u.id)}
-                          style={{
-                            padding: '6px 12px',
-                            fontSize: '12px',
-                            background: '#1c5fa8',
-                            color: '#fff',
-                            border: 'none',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            fontWeight: '600',
-                          }}
+                          style={{ padding: '6px 12px', fontSize: '12px', background: '#1c5fa8', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}
                         >
                           ✓ এপ্রুভ
                         </button>
                       )}
                       <button
                         onClick={() => {
-                          if (
-                            window.confirm(
-                              `"${u.name || 'ইউজার'}"-কে ডিলিট করতে চান?`
-                            )
-                          )
-                            onDeleteUser(u.id);
+                          if (window.confirm(`"${u.name || 'ইউজার'}"-কে ডিলিট করতে চান?`)) onDeleteUser(u.id);
                         }}
-                        style={{
-                          padding: '6px 12px',
-                          fontSize: '12px',
-                          background: '#dc2626',
-                          color: '#fff',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          fontWeight: '600',
-                        }}
+                        style={{ padding: '6px 12px', fontSize: '12px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}
                       >
                         🗑 ডিলিট
                       </button>
@@ -385,11 +279,7 @@ function DoctorLinkModal({ doctor, onClose }) {
 
   useEffect(() => {
     if (!linkUrl) return;
-    QRCode.toDataURL(linkUrl, {
-      width: 300,
-      margin: 2,
-      color: { dark: '#1c5fa8', light: '#ffffff' },
-    })
+    QRCode.toDataURL(linkUrl, { width: 300, margin: 2, color: { dark: '#1c5fa8', light: '#ffffff' } })
       .then((url) => setQrDataUrl(url))
       .catch((err) => console.error('QR error:', err));
   }, [linkUrl]);
@@ -427,9 +317,7 @@ function DoctorLinkModal({ doctor, onClose }) {
             <LinkIcon size={18} color="#0891b2" />
             ডাক্তারের বুকিং লিংক
           </h3>
-          <button className="icon-btn" onClick={onClose}>
-            <X size={18} />
-          </button>
+          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
         </div>
         <div className="modal-body">
           <div style={{ textAlign: 'center', marginBottom: '16px' }}>
@@ -444,14 +332,10 @@ function DoctorLinkModal({ doctor, onClose }) {
               {doctor.name}
             </div>
             {doctor.nameEn && (
-              <div style={{ fontSize: '13px', color: '#64748b', fontStyle: 'italic' }}>
-                {doctor.nameEn}
-              </div>
+              <div style={{ fontSize: '13px', color: '#64748b', fontStyle: 'italic' }}>{doctor.nameEn}</div>
             )}
             {doctor.specialty && (
-              <div style={{ fontSize: '13px', color: '#9c2a7e', marginTop: '4px', fontWeight: '600' }}>
-                {doctor.specialty}
-              </div>
+              <div style={{ fontSize: '13px', color: '#9c2a7e', marginTop: '4px', fontWeight: '600' }}>{doctor.specialty}</div>
             )}
           </div>
 
@@ -460,15 +344,10 @@ function DoctorLinkModal({ doctor, onClose }) {
               type="button"
               onClick={() => setLinkMode('qr')}
               style={{
-                flex: 1,
-                padding: '8px 12px',
-                border: 'none',
-                borderRadius: '8px',
+                flex: 1, padding: '8px 12px', border: 'none', borderRadius: '8px',
                 background: linkMode === 'qr' ? '#1c5fa8' : 'transparent',
                 color: linkMode === 'qr' ? '#fff' : '#475569',
-                fontSize: '13px',
-                fontWeight: '700',
-                cursor: 'pointer',
+                fontSize: '13px', fontWeight: '700', cursor: 'pointer',
                 transition: 'all 0.2s',
               }}
             >
@@ -478,15 +357,10 @@ function DoctorLinkModal({ doctor, onClose }) {
               type="button"
               onClick={() => setLinkMode('direct')}
               style={{
-                flex: 1,
-                padding: '8px 12px',
-                border: 'none',
-                borderRadius: '8px',
+                flex: 1, padding: '8px 12px', border: 'none', borderRadius: '8px',
                 background: linkMode === 'direct' ? '#1c5fa8' : 'transparent',
                 color: linkMode === 'direct' ? '#fff' : '#475569',
-                fontSize: '13px',
-                fontWeight: '700',
-                cursor: 'pointer',
+                fontSize: '13px', fontWeight: '700', cursor: 'pointer',
                 transition: 'all 0.2s',
               }}
             >
@@ -500,11 +374,7 @@ function DoctorLinkModal({ doctor, onClose }) {
           <div className="link-modal-input">
             <input type="text" readOnly value={linkUrl} onClick={(e) => e.target.select()} />
             <button onClick={handleCopy} className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '12px', flexShrink: 0 }}>
-              {copied ? (
-                <><Check size={14} /> কপি হয়েছে</>
-              ) : (
-                <><Copy size={14} /> কপি</>
-              )}
+              {copied ? <><Check size={14} /> কপি হয়েছে</> : <><Copy size={14} /> কপি</>}
             </button>
           </div>
 
@@ -537,9 +407,7 @@ function DoctorLinkModal({ doctor, onClose }) {
           )}
         </div>
         <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose}>
-            বন্ধ করুন
-          </button>
+          <button className="btn btn-secondary" onClick={onClose}>বন্ধ করুন</button>
         </div>
       </div>
     </div>
@@ -547,21 +415,12 @@ function DoctorLinkModal({ doctor, onClose }) {
 }
 
 // ==================================================
-// ✅ DoctorRow
+// ✅ DoctorRow (with chamber OFF badge)
 // ==================================================
 function DoctorRow({
-  doc,
-  index,
-  total,
-  checked,
-  onToggleChecked,
-  onEdit,
-  onDelete,
-  onMoveUp,
-  onMoveDown,
-  onShowLink,
-  allowDelete = true,
-  showCheckbox = true,
+  doc, index, total, checked, onToggleChecked, onEdit, onDelete,
+  onMoveUp, onMoveDown, onShowLink, allowDelete = true, showCheckbox = true,
+  isOffToday = false, isOneTime = false,
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -587,14 +446,24 @@ function DoctorRow({
         {doc.imageUrl ? (
           <img src={doc.imageUrl} alt={doc.name} />
         ) : (
-          <span className="placeholder">
-            <User size={22} />
-          </span>
+          <span className="placeholder"><User size={22} /></span>
         )}
       </div>
 
       <div className="doctor-row-info">
-        <div className="doctor-row-name">{doc.name || 'নামহীন ডাক্তার'}</div>
+        <div className="doctor-row-name" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          {doc.name || 'নামহীন ডাক্তার'}
+          {isOffToday && (
+            <span style={{ background: '#dc2626', color: '#fff', fontSize: 9.5, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>
+              চেম্বার অফ
+            </span>
+          )}
+          {isOneTime && (
+            <span style={{ background: '#1e40af', color: '#fff', fontSize: 9.5, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>
+              এই দিনে
+            </span>
+          )}
+        </div>
         {doc.specialty ? <div className="doctor-row-specialty">{doc.specialty}</div> : null}
         {doc.timeSlots && doc.timeSlots.length > 0 && (
           <div className="doctor-row-time-slots">
@@ -641,29 +510,14 @@ function DoctorRow({
 }
 
 // ==================================================
-// ✅ DepartmentCard
+// ✅ DepartmentCard (with chamber OFF support)
 // ==================================================
 function DepartmentCard({
-  dept,
-  index,
-  total,
-  checkedIds,
-  onEdit,
-  onDelete,
-  onMoveUp,
-  onMoveDown,
-  onAddDoctor,
-  onEditDoctor,
-  onDeleteDoctor,
-  onMoveDoctorUp,
-  onMoveDoctorDown,
-  onToggleDoctorChecked,
-  onToggleAllChecked,
-  onShowDoctorLink,
-  allowDeptDelete = true,
-  allowDoctorDelete = true,
-  showCheckbox = true,
-  showSelectAll = true,
+  dept, index, total, checkedIds, onEdit, onDelete, onMoveUp, onMoveDown,
+  onAddDoctor, onEditDoctor, onDeleteDoctor, onMoveDoctorUp, onMoveDoctorDown,
+  onToggleDoctorChecked, onToggleAllChecked, onShowDoctorLink,
+  allowDeptDelete = true, allowDoctorDelete = true, showCheckbox = true,
+  showSelectAll = true, offDoctorIds = new Set(),
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -675,8 +529,7 @@ function DepartmentCard({
 
   const Icon = ICONS[dept.icon] || ICONS.Stethoscope;
   const deptDoctorIds = dept.doctors?.map((doc) => doc.id) || [];
-  const allChecked =
-    deptDoctorIds.length > 0 && deptDoctorIds.every((id) => checkedIds.has(id));
+  const allChecked = deptDoctorIds.length > 0 && deptDoctorIds.every((id) => checkedIds.has(id));
 
   return (
     <div className="dept-card" style={{ borderLeftColor: dept.color }} key={dept.id}>
@@ -736,6 +589,7 @@ function DepartmentCard({
             onShowLink={onShowDoctorLink ? () => onShowDoctorLink(doc) : null}
             allowDelete={allowDoctorDelete}
             showCheckbox={showCheckbox}
+            isOffToday={offDoctorIds.has(doc.id)}
           />
         ))}
         {allowDoctorDelete && (
@@ -774,19 +628,11 @@ function DepartmentModal({ initial, onSave, onClose }) {
       <div className="modal-box" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{initial ? 'বিভাগ সম্পাদনা করুন' : 'নতুন বিভাগ যোগ করুন'}</h3>
-          <button className="icon-btn" onClick={onClose}>
-            <X size={18} />
-          </button>
+          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
         </div>
         <div className="modal-body">
           <label>বিভাগের নাম</label>
-          <input
-            className="input"
-            autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="যেমনঃ মেডিসিন বিভাগ"
-          />
+          <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="যেমনঃ মেডিসিন বিভাগ" />
 
           <label>আইকন বেছে নিন</label>
           <div className="icon-grid">
@@ -821,12 +667,8 @@ function DepartmentModal({ initial, onSave, onClose }) {
           </div>
         </div>
         <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose}>
-            বাতিল
-          </button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={!name.trim()}>
-            সংরক্ষণ করুন
-          </button>
+          <button className="btn btn-secondary" onClick={onClose}>বাতিল</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={!name.trim()}>সংরক্ষণ করুন</button>
         </div>
       </div>
     </div>
@@ -862,8 +704,7 @@ function DoctorModal({ initial, onSave, onClose }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const handleAddSlot = () =>
-    setTimeSlots([...timeSlots, { start: '09:00 AM', end: '11:00 AM' }]);
+  const handleAddSlot = () => setTimeSlots([...timeSlots, { start: '09:00 AM', end: '11:00 AM' }]);
 
   const handleRemoveSlot = (index) => {
     if (timeSlots.length <= 1) {
@@ -879,9 +720,7 @@ function DoctorModal({ initial, onSave, onClose }) {
   };
 
   const handleSlotChange = (index, field, value) => {
-    const updated = timeSlots.map((slot, i) =>
-      i === index ? { ...slot, [field]: value } : slot
-    );
+    const updated = timeSlots.map((slot, i) => (i === index ? { ...slot, [field]: value } : slot));
     setTimeSlots(updated);
     const errorKey = `${index}-${field}`;
     const newErrors = { ...slotErrors };
@@ -897,9 +736,7 @@ function DoctorModal({ initial, onSave, onClose }) {
     const value = timeSlots[index][field];
     if (value.trim() && validateTimeFormat(value)) {
       const standardized = standardizeTime(value);
-      const updated = timeSlots.map((slot, i) =>
-        i === index ? { ...slot, [field]: standardized } : slot
-      );
+      const updated = timeSlots.map((slot, i) => (i === index ? { ...slot, [field]: standardized } : slot));
       setTimeSlots(updated);
     }
   };
@@ -908,7 +745,6 @@ function DoctorModal({ initial, onSave, onClose }) {
     const file = e.target.files?.[0];
     if (!file) return;
     setImageError('');
-
     if (!file.type.startsWith('image/')) {
       setImageError('শুধু ছবি (image) ফাইল নির্বাচন করুন');
       return;
@@ -917,7 +753,6 @@ function DoctorModal({ initial, onSave, onClose }) {
       setImageError('ছবির সাইজ 3MB এর কম হতে হবে');
       return;
     }
-
     setImageFile(file);
     const reader = new FileReader();
     reader.onloadend = () => setImagePreview(reader.result);
@@ -956,12 +791,7 @@ function DoctorModal({ initial, onSave, onClose }) {
         hasError = true;
       }
 
-      if (
-        slot.start &&
-        slot.end &&
-        validateTimeFormat(slot.start) &&
-        validateTimeFormat(slot.end)
-      ) {
+      if (slot.start && slot.end && validateTimeFormat(slot.start) && validateTimeFormat(slot.end)) {
         const startMin = timeToMinutes(slot.start);
         const endMin = timeToMinutes(slot.end);
         if (startMin !== null && endMin !== null && startMin >= endMin) {
@@ -988,21 +818,11 @@ function DoctorModal({ initial, onSave, onClose }) {
       if (imageFile) {
         setUploading(true);
         setImageError('');
-
         const formData = new FormData();
         formData.append('file', imageFile);
-
-        const res = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData,
-        });
-
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
         const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error || 'Upload failed');
-        }
-
+        if (!res.ok) throw new Error(data.error || 'Upload failed');
         finalImageUrl = data.url;
         console.log('✅ Image uploaded:', finalImageUrl);
       } else if (initial?.imageUrl && !imagePreview) {
@@ -1029,17 +849,9 @@ function DoctorModal({ initial, onSave, onClose }) {
   };
 
   const inputBaseStyle = {
-    padding: '9px 12px',
-    border: '1px solid #cbd5e1',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontFamily: 'inherit',
-    outline: 'none',
-    width: '100%',
-    textAlign: 'center',
-    fontWeight: '600',
-    letterSpacing: '0.5px',
-    background: '#fff',
+    padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: '8px',
+    fontSize: '14px', fontFamily: 'inherit', outline: 'none', width: '100%',
+    textAlign: 'center', fontWeight: '600', letterSpacing: '0.5px', background: '#fff',
   };
 
   return (
@@ -1047,54 +859,26 @@ function DoctorModal({ initial, onSave, onClose }) {
       <div className="modal-box" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{initial ? 'ডাক্তারের তথ্য সম্পাদনা' : 'নতুন ডাক্তার যোগ করুন'}</h3>
-          <button className="icon-btn" onClick={onClose}>
-            <X size={18} />
-          </button>
+          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
         </div>
 
         <div className="modal-body">
-          <label style={{ fontWeight: '700', display: 'block', marginBottom: '8px' }}>
-            ডাক্তারের ছবি
-          </label>
+          <label style={{ fontWeight: '700', display: 'block', marginBottom: '8px' }}>ডাক্তারের ছবি</label>
           <div className="doctor-image-upload" style={{ marginBottom: '16px' }}>
             <div className="doctor-image-preview">
               {imagePreview ? (
                 <img src={imagePreview} alt="Doctor preview" />
               ) : (
-                <span className="placeholder">
-                  <User size={40} />
-                </span>
+                <span className="placeholder"><User size={40} /></span>
               )}
             </div>
             <div style={{ flex: 1, minWidth: '180px' }}>
-              <input
-                type="file"
-                id="doctor-image-input"
-                accept="image/*"
-                onChange={handleImageSelect}
-                style={{ display: 'none' }}
-              />
-              <label
-                htmlFor="doctor-image-input"
-                className="btn btn-secondary"
-                style={{
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '8px 14px',
-                  fontSize: '13px',
-                }}
-              >
+              <input type="file" id="doctor-image-input" accept="image/*" onChange={handleImageSelect} style={{ display: 'none' }} />
+              <label htmlFor="doctor-image-input" className="btn btn-secondary" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', fontSize: '13px' }}>
                 <Camera size={15} /> ছবি নির্বাচন করুন
               </label>
               {imagePreview && (
-                <button
-                  type="button"
-                  onClick={handleRemoveImage}
-                  className="btn btn-outline"
-                  style={{ marginLeft: '8px', fontSize: '12.5px', padding: '8px 14px' }}
-                >
+                <button type="button" onClick={handleRemoveImage} className="btn btn-outline" style={{ marginLeft: '8px', fontSize: '12.5px', padding: '8px 14px' }}>
                   <X size={14} /> সরান
                 </button>
               )}
@@ -1102,61 +886,28 @@ function DoctorModal({ initial, onSave, onClose }) {
                 JPG / PNG · সর্বোচ্চ 3MB · বর্গাকার ছবি সবচেয়ে ভালো
               </p>
               {imageError && (
-                <p style={{ fontSize: '12px', color: '#dc2626', margin: '4px 0 0 0', fontWeight: '600' }}>
-                  ⚠️ {imageError}
-                </p>
+                <p style={{ fontSize: '12px', color: '#dc2626', margin: '4px 0 0 0', fontWeight: '600' }}>⚠️ {imageError}</p>
               )}
             </div>
           </div>
 
           <label>ডাক্তারের নাম (বাংলা)</label>
-          <input
-            className="input"
-            autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="যেমনঃ ডাঃ মোহাম্মদ নূর"
-          />
+          <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="যেমনঃ ডাঃ মোহাম্মদ নূর" />
 
           <label style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
             ডাক্তারের নাম (English)
-            <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '400' }}>
-              (SMS/Email-এ ব্যবহৃত হবে)
-            </span>
+            <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '400' }}>(SMS/Email-এ ব্যবহৃত হবে)</span>
           </label>
-          <input
-            className="input"
-            value={nameEn}
-            onChange={(e) => setNameEn(e.target.value)}
-            placeholder="যেমনঃ Dr. Mohammad Nur"
-          />
+          <input className="input" value={nameEn} onChange={(e) => setNameEn(e.target.value)} placeholder="যেমনঃ Dr. Mohammad Nur" />
 
           <label style={{ marginTop: '12px' }}>শিক্ষাগত যোগ্যতা / ডিগ্রি</label>
-          <textarea
-            className="textarea"
-            rows={3}
-            value={quals}
-            onChange={(e) => setQuals(e.target.value)}
-            placeholder="প্রতি লাইনে একটি করে ডিগ্রি লিখুন"
-          />
+          <textarea className="textarea" rows={3} value={quals} onChange={(e) => setQuals(e.target.value)} placeholder="প্রতি লাইনে একটি করে ডিগ্রি লিখুন" />
 
           <label>বিশেষত্ব</label>
-          <textarea
-            className="textarea"
-            rows={2}
-            value={specialty}
-            onChange={(e) => setSpecialty(e.target.value)}
-            placeholder="যেমনঃ মেডিসিন বিশেষজ্ঞ"
-          />
+          <textarea className="textarea" rows={2} value={specialty} onChange={(e) => setSpecialty(e.target.value)} placeholder="যেমনঃ মেডিসিন বিশেষজ্ঞ" />
 
           <label>কর্মস্থল / পদবী</label>
-          <textarea
-            className="textarea"
-            rows={2}
-            value={workplace}
-            onChange={(e) => setWorkplace(e.target.value)}
-            placeholder="যেমনঃ চট্টগ্রাম মেডিকেল কলেজ হাসপাতাল"
-          />
+          <textarea className="textarea" rows={2} value={workplace} onChange={(e) => setWorkplace(e.target.value)} placeholder="যেমনঃ চট্টগ্রাম মেডিকেল কলেজ হাসপাতাল" />
 
           <div style={{ marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
             <label style={{ fontWeight: '700', display: 'block', marginBottom: '4px' }}>
@@ -1164,13 +915,9 @@ function DoctorModal({ initial, onSave, onClose }) {
             </label>
             <p style={{ fontSize: '12px', color: '#64748b', margin: '4px 0 12px 0', lineHeight: '1.5' }}>
               ফরম্যাট:{' '}
-              <code style={{ background: '#f1f5f9', padding: '1px 6px', borderRadius: '4px', fontSize: '11.5px' }}>
-                HH:MM AM
-              </code>{' '}
+              <code style={{ background: '#f1f5f9', padding: '1px 6px', borderRadius: '4px', fontSize: '11.5px' }}>HH:MM AM</code>{' '}
               অথবা{' '}
-              <code style={{ background: '#f1f5f9', padding: '1px 6px', borderRadius: '4px', fontSize: '11.5px' }}>
-                HH:MM PM
-              </code>
+              <code style={{ background: '#f1f5f9', padding: '1px 6px', borderRadius: '4px', fontSize: '11.5px' }}>HH:MM PM</code>
               <br />
               উদাহরণ: <strong>09:00 AM</strong>, <strong>02:30 PM</strong>, <strong>11:45 PM</strong>
             </p>
@@ -1179,29 +926,10 @@ function DoctorModal({ initial, onSave, onClose }) {
               const startError = slotErrors[`${index}-start`];
               const endError = slotErrors[`${index}-end`];
               return (
-                <div
-                  key={index}
-                  style={{
-                    marginBottom: '12px',
-                    background: '#f8fafc',
-                    padding: '12px',
-                    borderRadius: '10px',
-                    border: startError || endError ? '1.5px solid #dc2626' : '1px solid #e2e8f0',
-                  }}
-                >
+                <div key={index} style={{ marginBottom: '12px', background: '#f8fafc', padding: '12px', borderRadius: '10px', border: startError || endError ? '1.5px solid #dc2626' : '1px solid #e2e8f0' }}>
                   <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
                     <div style={{ flex: '1 1 140px' }}>
-                      <label
-                        style={{
-                          fontSize: '11.5px',
-                          fontWeight: '600',
-                          color: '#475569',
-                          display: 'block',
-                          marginBottom: '4px',
-                        }}
-                      >
-                        শুরু
-                      </label>
+                      <label style={{ fontSize: '11.5px', fontWeight: '600', color: '#475569', display: 'block', marginBottom: '4px' }}>শুরু</label>
                       <input
                         type="text"
                         value={slot.start}
@@ -1212,24 +940,10 @@ function DoctorModal({ initial, onSave, onClose }) {
                         autoComplete="off"
                         style={{ ...inputBaseStyle, borderColor: startError ? '#dc2626' : '#cbd5e1' }}
                       />
-                      {startError && (
-                        <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '4px', fontWeight: '500' }}>
-                          ⚠️ {startError}
-                        </div>
-                      )}
+                      {startError && (<div style={{ fontSize: '11px', color: '#dc2626', marginTop: '4px', fontWeight: '500' }}>⚠️ {startError}</div>)}
                     </div>
                     <div style={{ flex: '1 1 140px' }}>
-                      <label
-                        style={{
-                          fontSize: '11.5px',
-                          fontWeight: '600',
-                          color: '#475569',
-                          display: 'block',
-                          marginBottom: '4px',
-                        }}
-                      >
-                        শেষ
-                      </label>
+                      <label style={{ fontSize: '11.5px', fontWeight: '600', color: '#475569', display: 'block', marginBottom: '4px' }}>শেষ</label>
                       <input
                         type="text"
                         value={slot.end}
@@ -1240,30 +954,14 @@ function DoctorModal({ initial, onSave, onClose }) {
                         autoComplete="off"
                         style={{ ...inputBaseStyle, borderColor: endError ? '#dc2626' : '#cbd5e1' }}
                       />
-                      {endError && (
-                        <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '4px', fontWeight: '500' }}>
-                          ⚠️ {endError}
-                        </div>
-                      )}
+                      {endError && (<div style={{ fontSize: '11px', color: '#dc2626', marginTop: '4px', fontWeight: '500' }}>⚠️ {endError}</div>)}
                     </div>
                     <div style={{ paddingTop: '22px' }}>
                       <button
                         type="button"
                         onClick={() => handleRemoveSlot(index)}
                         title="স্লট মুছুন"
-                        style={{
-                          background: '#fee2e2',
-                          color: '#dc2626',
-                          border: 'none',
-                          borderRadius: '10px',
-                          padding: '9px 10px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          boxShadow: '0 2px 8px rgba(220,38,38,0.20)',
-                          transition: 'all 0.2s',
-                        }}
+                        style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '10px', padding: '9px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(220,38,38,0.20)', transition: 'all 0.2s' }}
                       >
                         <Trash2 size={16} />
                       </button>
@@ -1280,21 +978,9 @@ function DoctorModal({ initial, onSave, onClose }) {
         </div>
 
         <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose} disabled={uploading}>
-            বাতিল
-          </button>
-          <button
-            className="btn btn-primary"
-            onClick={handleSave}
-            disabled={!name.trim() || uploading}
-          >
-            {uploading ? (
-              <>
-                <Loader2 size={14} className="spin" /> আপলোড হচ্ছে...
-              </>
-            ) : (
-              'সংরক্ষণ করুন'
-            )}
+          <button className="btn btn-secondary" onClick={onClose} disabled={uploading}>বাতিল</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={!name.trim() || uploading}>
+            {uploading ? (<><Loader2 size={14} className="spin" /> আপলোড হচ্ছে...</>) : ('সংরক্ষণ করুন')}
           </button>
         </div>
       </div>
@@ -1321,12 +1007,7 @@ function PanelModal({ mode, initial, activeDeptCount, departments, onSave, onClo
   const handleSave = () => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    onSave({
-      name: trimmed,
-      title: titleForName(trimmed),
-      duplicate,
-      selectedIds: [...selectedIds],
-    });
+    onSave({ name: trimmed, title: titleForName(trimmed), duplicate, selectedIds: [...selectedIds] });
   };
 
   const toggleDoctor = (id) => {
@@ -1350,72 +1031,46 @@ function PanelModal({ mode, initial, activeDeptCount, departments, onSave, onClo
       <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
         <div className="modal-header">
           <h3>{mode === 'add' ? 'নতুন দিন/প্যানেল যোগ করুন' : 'প্যানেল সম্পাদনা করুন'}</h3>
-          <button className="icon-btn" onClick={onClose}>
-            <X size={18} />
-          </button>
+          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
         </div>
         <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
           <label>দিন বা প্যানেলের নাম</label>
           {mode === 'add' ? (
             <div className="day-buttons">
               {DAY_NAMES.map((d) => (
-                <button key={d} className="day-btn" onClick={() => setName(d)}>
-                  {d}
-                </button>
+                <button key={d} className="day-btn" onClick={() => setName(d)}>{d}</button>
               ))}
             </div>
           ) : null}
-          <input
-            className="input"
-            autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="যেমনঃ শনিবার, অথবা নিজের মতো নাম"
-          />
+          <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="যেমনঃ শনিবার, অথবা নিজের মতো নাম" />
 
           {mode === 'add' && (
             <>
-              <label style={{ marginTop: '14px', display: 'block' }}>
-                ডাক্তার বেছে নিন (টিক দিন)
-              </label>
+              <label style={{ marginTop: '14px', display: 'block' }}>ডাক্তার বেছে নিন (টিক দিন)</label>
               <button className="btn btn-secondary" onClick={toggleAll} style={{ marginBottom: '10px' }}>
-                {selectedIds.size === departments.flatMap((d) => d.doctors || []).length
-                  ? 'সব বাদ দিন'
-                  : 'সব বাছুন'}
+                {selectedIds.size === departments.flatMap((d) => d.doctors || []).length ? 'সব বাদ দিন' : 'সব বাছুন'}
               </button>
               {departments.map((dept) => (
                 <div key={dept.id} style={{ marginBottom: '10px' }}>
                   <strong style={{ color: dept.color }}>{dept.name}</strong>
                   {dept.doctors?.map((doc) => (
                     <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: '4px 0' }}>
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(doc.id)}
-                        onChange={() => toggleDoctor(doc.id)}
-                      />
+                      <input type="checkbox" checked={selectedIds.has(doc.id)} onChange={() => toggleDoctor(doc.id)} />
                       <label>{doc.name}</label>
                     </div>
                   ))}
                 </div>
               ))}
               <label className="checkbox-row" style={{ marginTop: '14px' }}>
-                <input
-                  type="checkbox"
-                  checked={duplicate}
-                  onChange={(e) => setDuplicate(e.target.checked)}
-                />
+                <input type="checkbox" checked={duplicate} onChange={(e) => setDuplicate(e.target.checked)} />
                 <span>বর্তমান দিনের ডাক্তার সিলেকশন কপি করুন</span>
               </label>
             </>
           )}
         </div>
         <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose}>
-            বাতিল
-          </button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={!name.trim()}>
-            সংরক্ষণ করুন
-          </button>
+          <button className="btn btn-secondary" onClick={onClose}>বাতিল</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={!name.trim()}>সংরক্ষণ করুন</button>
         </div>
       </div>
     </div>
@@ -1425,16 +1080,7 @@ function PanelModal({ mode, initial, activeDeptCount, departments, onSave, onClo
 // ==================================================
 // ✅ PanelSwitcher
 // ==================================================
-function PanelSwitcher({
-  panels,
-  activePanelId,
-  onSwitch,
-  onAdd,
-  onRename,
-  onDelete,
-  isReadOnly = false,
-  canManagePanels = true,
-}) {
+function PanelSwitcher({ panels, activePanelId, onSwitch, onAdd, onRename, onDelete, isReadOnly = false, canManagePanels = true }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   useEffect(() => {
@@ -1450,29 +1096,18 @@ function PanelSwitcher({
           const active = p.id === activePanelId;
           return (
             <div key={p.id} className={active ? 'panel-pill active' : 'panel-pill'}>
-              <button className="panel-pill-label" onClick={() => onSwitch(p.id)}>
-                {p.name || 'নামহীন'}
-              </button>
+              <button className="panel-pill-label" onClick={() => onSwitch(p.id)}>{p.name || 'নামহীন'}</button>
 
               {!isReadOnly && canManagePanels && (
-                <button
-                  className="panel-pill-icon"
-                  onClick={() => onRename(p)}
-                  title="এডিট করুন"
-                  style={{ color: active ? '#fff' : '#1c5fa8', fontWeight: 'bold' }}
-                >
+                <button className="panel-pill-icon" onClick={() => onRename(p)} title="এডিট করুন" style={{ color: active ? '#fff' : '#1c5fa8', fontWeight: 'bold' }}>
                   <Pencil size={12} /> এডিট
                 </button>
               )}
 
               {!isReadOnly && canManagePanels && panels.length > 1 ? (
                 <button
-                  className={
-                    confirmDeleteId === p.id ? 'panel-pill-icon danger-confirm' : 'panel-pill-icon'
-                  }
-                  onClick={() =>
-                    confirmDeleteId === p.id ? onDelete(p.id) : setConfirmDeleteId(p.id)
-                  }
+                  className={confirmDeleteId === p.id ? 'panel-pill-icon danger-confirm' : 'panel-pill-icon'}
+                  onClick={() => (confirmDeleteId === p.id ? onDelete(p.id) : setConfirmDeleteId(p.id))}
                   title="মুছুন"
                 >
                   {confirmDeleteId === p.id ? '✓' : <X size={11} />}
@@ -1493,34 +1128,14 @@ function PanelSwitcher({
 }
 
 // ==================================================
-// ✅ EditPanel
+// ✅ EditPanel (with one-time doctor section)
 // ==================================================
 function EditPanel({
-  panel,
-  departments,
-  footer,
-  checkedIds,
-  allChecked,
-  onUpdateTitle,
-  onUpdateFooter,
-  onUpdatePhone,
-  onAddPhone,
-  onRemovePhone,
-  onAddDept,
-  onEditDept,
-  onDeleteDept,
-  onMoveDept,
-  onAddDoctor,
-  onEditDoctor,
-  onDeleteDoctor,
-  onMoveDoctor,
-  onToggleDoctorChecked,
-  onToggleDeptAllChecked,
-  onToggleAll,
-  clearConfirm,
-  onClearAll,
-  onGoPreview,
-  onShowDoctorLink,
+  panel, departments, footer, checkedIds, allChecked, onUpdateTitle, onUpdateFooter,
+  onUpdatePhone, onAddPhone, onRemovePhone, onAddDept, onEditDept, onDeleteDept,
+  onMoveDept, onAddDoctor, onEditDoctor, onDeleteDoctor, onMoveDoctor,
+  onToggleDoctorChecked, onToggleDeptAllChecked, onToggleAll, clearConfirm,
+  onClearAll, onGoPreview, onShowDoctorLink, offDoctorIds, oneTimeDoctors, onShowOverrideModal,
 }) {
   const orderedDepartments = getOrderedDepartments(departments, panel?.departmentOrder);
 
@@ -1536,12 +1151,7 @@ function EditPanel({
         <p className="section-hint">
           {`প্রতিটি ডাক্তারের পাশের বক্সে টিক দিয়ে বেছে নিন কারা "${panel.name}"-এর পোস্টারে দেখাবে। 🔗 আইকনে ক্লিক করে বুকিং লিংক দেখুন। ⬆️⬇️ দিয়ে এই দিনের জন্য বিভাগের ক্রম ঠিক করুন — অন্য দিনের ক্রম অপরিবর্তিত থাকবে।`}
         </p>
-        <input
-          className="input"
-          value={panel.title}
-          onChange={(e) => onUpdateTitle(e.target.value)}
-          placeholder="যেমনঃ শনিবারের ডক্টরস প্যানেল"
-        />
+        <input className="input" value={panel.title} onChange={(e) => onUpdateTitle(e.target.value)} placeholder="যেমনঃ শনিবারের ডক্টরস প্যানেল" />
       </section>
 
       <section className="panel-section">
@@ -1578,67 +1188,92 @@ function EditPanel({
             onShowDoctorLink={onShowDoctorLink}
             allowDeptDelete={false}
             allowDoctorDelete={false}
+            offDoctorIds={offDoctorIds}
           />
         ))}
       </section>
+
+      {/* ✅ One-time doctors section */}
+      {oneTimeDoctors.length > 0 && (
+        <section className="panel-section" style={{ background: '#f0f9ff', borderColor: '#bae6fd' }}>
+          <div className="section-header">
+            <label style={{ color: '#0c4a6e' }}>
+              ⚡ এই দিনের জন্য অতিরিক্ত ডাক্তার (One-time)
+            </label>
+            <button className="btn btn-secondary" onClick={onShowOverrideModal} style={{ fontSize: 12 }}>
+              ম্যানেজ করুন →
+            </button>
+          </div>
+          <p className="section-hint">
+            এই ডাক্তাররা শুধুমাত্র আজকের জন্য যুক্ত হয়েছেন। পার্মানেন্ট শিডিউলে কোনো প্রভাব পড়বে না।
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {oneTimeDoctors.map((entry) => (
+              <div
+                key={entry.id}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '10px 14px', background: '#fff',
+                  border: '1px solid #bae6fd', borderRadius: 8,
+                }}
+              >
+                <div className="doctor-thumb" style={{ width: 36, height: 36 }}>
+                  {entry.doctorSnapshot?.imageUrl ? (
+                    <img src={entry.doctorSnapshot.imageUrl} alt="" />
+                  ) : (
+                    <span className="placeholder"><User size={18} /></span>
+                  )}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: '#0c4a6e' }}>
+                    {entry.doctorSnapshot?.name || 'Unknown'}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#64748b' }}>
+                    {entry.doctorSnapshot?.deptName || entry.doctorSnapshot?.specialty || ''}
+                  </div>
+                </div>
+                <span style={{
+                  background: '#1e40af', color: '#fff',
+                  padding: '2px 10px', borderRadius: 10,
+                  fontSize: 10.5, fontWeight: 700,
+                }}>
+                  এই দিনে
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="panel-section">
         <label>ফুটার তথ্য</label>
         <div className="footer-form-grid">
           <div className="field">
             <label>হাসপাতালের নাম</label>
-            <input
-              className="input"
-              value={footer.hospitalName}
-              onChange={(e) => onUpdateFooter({ hospitalName: e.target.value })}
-            />
+            <input className="input" value={footer.hospitalName} onChange={(e) => onUpdateFooter({ hospitalName: e.target.value })} />
           </div>
           <div className="field">
             <label>সাবটাইটেল</label>
-            <input
-              className="input"
-              value={footer.hospitalSubtitle}
-              onChange={(e) => onUpdateFooter({ hospitalSubtitle: e.target.value })}
-            />
+            <input className="input" value={footer.hospitalSubtitle} onChange={(e) => onUpdateFooter({ hospitalSubtitle: e.target.value })} />
           </div>
           <div className="field">
             <label>ঠিকানা</label>
-            <textarea
-              className="textarea"
-              rows={2}
-              value={footer.address}
-              onChange={(e) => onUpdateFooter({ address: e.target.value })}
-            />
+            <textarea className="textarea" rows={2} value={footer.address} onChange={(e) => onUpdateFooter({ address: e.target.value })} />
           </div>
           <div className="field">
             <label>ওয়েবসাইট</label>
-            <input
-              className="input"
-              value={footer.website}
-              onChange={(e) => onUpdateFooter({ website: e.target.value })}
-            />
+            <input className="input" value={footer.website} onChange={(e) => onUpdateFooter({ website: e.target.value })} />
           </div>
           <div className="field" style={{ gridColumn: '1 / -1' }}>
             <label>যোগাযোগ লেবেল</label>
-            <input
-              className="input"
-              value={footer.contactLabel}
-              onChange={(e) => onUpdateFooter({ contactLabel: e.target.value })}
-            />
+            <input className="input" value={footer.contactLabel} onChange={(e) => onUpdateFooter({ contactLabel: e.target.value })} />
           </div>
           <div className="field" style={{ gridColumn: '1 / -1' }}>
             <label>ফোন নম্বর</label>
             {footer.phones.map((p, i) => (
               <div key={i} style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
-                <input
-                  className="input"
-                  value={p}
-                  onChange={(e) => onUpdatePhone(i, e.target.value)}
-                  placeholder="০১৮৮৬ ৭৭৬ ৫১২"
-                />
-                <button className="icon-btn" onClick={() => onRemovePhone(i)}>
-                  <Trash2 size={15} />
-                </button>
+                <input className="input" value={p} onChange={(e) => onUpdatePhone(i, e.target.value)} placeholder="০১৮৮৬ ৭৭৬ ৫১২" />
+                <button className="icon-btn" onClick={() => onRemovePhone(i)}><Trash2 size={15} /></button>
               </div>
             ))}
             <button className="btn btn-secondary" onClick={onAddPhone}>
@@ -1675,11 +1310,50 @@ function DeptHeader({ dept }) {
 }
 
 // ==================================================
-// ✅ PreviewPanel
+// ✅ PreviewPanel (with chamber OFF + one-time doctors)
 // ==================================================
 function PreviewPanel({ panel, departments, checkedIds, footer, onBack, user }) {
   const printRef = useRef(null);
   const isAdmin = user?.role === 'admin';
+  const { currentHospital } = useHospital();
+  const hospitalId = currentHospital?.id || 'alafiyah_main';
+
+  const [offDoctorIds, setOffDoctorIds] = useState(new Set());
+  const [oneTimeDoctors, setOneTimeDoctors] = useState([]);
+  const today = getBDTodayString();
+
+  // ✅ Subscribe to today's OFF doctors
+  useEffect(() => {
+    const unsub = subscribeToOffDoctors(
+      hospitalId,
+      today,
+      (ids) => {
+        console.log('🎨 [PreviewPanel] Off doctors today:', [...ids]);
+        setOffDoctorIds(ids);
+      },
+      (err) => console.error('❌ [PreviewPanel] Off doctors subscription error:', err)
+    );
+    return () => unsub();
+  }, [hospitalId, today]);
+
+  // ✅ Subscribe to today's one-time doctors
+  useEffect(() => {
+    const unsub = subscribeToOneTimeDoctors(
+      hospitalId,
+      today,
+      (list) => {
+        console.log('🎨 [PreviewPanel] One-time doctors today:', list.length);
+        setOneTimeDoctors(list);
+      },
+      (err) => console.error('❌ [PreviewPanel] One-time doctors subscription error:', err)
+    );
+    return () => unsub();
+  }, [hospitalId, today]);
+
+  // ✅ Subscribe for the panel's day (not today) — if user selects a different panel
+  const panelDay = panel?.name || '';
+  const isToday = panelDay === new Date().toLocaleDateString('en-US', { weekday: 'long' }) ||
+    panelDay === today; // fallback
 
   const handlePrint = () => {
     if (!isAdmin) {
@@ -1699,9 +1373,7 @@ function PreviewPanel({ panel, departments, checkedIds, footer, onBack, user }) 
     try {
       document.body.classList.add('generating-poster');
       const canvas = await html2canvas(element, {
-        scale: 3,
-        useCORS: true,
-        logging: false,
+        scale: 3, useCORS: true, logging: false,
         backgroundColor: '#ffffff',
         ignoreElements: html2canvasIgnoreElements,
       });
@@ -1727,9 +1399,7 @@ function PreviewPanel({ panel, departments, checkedIds, footer, onBack, user }) 
     try {
       document.body.classList.add('generating-poster');
       const canvas = await html2canvas(element, {
-        scale: 3,
-        useCORS: true,
-        logging: false,
+        scale: 3, useCORS: true, logging: false,
         backgroundColor: '#ffffff',
         ignoreElements: html2canvasIgnoreElements,
       });
@@ -1761,12 +1431,51 @@ function PreviewPanel({ panel, departments, checkedIds, footer, onBack, user }) 
 
   const orderedDepartments = getOrderedDepartments(departments, panel?.departmentOrder);
 
-  const visibleDepartments = orderedDepartments
-    .map((dept) => ({
-      ...dept,
-      doctors: dept.doctors?.filter((doc) => (hasChecked ? checkedIds.has(doc.id) : true)) || [],
-    }))
-    .filter((dept) => dept.doctors.length > 0);
+  // ✅ Merge regular + one-time doctors into departments for display
+  const visibleDepartments = (() => {
+    // Start with regular departments
+    const merged = orderedDepartments
+      .map((dept) => ({
+        ...dept,
+        doctors: (dept.doctors || []).filter((doc) =>
+          hasChecked ? checkedIds.has(doc.id) : true
+        ),
+      }))
+      .filter((dept) => dept.doctors.length > 0);
+
+    // ✅ Add one-time doctors as a separate pseudo-department (only for today's panel)
+    if (isToday && oneTimeDoctors.length > 0) {
+      const oneTimeEntries = oneTimeDoctors
+        .filter((entry) => entry.doctorSnapshot)
+        .map((entry) => ({
+          ...entry.doctorSnapshot,
+          id: entry.doctorId,
+          isOneTime: true,
+        }))
+        .filter((doc) => {
+          // Skip if already in a regular department
+          const inRegular = merged.some((dept) =>
+            dept.doctors.some((d) => d.id === doc.id)
+          );
+          if (inRegular) return false;
+          // Skip if not checked (when filter is active)
+          if (hasChecked && !checkedIds.has(doc.id)) return false;
+          return true;
+        });
+
+      if (oneTimeEntries.length > 0) {
+        merged.push({
+          id: '__one_time__',
+          name: '⚡ এই দিনের অতিরিক্ত ডাক্তার',
+          color: '#1e40af',
+          icon: 'Stethoscope',
+          doctors: oneTimeEntries,
+        });
+      }
+    }
+
+    return merged;
+  })();
 
   return (
     <div className="preview-wrap">
@@ -1785,8 +1494,7 @@ function PreviewPanel({ panel, departments, checkedIds, footer, onBack, user }) 
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
               <circle cx="8.5" cy="8.5" r="1.5" />
               <polyline points="21 15 16 10 5 21" />
-            </svg>{' '}
-            PNG
+            </svg>{' '}PNG
           </button>
           <button className="btn btn-secondary" onClick={downloadPDF}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1794,8 +1502,7 @@ function PreviewPanel({ panel, departments, checkedIds, footer, onBack, user }) 
               <polyline points="14 2 14 8 20 8" />
               <line x1="16" y1="13" x2="8" y2="13" />
               <line x1="16" y1="17" x2="8" y2="17" />
-            </svg>{' '}
-            PDF
+            </svg>{' '}PDF
           </button>
         </div>
       )}
@@ -1815,7 +1522,12 @@ function PreviewPanel({ panel, departments, checkedIds, footer, onBack, user }) 
               <div className="dept-block" key={dept.id}>
                 <DeptHeader dept={dept} />
                 {dept.doctors.map((doc) => (
-                  <DoctorEntry key={doc.id} doc={doc} accentColor={dept.color} />
+                  <DoctorEntry
+                    key={doc.id}
+                    doc={doc}
+                    accentColor={dept.color}
+                    isOffToday={offDoctorIds.has(doc.id)}
+                  />
                 ))}
               </div>
             ))}
@@ -1853,18 +1565,9 @@ function PreviewPanel({ panel, departments, checkedIds, footer, onBack, user }) 
 // ✅ ManageDoctorsView
 // ==================================================
 function ManageDoctorsView({
-  departments,
-  onAddDept,
-  onEditDept,
-  onDeleteDept,
-  onMoveDept,
-  onAddDoctor,
-  onEditDoctor,
-  onDeleteDoctor,
-  onMoveDoctor,
-  isAdmin,
-  onRefreshData,
-  onShowDoctorLink,
+  departments, onAddDept, onEditDept, onDeleteDept, onMoveDept,
+  onAddDoctor, onEditDoctor, onDeleteDoctor, onMoveDoctor,
+  isAdmin, onRefreshData, onShowDoctorLink,
 }) {
   return (
     <div className="edit-panel">
@@ -1935,36 +1638,24 @@ export default function DoctorPanelBuilder() {
 
   const isRestrictedRole = !!user && RESTRICTED_ROLES.includes(user.role);
   const canManagePanels = !isGuest && !isRestrictedRole;
-
-  // ✅ NEW — Check if logged-in user is a Doctor
-  const isDoctorLoggedIn =
-    !!user && user.designation === 'Doctor' && !!user.doctorId;
+  const isDoctorLoggedIn = !!user && user.designation === 'Doctor' && !!user.doctorId;
 
   const path = location.pathname;
-
   const bookingDoctorMatch = path.match(/^\/booking\/(.+)$/);
   const bookingDoctorId = bookingDoctorMatch ? bookingDoctorMatch[1] : null;
 
   let activeView;
-  if (path === '/') {
-    activeView = 'preview';
-  } else if (bookingDoctorId) {
-    activeView = 'booking';
-  } else {
-    activeView = path.substring(1);
-  }
+  if (path === '/') activeView = 'preview';
+  else if (bookingDoctorId) activeView = 'booking';
+  else activeView = path.substring(1);
 
   const setActiveView = (view) => {
     if (view === 'preview') navigate('/');
     else navigate(`/${view}`);
   };
 
-  // ✅ NEW: Mobile menu state
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  // ✅ NEW: Hospital branding
   const [branding, setBranding] = useState(DEFAULT_BRANDING);
-
   const [showAuth, setShowAuth] = useState(false);
   const [allUsers, setAllUsers] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -1979,15 +1670,21 @@ export default function DoctorPanelBuilder() {
   const [panelModal, setPanelModal] = useState(null);
   const [linkModalDoctor, setLinkModalDoctor] = useState(null);
   const [clearConfirm, setClearConfirm] = useState(false);
-  const [showOverrideModal, setShowOverrideModal] = useState(false); // ✅ নতুন স্টেট
+  const [showOverrideModal, setShowOverrideModal] = useState(false);
   const debounceRef = useRef(null);
   const [reloadKey, setReloadKey] = useState(0);
+
+  // ✅ One-time doctors state for EditPanel
+  const [oneTimeDoctors, setOneTimeDoctors] = useState([]);
 
   const handleLogout = () => {
     logout();
     setTimeout(() => window.location.reload(), 100);
   };
 
+  // ==================================================
+  // ✅ Load data
+  // ==================================================
   useEffect(() => {
     const loadData = async () => {
       const hid = hospitalId || 'alafiyah_main';
@@ -2055,10 +1752,7 @@ export default function DoctorPanelBuilder() {
         const params = new URLSearchParams(window.location.search);
         let targetDay = params.get('day');
         if (!targetDay) {
-          const weekDays = [
-            'রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার',
-            'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার',
-          ];
+          const weekDays = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
           targetDay = weekDays[new Date().getDay()];
         }
 
@@ -2077,7 +1771,7 @@ export default function DoctorPanelBuilder() {
   }, [hospitalId, reloadKey]);
 
   // ==================================================
-  // ✅ Load hospital branding (name + logo)
+  // ✅ Load branding
   // ==================================================
   useEffect(() => {
     if (!hospitalId) return;
@@ -2106,12 +1800,27 @@ export default function DoctorPanelBuilder() {
     };
   }, [hospitalId]);
 
+  // ==================================================
+  // ✅ Subscribe to today's one-time doctors (for EditPanel)
+  // ==================================================
+  useEffect(() => {
+    if (!hospitalId) return;
+    const today = getBDTodayString();
+    const unsub = subscribeToOneTimeDoctors(
+      hospitalId,
+      today,
+      (list) => setOneTimeDoctors(list),
+      (err) => console.warn('One-time doctors subscription error:', err)
+    );
+    return () => unsub();
+  }, [hospitalId]);
+
   // ✅ Close mobile menu on route change
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [path]);
 
-  // ✅ ESC key + body scroll lock
+  // ✅ ESC + body scroll lock
   useEffect(() => {
     if (!mobileMenuOpen) return;
     const onKey = (e) => {
@@ -2138,8 +1847,7 @@ export default function DoctorPanelBuilder() {
         const usersList = usersSnapshot.docs.map((doc) => {
           const data = doc.data();
           return {
-            id: doc.id,
-            ...data,
+            id: doc.id, ...data,
             name: data.name || data.displayName || 'নাম নেই',
             designation: data.designation || data.role || '',
           };
@@ -2199,27 +1907,19 @@ export default function DoctorPanelBuilder() {
 
   const activePanel =
     panels.find((p) => p.id === activePanelId) ||
-    (panels.length > 0
-      ? panels[0]
-      : {
-          id: 'empty',
-          name: 'কোনো প্যানেল নেই',
-          title: 'প্যানেল তৈরি করুন',
-          activeDoctorIds: [],
-          departmentOrder: [],
-        });
+    (panels.length > 0 ? panels[0] : {
+      id: 'empty', name: 'কোনো প্যানেল নেই', title: 'প্যানেল তৈরি করুন',
+      activeDoctorIds: [], departmentOrder: [],
+    });
 
   const allDoctorIds = departments.flatMap((d) => d.doctors?.map((doc) => doc.id) || []);
-  const allChecked =
-    allDoctorIds.length > 0 && allDoctorIds.every((id) => checkedIds.has(id));
+  const allChecked = allDoctorIds.length > 0 && allDoctorIds.every((id) => checkedIds.has(id));
 
   const handleApprove = async (userId) => {
     if (!hospitalId) return;
     try {
       await updateDoc(doc(db, 'hospitals', hospitalId, 'users', userId), { approved: true });
-      setAllUsers((users) =>
-        users.map((u) => (u.id === userId ? { ...u, approved: true } : u))
-      );
+      setAllUsers((users) => users.map((u) => (u.id === userId ? { ...u, approved: true } : u)));
     } catch (e) {
       console.error(e);
     }
@@ -2229,9 +1929,7 @@ export default function DoctorPanelBuilder() {
     if (!hospitalId) return;
     try {
       await updateDoc(doc(db, 'hospitals', hospitalId, 'users', userId), { role });
-      setAllUsers((users) =>
-        users.map((u) => (u.id === userId ? { ...u, role } : u))
-      );
+      setAllUsers((users) => users.map((u) => (u.id === userId ? { ...u, role } : u)));
     } catch (e) {
       console.error(e);
     }
@@ -2254,17 +1952,13 @@ export default function DoctorPanelBuilder() {
 
     if (immediate) {
       setSaveStatus('saving');
-      savePanelToFirebase(updated)
-        .then(() => setSaveStatus('saved'))
-        .catch(() => setSaveStatus('error'));
+      savePanelToFirebase(updated).then(() => setSaveStatus('saved')).catch(() => setSaveStatus('error'));
       setTimeout(() => setSaveStatus('idle'), 1500);
     } else {
       setSaveStatus('saving');
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
-        savePanelToFirebase(updated)
-          .then(() => setSaveStatus('saved'))
-          .catch(() => setSaveStatus('error'));
+        savePanelToFirebase(updated).then(() => setSaveStatus('saved')).catch(() => setSaveStatus('error'));
         setTimeout(() => setSaveStatus('idle'), 1500);
       }, 700);
     }
@@ -2339,10 +2033,9 @@ export default function DoctorPanelBuilder() {
   };
 
   const handleMoveDept = (deptId, dir) => {
-    const currentOrder =
-      activePanel.departmentOrder && activePanel.departmentOrder.length > 0
-        ? [...activePanel.departmentOrder]
-        : departments.map((d) => d.id);
+    const currentOrder = activePanel.departmentOrder && activePanel.departmentOrder.length > 0
+      ? [...activePanel.departmentOrder]
+      : departments.map((d) => d.id);
 
     const idx = currentOrder.indexOf(deptId);
     if (idx === -1) return;
@@ -2523,52 +2216,26 @@ export default function DoctorPanelBuilder() {
   };
 
   const getIsAuthorized = () => {
-    if (
-      path === '/' ||
-      path === '/booking' ||
-      path === '/display' ||
-      path === '/preview' ||
-      path === '/login'
-    )
-      return true;
-
-    // ✅ MOU রাউট অনুমোদন (শুধু লগইন করা ইউজারের জন্য)
-    if (path === '/mou' || path.startsWith('/mou/')) {
-      return !!user; // লগইন না থাকলে 404 → login এ redirect হবে
-    }
-
+    if (path === '/' || path === '/booking' || path === '/display' || path === '/preview' || path === '/login') return true;
+    if (path === '/mou' || path.startsWith('/mou/')) return !!user;
     if (bookingDoctorId) return true;
     if (path === '/edit' && (isEditor || isModerator || isSubAdmin || isAdmin)) return true;
     if (path === '/doctors' && (isSubAdmin || isAdmin)) return true;
-    if (path === '/dashboard' && (isEditor || isModerator || isSubAdmin || isAdmin))
-      return true;
+    if (path === '/dashboard' && (isEditor || isModerator || isSubAdmin || isAdmin)) return true;
     if (path === '/admin' && isAdmin) return true;
     return false;
   };
 
   if (authLoading) {
-    return (
-      <>
-        <style>{CSS}</style>
-        <AppShellSkeleton />
-      </>
-    );
+    return (<><style>{CSS}</style><AppShellSkeleton /></>);
   }
 
   if (loading) {
-    return (
-      <>
-        <style>{CSS}</style>
-        <AppShellSkeleton />
-      </>
-    );
+    return (<><style>{CSS}</style><AppShellSkeleton /></>);
   }
 
   if (path === '/login') {
-    if (user) {
-      return <Navigate to="/my-bookings" replace />;
-    }
-
+    if (user) return <Navigate to="/my-bookings" replace />;
     return (
       <div className="dpb">
         <style>{CSS}</style>
@@ -2605,7 +2272,7 @@ export default function DoctorPanelBuilder() {
           onGoMou={() => navigate('/mou')}
           mobileMenuOpen={mobileMenuOpen}
           setMobileMenuOpen={setMobileMenuOpen}
-          onShowOverrideModal={() => setShowOverrideModal(true)} // ✅ নতুন প্রপ পাস করা হলো
+          onShowOverrideModal={() => setShowOverrideModal(true)}
         />
       )}
 
@@ -2614,16 +2281,8 @@ export default function DoctorPanelBuilder() {
           panels={panels}
           activePanelId={activePanelId}
           onSwitch={handleSwitchPanel}
-          onAdd={
-            canManagePanels
-              ? () => setPanelModal({ mode: 'add', departments })
-              : () => {}
-          }
-          onRename={
-            canManagePanels
-              ? (panel) => setPanelModal({ mode: 'rename', panel })
-              : () => {}
-          }
+          onAdd={canManagePanels ? () => setPanelModal({ mode: 'add', departments }) : () => {}}
+          onRename={canManagePanels ? (panel) => setPanelModal({ mode: 'rename', panel }) : () => {}}
           onDelete={isAdmin ? handleDeletePanel : () => {}}
           isReadOnly={isGuest}
           canManagePanels={canManagePanels}
@@ -2679,6 +2338,8 @@ export default function DoctorPanelBuilder() {
           onClearAll={() => {}}
           onGoPreview={() => setActiveView('preview')}
           onShowDoctorLink={handleShowDoctorLink}
+          oneTimeDoctors={oneTimeDoctors}
+          onShowOverrideModal={() => setShowOverrideModal(true)}
         />
       )}
 
@@ -2712,7 +2373,6 @@ export default function DoctorPanelBuilder() {
         <AdminDashboard user={user} />
       )}
 
-      {/* ✅ MOU View — MoUClientManager (Admin only) */}
       {activeView === 'mou' && (
         <Suspense
           fallback={
@@ -2762,7 +2422,6 @@ export default function DoctorPanelBuilder() {
         />
       )}
 
-      {/* ✅ Chamber Override Modal */}
       {showOverrideModal && (
         <DoctorOverrideModal
           departments={departments}

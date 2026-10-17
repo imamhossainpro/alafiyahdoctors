@@ -2,22 +2,20 @@
 // ==================================================
 // 📅 BookingSystem — Booking Form + Redirect to Success
 // ==================================================
-// ✅ Only ONE name field — English letters only
+// ✅ Chamber OFF — disabled doctor + next date suggestion
+// ✅ One-time doctor support (per-date only)
 // ✅ Direct doctor link support (preselectedDoctorId)
 // ✅ Date picker: only enabled on doctor's chamber days
 // ✅ Doctor image / User icon fallback in profile card
 // ✅ Doctor quals + workplace + specialty shown
 // ✅ Referral source NOT auto-selected
 // ✅ GA4 booking_complete event
-// ✅ Meta Pixel — Schedule + CompleteRegistration with Advanced Matching
+// ✅ Meta Pixel — Schedule + CompleteRegistration
 // ✅ Mobile stored in international format (8801XXXXXXXXX)
 // ✅ Doctor image lightbox (click to view full size)
 // ✅ Location tracking (GPS + City + Distance + Device)
-// ✅ Patient-side location details popup
 // ✅ Booking summary shows AGE
 // ✅ Redirect to /booking-success/:appointmentId on submit
-// ✅ Location-fail warning REMOVED (only show success badge)
-// ✅ Chamber OFF logic + One-time doctor inclusion
 // ==================================================
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -55,6 +53,7 @@ import {
   X,
   Info,
   Ban,
+  CalendarX2,
 } from 'lucide-react';
 
 import {
@@ -62,7 +61,11 @@ import {
   buildBookingLocationPayload,
 } from './utils/locationTracker';
 
+// ==================================================
+// ✅ Constants
+// ==================================================
 const DEFAULT_HOSPITAL_ID = 'alafiyah_main';
+
 const BANGLA_DAYS = [
   'রবিবার',
   'সোমবার',
@@ -72,17 +75,23 @@ const BANGLA_DAYS = [
   'শুক্রবার',
   'শনিবার',
 ];
-const MAX_DAYS_AHEAD = 7;
 
+const MAX_DAYS_AHEAD = 7;
 const ENGLISH_NAME_REGEX = /^[A-Za-z\s.\-']*$/;
 
-const getTodayString = () => {
-  const date = new Date();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+// ==================================================
+// ✅ BD timezone helpers
+// ==================================================
+const getBDTodayString = () => {
+  const now = new Date();
+  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+  const bd = new Date(utc + 6 * 60 * 60000);
+  return `${bd.getFullYear()}-${String(bd.getMonth() + 1).padStart(2, '0')}-${String(
+    bd.getDate()
+  ).padStart(2, '0')}`;
 };
+
+const getTodayString = getBDTodayString;
 
 const toEnglishDigits = (str) => {
   const banglaDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
@@ -183,7 +192,9 @@ function CustomCalendar({ selectedDate, onDateChange, allowedDays }) {
   );
 }
 
-// ---------- CSS ----------
+// ==================================================
+// ✅ CSS
+// ==================================================
 const BookingCSS = `
   .booking-wrapper { max-width: 650px; margin: 40px auto; padding: 20px; font-family: 'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif; background: #f4f7f6; border-radius: 20px; }
   .booking-card { background: #fff; border-radius: 16px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06); padding: 30px; border: 1px solid #e2e8f0; min-height: 500px; position: relative; }
@@ -307,8 +318,15 @@ const BookingCSS = `
   }
 `;
 
-// ---------- মূল BookingSystem ----------
-export default function BookingSystem({ departments, panels, preselectedDoctorId, onBack }) {
+// ==================================================
+// ✅ Main Component
+// ==================================================
+export default function BookingSystem({
+  departments,
+  panels,
+  preselectedDoctorId,
+  onBack,
+}) {
   const navigate = useNavigate();
   const { currentHospital } = useHospital();
   const hospitalId = currentHospital?.id || DEFAULT_HOSPITAL_ID;
@@ -316,6 +334,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
 
   const isDirectBooking = !!preselectedDoctorId;
 
+  // Form state
   const [formData, setFormData] = useState({
     name: '',
     nameEn: '',
@@ -336,20 +355,21 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
 
-  // ✅ Doctor Image Lightbox state
+  // Lightbox + location popup
   const [showImageLightbox, setShowImageLightbox] = useState(false);
-
-  // ✅ Patient-side Location Details popup state
   const [showLocationDetails, setShowLocationDetails] = useState(false);
 
-  // ✅ Booking Location state
+  // Location
   const [bookingLocation, setBookingLocation] = useState(null);
   const [locationStatus, setLocationStatus] = useState('idle');
 
-  // ✅ Chamber Off & Overrides state
+  // ✅ Chamber OFF + one-time doctors
   const [offDoctorIds, setOffDoctorIds] = useState(new Set());
   const [chamberOffAlert, setChamberOffAlert] = useState(null);
 
+  // ==================================================
+  // ✅ Doctor's allowed days (from panels)
+  // ==================================================
   const doctorAllowedDays = useMemo(() => {
     if (!preselectedDoctorId || !panels || panels.length === 0) return [];
 
@@ -364,7 +384,9 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
     return allowed;
   }, [preselectedDoctorId, panels]);
 
+  // ==================================================
   // ✅ Auto-capture location on page load
+  // ==================================================
   useEffect(() => {
     let mounted = true;
 
@@ -395,7 +417,9 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
     };
   }, []);
 
-  // ✅ ESC key দিয়ে সব modal বন্ধ
+  // ==================================================
+  // ✅ ESC closes modals
+  // ==================================================
   useEffect(() => {
     const onKeyDown = (e) => {
       if (e.key === 'Escape') {
@@ -407,15 +431,30 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [showImageLightbox, showLocationDetails]);
 
-  // ✅ Subscribe to Off Doctors
+  // ==================================================
+  // ✅ Subscribe to Chamber OFF doctors
+  // ==================================================
   useEffect(() => {
     if (!hospitalId || !selectedDate) return;
-    const unsub = subscribeToOffDoctors(hospitalId, selectedDate, (ids) => {
-      setOffDoctorIds(ids);
-    });
+
+    const unsub = subscribeToOffDoctors(
+      hospitalId,
+      selectedDate,
+      (ids) => {
+        console.log('🔍 [BookingSystem] Off doctors for', selectedDate, ':', [...ids]);
+        setOffDoctorIds(ids);
+      },
+      (err) => {
+        console.error('❌ [BookingSystem] Off doctors subscription error:', err);
+      }
+    );
+
     return () => unsub();
   }, [hospitalId, selectedDate]);
 
+  // ==================================================
+  // ✅ Direct booking — auto-select doctor
+  // ==================================================
   useEffect(() => {
     if (!preselectedDoctorId || !departments || departments.length === 0) return;
 
@@ -448,38 +487,66 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
     }
   }, [preselectedDoctorId, departments]);
 
-  // ✅ Direct booking-এ ডাক্তার off হলে auto-suggest next allowed date
+  // ==================================================
+  // ✅ Direct booking — suggest next date if OFF today
+  // ==================================================
   useEffect(() => {
-    if (!isDirectBooking || !selectedDoctor) { setChamberOffAlert(null); return; }
-    if (!offDoctorIds.has(selectedDoctor.id)) { setChamberOffAlert(null); return; }
+    if (!isDirectBooking || !selectedDoctor) {
+      setChamberOffAlert(null);
+      return;
+    }
+    if (!offDoctorIds.has(selectedDoctor.id)) {
+      setChamberOffAlert(null);
+      return;
+    }
 
     let cancelled = false;
     (async () => {
       const today = new Date();
       let suggested = null;
+
       for (let i = 1; i <= MAX_DAYS_AHEAD; i++) {
         const d = new Date(today);
         d.setDate(today.getDate() + i);
         const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         const dayName = BANGLA_DAYS[d.getDay()];
+
+        // Skip if doctor doesn't chamber on this day
         const allowed = doctorAllowedDays.length === 0 || doctorAllowedDays.includes(dayName);
         if (!allowed) continue;
+
         try {
           const { offIds } = await getOverridesForDate(hospitalId, dateStr);
-          if (!offIds.has(selectedDoctor.id)) { suggested = dateStr; break; }
-        } catch { suggested = dateStr; break; }
+          if (!offIds.has(selectedDoctor.id)) {
+            suggested = dateStr;
+            break;
+          }
+        } catch {
+          suggested = dateStr;
+          break;
+        }
       }
-      if (!cancelled) setChamberOffAlert({ doctor: selectedDoctor, suggestedDate: suggested });
+
+      if (!cancelled) {
+        setChamberOffAlert({
+          doctor: selectedDoctor,
+          suggestedDate: suggested,
+        });
+      }
     })();
-    return () => { cancelled = true; };
+
+    return () => {
+      cancelled = true;
+    };
   }, [isDirectBooking, selectedDoctor, offDoctorIds, hospitalId, doctorAllowedDays]);
 
+  // ==================================================
+  // ✅ Direct booking — auto-move to allowed date
+  // ==================================================
   useEffect(() => {
     if (!isDirectBooking || doctorAllowedDays.length === 0) return;
 
     const today = new Date();
-    const todayStr = getTodayString();
-
     const currentDateObj = new Date(selectedDate + 'T00:00:00');
     const currentDayName = BANGLA_DAYS[currentDateObj.getDay()];
     const isCurrentAllowed = doctorAllowedDays.includes(currentDayName);
@@ -501,9 +568,11 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDirectBooking, doctorAllowedDays.join(',')]);
 
+  // ==================================================
+  // ✅ Load available doctors for selected date
+  // ==================================================
   useEffect(() => {
     if (isDirectBooking) return;
-
     if (!panels || panels.length === 0) {
       setAvailableDoctors([]);
       return;
@@ -514,15 +583,17 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
     }
 
     const loadDoctors = async () => {
-      const dateObj = new Date(selectedDate);
+      const dateObj = new Date(selectedDate + 'T00:00:00');
       const englishDay = dateObj.getDay();
       const dayName = BANGLA_DAYS[englishDay];
       setSelectedDayName(dayName);
 
       const dayPanel = panels.find((p) => p.name === dayName);
       const activeIds = dayPanel ? (dayPanel.activeDoctorIds || []) : [];
-      
+
       let filteredDocs = [];
+
+      // Regular doctors from panel
       departments.forEach((dept) => {
         const deptDoctors = dept.doctors || [];
         deptDoctors.forEach((doc) => {
@@ -532,16 +603,23 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
         });
       });
 
-      // Load One-Time Doctors for this date
+      // ✅ One-time doctors for this specific date
       try {
         const oneTimeDocs = await getOneTimeDoctorsForDate(hospitalId, selectedDate);
         oneTimeDocs.forEach((entry) => {
-          if (entry.doctorSnapshot && !filteredDocs.find(d => d.id === entry.doctorId)) {
-            filteredDocs.push({ ...entry.doctorSnapshot, deptName: entry.doctorSnapshot.deptName || 'One-time' });
+          if (entry.doctorSnapshot && !filteredDocs.find((d) => d.id === entry.doctorId)) {
+            filteredDocs.push({
+              ...entry.doctorSnapshot,
+              deptName: entry.doctorSnapshot.deptName || 'One-time',
+              isOneTime: true,
+            });
           }
         });
+        if (oneTimeDocs.length > 0) {
+          console.log(`📋 [BookingSystem] +${oneTimeDocs.length} one-time doctors for ${selectedDate}`);
+        }
       } catch (err) {
-        console.warn('Error loading one-time docs:', err);
+        console.warn('⚠️ One-time doctors load error:', err);
       }
 
       setAvailableDoctors(filteredDocs);
@@ -551,13 +629,17 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
     loadDoctors();
   }, [selectedDate, panels, departments, isDirectBooking, hospitalId]);
 
+  // ==================================================
+  // ✅ Update selected day name
+  // ==================================================
   useEffect(() => {
-    if (!isDirectBooking) return;
     const dateObj = new Date(selectedDate + 'T00:00:00');
-    const englishDay = dateObj.getDay();
-    setSelectedDayName(BANGLA_DAYS[englishDay]);
-  }, [selectedDate, isDirectBooking]);
+    setSelectedDayName(BANGLA_DAYS[dateObj.getDay()]);
+  }, [selectedDate]);
 
+  // ==================================================
+  // ✅ Input handlers
+  // ==================================================
   const handleNameKeyDown = (e) => {
     if (
       e.key === 'Backspace' ||
@@ -605,32 +687,47 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
     setSuccessMsg('');
   };
 
+  // ==================================================
+  // ✅ Handle doctor selection (block if OFF)
+  // ==================================================
+  const handleDoctorSelect = (doc) => {
+    if (offDoctorIds.has(doc.id)) {
+      console.log('⚠️ [BookingSystem] Cannot select OFF doctor:', doc.name);
+      return;
+    }
+    setSelectedDoctor(doc);
+  };
+
+  // ==================================================
+  // ✅ Submit
+  // ==================================================
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setSuccessMsg('');
+
     try {
+      // Validate
       if (!formData.nameEn.trim()) throw new Error('রোগীর নাম লিখুন');
       if (!/^[A-Za-z\s.\-']+$/.test(formData.nameEn.trim())) {
         throw new Error('রোগীর নাম শুধু ইংরেজি অক্ষরে লিখুন');
       }
       if (!formData.age.trim()) throw new Error('বয়স লিখুন');
-
       if (!formData.mobile.trim()) throw new Error('মোবাইল নম্বর লিখুন');
       if (formData.mobile.length !== 13 || !formData.mobile.startsWith('880')) {
-        throw new Error(
-          'সঠিক ১১ digit মোবাইল নম্বর লিখুন (যেমন: 01889885094)'
-        );
+        throw new Error('সঠিক ১১ digit মোবাইল নম্বর লিখুন (যেমন: 01889885094)');
       }
-
       if (!selectedDoctor) throw new Error('ডাক্তার নির্বাচন করুন');
       if (!selectedDate) throw new Error('তারিখ নির্বাচন করুন');
 
-      // ✅ Chamber OFF Check
+      // ✅ Chamber OFF guard
       if (offDoctorIds.has(selectedDoctor.id)) {
-        throw new Error('এই ডাক্তার এই তারিখে চেম্বার বন্ধ রেখেছেন। অন্য তারিখ নির্বাচন করুন।');
+        throw new Error(
+          'এই ডাক্তার এই তারিখে চেম্বার বন্ধ রেখেছেন। অনুগ্রহ করে অন্য তারিখ নির্বাচন করুন।'
+        );
       }
 
+      // ✅ Direct booking — check allowed day
       if (isDirectBooking && doctorAllowedDays.length > 0) {
         const dateObj = new Date(selectedDate + 'T00:00:00');
         const dayName = BANGLA_DAYS[dateObj.getDay()];
@@ -645,6 +742,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
 
       const patientName = formData.nameEn.trim();
 
+      // 1) Find or create patient
       let patient = await findPatientByMobile(hospitalId, formData.mobile);
       let patientId;
       let isNewPatient = true;
@@ -675,6 +773,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
         });
       }
 
+      // 2) Serial number counter
       const bookingDateStr = selectedDate;
       const counterKey = `${selectedDoctor.id}_${bookingDateStr}`;
       const counterRef = doc(db, 'hospitals', hospitalId, 'counters', counterKey);
@@ -705,9 +804,12 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
         });
       }
 
-      const finalReferralSource = formData.referralSource ||
+      // 3) Referral source
+      const finalReferralSource =
+        formData.referralSource ||
         (isDirectBooking ? 'Doctor Link' : 'Walk-in / নিজে এসেছেন');
 
+      // 4) Appointment doc
       const appointmentData = {
         ...formData,
         name: patientName,
@@ -734,8 +836,9 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
         isRead: false,
         hospitalId,
         fromDoctorLink: isDirectBooking,
+        isOneTimeBooking: !!selectedDoctor.isOneTime,
 
-        // ✅ Booking Location data (with manual address fallback)
+        // Location payload
         ...buildBookingLocationPayload(bookingLocation, formData.address),
       };
 
@@ -744,13 +847,19 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
         appointmentData
       );
 
+      // 5) Add location record if manual address
       if (formData.address && formData.address.trim()) {
-        await addLocationFromBooking(hospitalId, formData.address, docRef.id);
+        try {
+          await addLocationFromBooking(hospitalId, formData.address, docRef.id);
+        } catch (locErr) {
+          console.warn('⚠️ addLocationFromBooking failed (non-critical):', locErr);
+        }
       }
 
+      // 6) QR generate (non-critical)
       try {
-        const qrImage = await generateQRCode(docRef.id);
-        if (qrImage) console.log('✅ QR generated');
+        await generateQRCode(hospitalId, docRef.id);
+        console.log('✅ QR generated');
       } catch (qrErr) {
         console.warn('QR generation failed (non-critical):', qrErr);
       }
@@ -759,7 +868,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
         'আপনার সিরিয়ালটি সফলভাবে কনফার্ম করা হয়েছে। চেক-ইন করতে QR কোড ব্যবহার করুন।'
       );
 
-      // ✅ GA4 booking_complete event
+      // 7) GA4 event
       trackEvent('booking_complete', {
         doctor_id: selectedDoctor.id,
         doctor_name: selectedDoctor.name,
@@ -768,10 +877,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
         referral_source: finalReferralSource,
       });
 
-      // ==================================================
-      // ✅ Meta Pixel — Schedule + CompleteRegistration
-      //    with Advanced Matching (name + phone)
-      // ==================================================
+      // 8) Meta Pixel — Schedule
       trackMetaEvent(
         'Schedule',
         {
@@ -788,6 +894,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
         }
       );
 
+      // 9) Meta Pixel — CompleteRegistration (new patient)
       if (isNewPatient) {
         trackMetaEvent(
           'CompleteRegistration',
@@ -803,7 +910,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
         );
       }
 
-      // ✅ Redirect to Thank You page
+      // 10) Redirect to success page
       setTimeout(() => {
         navigate(`/booking-success/${docRef.id}`, {
           state: {
@@ -820,35 +927,99 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
     }
   };
 
+  // ==================================================
+  // ✅ Filtered doctors for dropdown
+  // ==================================================
   const filteredDoctors = selectedDoctor
     ? availableDoctors.filter((doc) => doc.id === selectedDoctor.id)
     : availableDoctors.filter(
-        (doc) =>
-          !formData.departmentId || doc.deptId === formData.departmentId
+        (doc) => !formData.departmentId || doc.deptId === formData.departmentId
       );
 
   const allowedDaysText = doctorAllowedDays.join(', ');
 
+  // ==================================================
+  // ✅ Render
+  // ==================================================
   return (
     <div className="booking-wrapper">
       <style>{BookingCSS}</style>
       <div className="booking-card">
+        {/* ✅ Back button (mobile) */}
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              marginBottom: 16,
+              padding: '8px 14px',
+              background: '#f1f5f9',
+              border: 'none',
+              borderRadius: 8,
+              color: '#475569',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            <ArrowLeft size={14} />
+            ফিরে যান
+          </button>
+        )}
+
         <form onSubmit={handleSubmit}>
           <h2 className="booking-title">রোগীর ডাক্তার বুকিং ফর্ম</h2>
 
-          {/* ✅ Chamber OFF Alert (Direct Link) */}
+          {/* ✅ Chamber OFF alert (direct booking) */}
           {isDirectBooking && selectedDoctor && chamberOffAlert && (
-            <div style={{ background: '#fef2f2', border: '2px solid #fca5a5', borderRadius: 12, padding: '16px 20px', marginBottom: 20, color: '#991b1b' }}>
+            <div
+              style={{
+                background: '#fef2f2',
+                border: '2px solid #fca5a5',
+                borderRadius: 12,
+                padding: '16px 20px',
+                marginBottom: 20,
+                color: '#991b1b',
+              }}
+            >
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                 <Ban size={22} style={{ flexShrink: 0, marginTop: 2 }} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 6 }}>আজকে ডাক্তার চেম্বার অফ রেখেছেন</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 6 }}>
+                    আজকে ডাক্তার চেম্বার অফ রেখেছেন
+                  </div>
                   <div style={{ fontSize: 13.5, lineHeight: 1.6, marginBottom: 12 }}>
                     আপনি চাইলে পরবর্তী চেম্বারে দিন সিরিয়াল নিতে পারবেন।
-                    {chamberOffAlert.suggestedDate && <> পরবর্তী উপলব্ধ তারিখ: <strong>{chamberOffAlert.suggestedDate}</strong></>}
+                    {chamberOffAlert.suggestedDate && (
+                      <>
+                        {' '}পরবর্তী উপলব্ধ তারিখ:{' '}
+                        <strong>{chamberOffAlert.suggestedDate}</strong>
+                      </>
+                    )}
                   </div>
                   {chamberOffAlert.suggestedDate && (
-                    <button type="button" onClick={() => { setSelectedDate(chamberOffAlert.suggestedDate); setChamberOffAlert(null); }} style={{ padding: '9px 18px', background: '#1c5fa8', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedDate(chamberOffAlert.suggestedDate);
+                        setChamberOffAlert(null);
+                      }}
+                      style={{
+                        padding: '9px 18px',
+                        background: '#1c5fa8',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: 8,
+                        fontSize: 13.5,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                      }}
+                    >
                       {chamberOffAlert.suggestedDate} তারিখে সিরিয়াল নিন →
                     </button>
                   )}
@@ -857,112 +1028,79 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
             </div>
           )}
 
-          {/* ✅ Location Status Badge — only show "loading" and "captured" */}
+          {/* ✅ Location status badge */}
           {locationStatus !== 'idle' && (
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
               {locationStatus === 'loading' && (
                 <div className="location-status-badge loading">
                   <Loader2 size={13} className="spin" />
-                  লোড হচ্ছে...
+                  লোকেশন লোড হচ্ছে...
                 </div>
               )}
-
               {locationStatus === 'captured' && bookingLocation?.geo && (
                 <button
                   type="button"
                   className="location-status-badge captured clickable"
                   onClick={() => setShowLocationDetails(true)}
                   title="বিস্তারিত দেখতে ক্লিক করুন"
-                  style={{
-                    cursor: 'pointer',
-                    border: 'none',
-                    fontFamily: 'inherit',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    transition: 'all 0.2s ease',
-                    padding: '6px 12px',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'scale(1.02)';
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(22, 163, 74, 0.25)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'scale(1)';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
                 >
                   <MapPin size={13} />
                   <span>{bookingLocation.summary}</span>
-
-                  {bookingLocation.distance?.distanceText && (
-                    <span style={{ marginLeft: '2px' }}>
-                      · 🚗 {bookingLocation.distance.distanceText}
-                    </span>
-                  )}
-
+                  {bookingLocation.distance?.distanceText &&
+                    bookingLocation.distance.distanceText !== '—' && (
+                      <span style={{ marginLeft: 2 }}>
+                        · 🚗 {bookingLocation.distance.distanceText}
+                      </span>
+                    )}
                   <span
                     style={{
-                      marginLeft: '8px',
+                      marginLeft: 8,
                       padding: '3px 10px',
                       background: '#166534',
                       color: '#fff',
-                      borderRadius: '10px',
+                      borderRadius: 10,
                       fontSize: '10.5px',
-                      fontWeight: '700',
-                      letterSpacing: '0.3px',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '3px',
-                      boxShadow: '0 1px 3px rgba(22, 101, 52, 0.3)',
+                      fontWeight: 700,
                     }}
                   >
-                    <Info size={10} strokeWidth={2.5} />
                     বিস্তারিত
                   </span>
                 </button>
               )}
-
-              {/* ❌ 'failed' block removed — no warning shown */}
             </div>
           )}
 
+          {/* ✅ Doctor profile card (direct booking) */}
           {isDirectBooking && selectedDoctor && (
             <div className="doctor-profile-card">
               <div
-                className={`doctor-profile-avatar ${selectedDoctor.imageUrl ? 'clickable' : ''}`}
+                className={`doctor-profile-avatar ${
+                  selectedDoctor.imageUrl ? 'clickable' : ''
+                }`}
                 onClick={() => {
                   if (selectedDoctor.imageUrl) setShowImageLightbox(true);
                 }}
                 title={selectedDoctor.imageUrl ? 'ছবিতে ক্লিক করে বড় দেখুন' : ''}
               >
                 {selectedDoctor.imageUrl ? (
-                  <img
-                    src={selectedDoctor.imageUrl}
-                    alt={selectedDoctor.name}
-                  />
+                  <img src={selectedDoctor.imageUrl} alt={selectedDoctor.name} />
                 ) : (
                   <User size={40} strokeWidth={1.5} color="#ffffff" />
                 )}
               </div>
               <div className="doctor-profile-name">{selectedDoctor.name}</div>
-
               {selectedDoctor.specialty && (
                 <div className="doctor-profile-specialty">{selectedDoctor.specialty}</div>
               )}
-
               {selectedDoctor.quals && (
                 <div className="doctor-profile-quals">{selectedDoctor.quals}</div>
               )}
-
               {selectedDoctor.workplace && (
                 <div className="doctor-profile-workplace">{selectedDoctor.workplace}</div>
               )}
-
               {selectedDoctor.deptName && (
                 <div className="doctor-profile-dept">{selectedDoctor.deptName}</div>
               )}
-
               {selectedDoctor.timeSlots && selectedDoctor.timeSlots.length > 0 && (
                 <div className="doctor-profile-times">
                   {selectedDoctor.timeSlots.map((slot, idx) => (
@@ -975,6 +1113,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
             </div>
           )}
 
+          {/* ✅ Doctor allowed days hint (direct booking) */}
           {isDirectBooking && doctorAllowedDays.length > 0 && (
             <div className="allowed-days-hint">
               <CalendarDays size={16} />
@@ -988,6 +1127,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
             </div>
           )}
 
+          {/* ==================== DATE SELECTION ==================== */}
           <div className="form-section">
             <div className="section-title">
               <CalendarDays size={18} /> বুকিং তারিখ নির্বাচন
@@ -999,17 +1139,15 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
                 allowedDays={isDirectBooking ? doctorAllowedDays : null}
               />
               {selectedDayName && (
-                <span className="day-badge">
-                  সপ্তাহের দিন: {selectedDayName}
-                </span>
+                <span className="day-badge">সপ্তাহের দিন: {selectedDayName}</span>
               )}
             </div>
           </div>
 
+          {/* ==================== PATIENT INFO ==================== */}
           <div className="form-section">
             <div className="section-title">
-              <User size={18} /> রোগীর তথ্য{' '}
-              <span className="required-asterisk">*</span>
+              <User size={18} /> রোগীর তথ্য <span className="required-asterisk">*</span>
             </div>
 
             <div className="form-group">
@@ -1035,8 +1173,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
 
             <div className="form-group">
               <label>
-                বয়স (বাংলা বা ইংরেজি সংখ্যায়){' '}
-                <span className="required-asterisk">*</span>
+                বয়স (বাংলা বা ইংরেজি সংখ্যায়) <span className="required-asterisk">*</span>
               </label>
               <input
                 type="text"
@@ -1051,9 +1188,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
 
             <BangladeshMobileInput
               value={formData.mobile}
-              onChange={(val) =>
-                setFormData((prev) => ({ ...prev, mobile: val }))
-              }
+              onChange={(val) => setFormData((prev) => ({ ...prev, mobile: val }))}
               label="মোবাইল নম্বর"
               required={true}
               placeholder="মোবাইল নম্বর লিখুন"
@@ -1076,6 +1211,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
                 <option value="অন্যান্য">অন্যান্য</option>
               </select>
             </div>
+
             <div className="form-group">
               <label>বর্তমান ঠিকানা (ঐচ্ছিক)</label>
               <textarea
@@ -1088,6 +1224,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
             </div>
           </div>
 
+          {/* ==================== REFERRAL ==================== */}
           <div className="form-section">
             <div className="section-title">
               <MapPin size={18} /> রেফারেল তথ্য (ঐচ্ছিক)
@@ -1111,6 +1248,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
                 <option value="অন্যান্য">অন্যান্য</option>
               </select>
             </div>
+
             {formData.referralSource === 'Refer Doctor' && (
               <div className="conditional-field">
                 <div className="form-group" style={{ marginBottom: 0 }}>
@@ -1126,6 +1264,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
                 </div>
               </div>
             )}
+
             {formData.referralSource === 'অন্যান্য' && (
               <div className="conditional-field">
                 <div className="form-group" style={{ marginBottom: 0 }}>
@@ -1136,13 +1275,14 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
                     name="otherReferralNote"
                     value={formData.otherReferralNote}
                     onChange={handleChange}
-                    placeholder="যেমনঃ ফেসবুক গ্রুপ, মাইক্রোব্লগ, পরিচিতজন ইত্যাদি"
+                    placeholder="যেমনঃ ফেসবুক গ্রুপ, মাইক্রোব্লগ..."
                   />
                 </div>
               </div>
             )}
           </div>
 
+          {/* ==================== DOCTOR SELECTION ==================== */}
           {!isDirectBooking && (
             <div className="form-section">
               <div className="section-title">
@@ -1206,13 +1346,43 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
                       return (
                         <div
                           key={doc.id}
-                          className={`doctor-option ${selectedDoctor?.id === doc.id ? 'selected' : ''} ${isOff ? 'is-off' : ''}`}
-                          onClick={() => !isOff && setSelectedDoctor(doc)}
+                          className={`doctor-option ${
+                            selectedDoctor?.id === doc.id ? 'selected' : ''
+                          } ${isOff ? 'is-off' : ''}`}
+                          onClick={() => handleDoctorSelect(doc)}
                         >
                           <div>
                             <div className="doctor-name">
                               {doc.name}
-                              {isOff && <span style={{ marginLeft: 8, fontSize: 11, padding: '2px 8px', background: '#dc2626', color: '#fff', borderRadius: 10 }}>চেম্বার অফ</span>}
+                              {doc.isOneTime && (
+                                <span
+                                  style={{
+                                    marginLeft: 8,
+                                    fontSize: 10,
+                                    padding: '2px 8px',
+                                    background: '#dbeafe',
+                                    color: '#1e40af',
+                                    borderRadius: 10,
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  এই দিনে
+                                </span>
+                              )}
+                              {isOff && (
+                                <span
+                                  style={{
+                                    marginLeft: 8,
+                                    fontSize: 11,
+                                    padding: '2px 8px',
+                                    background: '#dc2626',
+                                    color: '#fff',
+                                    borderRadius: 10,
+                                  }}
+                                >
+                                  চেম্বার অফ
+                                </span>
+                              )}
                             </div>
                             <div className="doctor-details">
                               {doc.specialty || doc.quals || doc.deptName}
@@ -1226,6 +1396,25 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
                                 ))}
                               </div>
                             )}
+                            {isOff && (
+                              <div
+                                style={{
+                                  marginTop: 6,
+                                  padding: '6px 10px',
+                                  background: '#fef2f2',
+                                  border: '1px solid #fca5a5',
+                                  borderRadius: 8,
+                                  fontSize: 11,
+                                  color: '#991b1b',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                }}
+                              >
+                                <Ban size={11} />
+                                আজ চেম্বার বন্ধ — পরবর্তী দিনে সিরিয়াল নিন
+                              </div>
+                            )}
                           </div>
                           {selectedDoctor?.id === doc.id && !isOff && (
                             <CheckCircle2 size={18} color="#0d9488" />
@@ -1236,7 +1425,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
                   )}
                 </div>
 
-                {selectedDoctor && (
+                {selectedDoctor && !offDoctorIds.has(selectedDoctor.id) && (
                   <button
                     type="button"
                     className="clear-doctor-btn"
@@ -1249,7 +1438,7 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
             </div>
           )}
 
-          {/* ✅ Booking Summary */}
+          {/* ==================== SUMMARY ==================== */}
           <div className="summary-box">
             <div
               className="section-title"
@@ -1287,7 +1476,12 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
             </div>
             <div className="summary-row">
               <span className="summary-label">নির্বাচিত ডাক্তার:</span>
-              <span className="summary-value">{selectedDoctor?.name || '-'}</span>
+              <span className="summary-value">
+                {selectedDoctor?.name || '-'}
+                {selectedDoctor && offDoctorIds.has(selectedDoctor.id) && (
+                  <span style={{ color: '#dc2626', marginLeft: 6 }}>(চেম্বার অফ)</span>
+                )}
+              </span>
             </div>
             <div className="summary-row">
               <span className="summary-label">রেফারেল সোর্স:</span>
@@ -1313,60 +1507,65 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
             )}
           </div>
 
-          <button type="submit" className="submit-btn" disabled={loading}>
-            {loading ? <Loader2 className="spin" size={18} /> : <Send size={18} />}
-            সিরিয়াল নিশ্চিত করুন
+          {/* ==================== SUBMIT ==================== */}
+          <button
+            type="submit"
+            className="submit-btn"
+            disabled={loading || (selectedDoctor && offDoctorIds.has(selectedDoctor.id))}
+          >
+            {loading ? (
+              <Loader2 className="spin" size={18} />
+            ) : selectedDoctor && offDoctorIds.has(selectedDoctor.id) ? (
+              <>
+                <Ban size={18} />
+                চেম্বার বন্ধ — অন্য তারিখে সিরিয়াল নিন
+              </>
+            ) : (
+              <>
+                <Send size={18} />
+                সিরিয়াল নিশ্চিত করুন
+              </>
+            )}
           </button>
         </form>
       </div>
 
-      {/* ✅ Doctor Image Lightbox */}
+      {/* ==================== DOCTOR IMAGE LIGHTBOX ==================== */}
       {showImageLightbox && selectedDoctor?.imageUrl && (
         <div
           className="lightbox-overlay"
           onClick={() => setShowImageLightbox(false)}
         >
-          <div
-            className="lightbox-content"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
             <button
               className="lightbox-close-btn"
               onClick={() => setShowImageLightbox(false)}
               aria-label="ছবি বন্ধ করুন"
-              title="বন্ধ করুন (Esc)"
             >
               <X size={20} strokeWidth={2.5} />
             </button>
-
             <img
               src={selectedDoctor.imageUrl}
               alt={selectedDoctor.name}
               className="lightbox-image"
             />
-
             <div className="lightbox-caption">
               {selectedDoctor.name}
               {selectedDoctor.nameEn && (
-                <div className="lightbox-caption-sub">
-                  {selectedDoctor.nameEn}
-                </div>
+                <div className="lightbox-caption-sub">{selectedDoctor.nameEn}</div>
               )}
             </div>
           </div>
         </div>
       )}
 
-      {/* ✅ Location Details Popup */}
+      {/* ==================== LOCATION DETAILS POPUP ==================== */}
       {showLocationDetails && bookingLocation && (
         <div
           className="location-modal-overlay"
           onClick={() => setShowLocationDetails(false)}
         >
-          <div
-            className="location-modal-box"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="location-modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="location-modal-header">
               <h3>
                 <MapPin size={20} />
@@ -1380,7 +1579,6 @@ export default function BookingSystem({ departments, panels, preselectedDoctorId
                 <X size={18} />
               </button>
             </div>
-
             <div className="location-modal-body">
               <div className="location-summary-box">
                 <div className="location-summary-label">🌍 আপনার লোকেশন</div>
