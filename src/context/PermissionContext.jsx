@@ -2,11 +2,6 @@
 // ==================================================
 // 🔐 Permission Context — Fixed
 // ==================================================
-// ✅ Real-time listener on user document
-// ✅ Auto-approve when permissions are managed
-// ✅ Debug logs + Error handling
-// ✅ Auto refresh on permission change
-// ==================================================
 import React, {
   createContext,
   useContext,
@@ -59,50 +54,21 @@ export function PermissionProvider({ children }) {
       (snap) => {
         if (snap.exists()) {
           const data = { id: snap.id, ...snap.data() };
+          setUserData(data);
 
-          // ✅ Debug logs
+          // ✅ সরাসরি calculateEffectivePermissions কল করুন
+          const calculated = calculateEffectivePermissions(data);
+          
           console.log('📋 [PermissionContext] User Data:', {
             role: data.role,
             approved: data.approved,
             isActive: data.isActive,
-            overridesCount: Object.keys(data.permissionOverrides || {}).length,
+            grantedCount: Object.values(calculated).filter(v => v === true).length
           });
-
-          // ⚠️ Only warn — do NOT block permissions based on `approved`.
-          // Admin must explicitly set `isActive: false` to disable a user.
-          if (data.approved !== true) {
-            console.warn(
-              '⚠️ [PermissionContext] User NOT approved — but permissions will still be computed from role/overrides'
-            );
-          }
-
-          if (data.isActive === false) {
-            console.warn(
-              '⚠️ [PermissionContext] User is INACTIVE — permissions will be emptied'
-            );
-          }
-
-          setUserData(data);
-
-          // ✅ If user is inactive, empty permissions. Otherwise compute normally.
-          const calculated =
-            data.isActive === false
-              ? {}
-              : calculateEffectivePermissions(data);
-
-          const grantedCount = Object.values(calculated).filter(
-            (v) => v === true
-          ).length;
-          console.log(
-            `📋 [PermissionContext] Granted: ${grantedCount}/${Object.keys(calculated).length}`
-          );
 
           setPermissions(calculated);
         } else {
-          console.warn(
-            '⚠️ [PermissionContext] User document NOT FOUND:',
-            userRef.path
-          );
+          console.warn('⚠️ [PermissionContext] User document NOT FOUND:', userRef.path);
           setUserData(null);
           setPermissions({});
         }
@@ -110,8 +76,6 @@ export function PermissionProvider({ children }) {
       },
       (err) => {
         console.error('❌ [PermissionContext] Listener error:', err);
-        console.error('   → সম্ভবত Firestore Rules-এ read permission নেই');
-        console.error('   → Firebase Console → Firestore → Rules check করুন');
         setError(err.message);
         setLoading(false);
       }
@@ -125,8 +89,7 @@ export function PermissionProvider({ children }) {
   // ==================================================
   const hasPerm = useCallback(
     (key) => {
-      const result = hp(permissions, key);
-      return result;
+      return hp(permissions, key);
     },
     [permissions]
   );
@@ -160,8 +123,11 @@ export function PermissionProvider({ children }) {
       can,
       hasAny,
       hasAll,
-      refresh: () =>
-        setPermissions(calculateEffectivePermissions(userData)),
+      refresh: () => {
+        if (userData) {
+          setPermissions(calculateEffectivePermissions(userData));
+        }
+      },
     }),
     [userData, permissions, loading, error, hasPerm, hasAny, hasAll]
   );

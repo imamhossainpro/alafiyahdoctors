@@ -74,27 +74,14 @@ export const PERMISSION_REGISTRY = [
       { key: 'doctor.schedule.edit', label: 'Schedule এডিট' },
     ],
   },
-  // ✅ NEW: Doctor's own dashboard permissions
   {
     module: "Doctor's Own Dashboard",
     icon: '🩺',
     permissions: [
-      {
-        key: 'doctor_dashboard.view',
-        label: 'নিজের ড্যাশবোর্ড দেখুন',
-      },
-      {
-        key: 'doctor_dashboard.patients.view',
-        label: 'নিজের রোগী দেখুন',
-      },
-      {
-        key: 'doctor_dashboard.reports.view',
-        label: 'নিজের রিপোর্ট দেখুন',
-      },
-      {
-        key: 'doctor_dashboard.profile.view',
-        label: 'নিজের প্রোফাইল দেখুন',
-      },
+      { key: 'doctor_dashboard.view', label: 'নিজের ড্যাশবোর্ড দেখুন' },
+      { key: 'doctor_dashboard.patients.view', label: 'নিজের রোগী দেখুন' },
+      { key: 'doctor_dashboard.reports.view', label: 'নিজের রিপোর্ট দেখুন' },
+      { key: 'doctor_dashboard.profile.view', label: 'নিজের প্রোফাইল দেখুন' },
     ],
   },
   {
@@ -213,7 +200,6 @@ export const ROLE_TEMPLATES = {
     label: 'Pending',
     permissions: {},
   },
-  // ✅ NEW: Doctor-specific role (only own dashboard)
   doctor: {
     label: 'Doctor',
     permissions: {
@@ -226,22 +212,29 @@ export const ROLE_TEMPLATES = {
 };
 
 // ==================================================
-// ✅ Effective Permissions Calculator
-// Priority: designation=Doctor → doctor template
-//           else → role template
-//           user.overrides > template
+// ✅ Effective Permissions Calculator (FIXED)
 // ==================================================
 export const calculateEffectivePermissions = (userData) => {
   if (!userData) return {};
 
-  // ✅ Admin all-access
+  // ✅ ১. ইউজার যদি অ্যাপ্রুভড না হয়, তবে কোনো পারমিশন পাবে না
+  if (userData.approved === false) {
+    return {};
+  }
+
+  // ✅ ২. ইউজার যদি নিষ্ক্রিয় (Inactive) হয়, তবে কোনো পারমিশন পাবে না
+  if (userData.isActive === false) {
+    return {};
+  }
+
+  // ✅ ৩. অ্যাডমিন সবসময় সব পারমিশন পাবে
   if (userData.role === 'admin') {
     return ALL_PERMISSIONS.reduce((acc, k) => ({ ...acc, [k]: true }), {});
   }
 
-  // ✅ Doctor designation → doctor template (unless overridden by role)
+  // ✅ ৪. ডাক্তার designation হলে (এবং রোল viewer বা doctor হলে) doctor টেমপ্লেট পাবে
   let roleTemplate;
-  if (userData.designation === 'Doctor' && userData.role === 'viewer') {
+  if (userData.designation === 'Doctor' && ['viewer', 'doctor', undefined].includes(userData.role)) {
     roleTemplate = ROLE_TEMPLATES.doctor;
   } else {
     roleTemplate = ROLE_TEMPLATES[userData.role] || ROLE_TEMPLATES.pending;
@@ -302,7 +295,6 @@ export const PERMISSION_DEPENDENCIES = {
   'doctor.delete': 'doctor.view',
   'doctor.schedule.edit': 'doctor.view',
 
-  // ✅ Doctor dashboard dependencies
   'doctor_dashboard.patients.view': 'doctor_dashboard.view',
   'doctor_dashboard.reports.view': 'doctor_dashboard.view',
   'doctor_dashboard.profile.view': 'doctor_dashboard.view',

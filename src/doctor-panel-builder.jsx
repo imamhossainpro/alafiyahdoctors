@@ -2225,14 +2225,38 @@ export default function DoctorPanelBuilder() {
     setLinkModalDoctor(doctor);
   };
 
+  // ==================================================
+  // ✅ NEW: Dynamic Authorization based on Permission Matrix
+  // ==================================================
   const getIsAuthorized = () => {
-    if (path === '/' || path === '/booking' || path === '/display' || path === '/preview' || path === '/login') return true;
-    if (path === '/mou' || path.startsWith('/mou/')) return !!user;
-    if (bookingDoctorId) return true;
-    if (path === '/edit' && (isEditor || isModerator || isSubAdmin || isAdmin)) return true;
-    if (path === '/doctors' && (isSubAdmin || isAdmin)) return true;
-    if (path === '/dashboard' && (isEditor || isModerator || isSubAdmin || isAdmin)) return true;
-    if (path === '/admin' && isAdmin) return true;
+    // সব পাবলিক রুট
+    if (path === '/' || path === '/booking' || path === '/display' || path === '/preview' || path === '/login') {
+      return true;
+    }
+    if (path === '/mou' || path.startsWith('/mou/')) {
+      return !!user;
+    }
+    if (bookingDoctorId) {
+      return true;
+    }
+
+    // ✅ Permission Matrix-এ দেওয়া পারমিশনের উপর ভিত্তি করে রুট প্রোটেকশন
+    if (path === '/edit') {
+      return can('booking.edit') || can('doctor.edit') || can('user.permission_manage');
+    }
+    
+    if (path === '/doctors') {
+      return can('doctor.view') || can('user.view');
+    }
+    
+    if (path === '/dashboard') {
+      return can('dashboard.view') || can('statistics.view') || can('booking.view');
+    }
+    
+    if (path === '/admin') {
+      return can('user.view') || can('user.permission_manage');
+    }
+
     return false;
   };
 
