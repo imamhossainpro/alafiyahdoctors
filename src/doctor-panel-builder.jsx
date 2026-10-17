@@ -2347,7 +2347,7 @@ export default function DoctorPanelBuilder() {
         />
       )}
 
-      {activeView === 'edit' && !isGuest && (isEditor || isModerator || isSubAdmin || isAdmin) && (
+            {activeView === 'edit' && !isGuest && can('booking.edit') && (
         <EditPanel
           panel={activePanel}
           departments={departments}
@@ -2361,7 +2361,7 @@ export default function DoctorPanelBuilder() {
           onRemovePhone={handleRemovePhone}
           onAddDept={handleAddDept}
           onEditDept={handleEditDept}
-          onDeleteDept={isAdmin ? handleDeleteDept : () => {}}
+          onDeleteDept={can('doctor.delete') ? handleDeleteDept : () => {}}
           onMoveDept={handleMoveDept}
           onAddDoctor={handleAddDoctor}
           onEditDoctor={handleEditDoctor}
@@ -2379,7 +2379,7 @@ export default function DoctorPanelBuilder() {
         />
       )}
 
-      {activeView === 'doctors' && (isSubAdmin || isAdmin) && (
+        {activeView === 'doctors' && can('doctor.view') && (
         <ManageDoctorsView
           departments={departments}
           onAddDept={handleAddDept}
@@ -2390,13 +2390,13 @@ export default function DoctorPanelBuilder() {
           onEditDoctor={handleEditDoctor}
           onDeleteDoctor={handleDeleteDoctor}
           onMoveDoctor={handleMoveDoctor}
-          isAdmin={isAdmin}
+          isAdmin={can('doctor.delete')} 
           onRefreshData={handleRefreshData}
           onShowDoctorLink={handleShowDoctorLink}
         />
       )}
 
-      {activeView === 'admin' && isAdmin && (
+      {activeView === 'admin' && can('user.view') && (
         <AdminPanel
           users={allUsers}
           onApprove={handleApprove}
@@ -2405,7 +2405,7 @@ export default function DoctorPanelBuilder() {
         />
       )}
 
-      {activeView === 'dashboard' && (isEditor || isModerator || isSubAdmin || isAdmin) && (
+      {activeView === 'dashboard' && (can('dashboard.view') || can('statistics.view') || can('booking.view')) && (
         <AdminDashboard user={user} />
       )}
 
