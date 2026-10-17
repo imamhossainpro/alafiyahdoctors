@@ -4,6 +4,7 @@
 // ==================================================
 // ✅ FIXED: Bengali day-name matching (trim + lowercase + id fallback)
 // ✅ FIXED: Detailed empty-state messages for debugging
+// ✅ NEW: Added GA4 Funnel Events (Step 1, 2, 3)
 // ==================================================
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -342,6 +343,9 @@ export default function BookingSystem({
   const [selectedDoctor, setSelectedDoctor] = useState(null);
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+
+  // ✅ NEW: Track Step 1 (Prevents multiple fires on every keystroke)
+  const [hasTrackedStep1, setHasTrackedStep1] = useState(false);
 
   // Lightbox + location popup
   const [showImageLightbox, setShowImageLightbox] = useState(false);
@@ -688,6 +692,14 @@ export default function BookingSystem({
   const handleChange = (e) => {
     const { name, value } = e.target;
 
+    // ✅ GA4 Step 1: Track when patient starts typing name or age
+    if ((name === 'nameEn' || name === 'age') && value.length > 1 && !hasTrackedStep1) {
+      trackEvent('step_1_patient_info', {
+        field_typing: name,
+      });
+      setHasTrackedStep1(true);
+    }
+
     if (name === 'age') {
       setFormData((prev) => ({ ...prev, [name]: toEnglishDigits(value) }));
     } else if (name === 'nameEn') {
@@ -710,6 +722,14 @@ export default function BookingSystem({
       return;
     }
     setSelectedDoctor(doc);
+
+    // ✅ GA4 Step 2: Track doctor selection
+    trackEvent('step_2_doctor_selected', {
+      doctor_id: doc.id,
+      doctor_name: doc.name,
+      department: doc.deptName || 'unknown',
+      is_direct_booking: isDirectBooking,
+    });
   };
 
   // ==================================================
@@ -882,7 +902,15 @@ export default function BookingSystem({
         'আপনার সিরিয়ালটি সফলভাবে কনফার্ম করা হয়েছে। চেক-ইন করতে QR কোড ব্যবহার করুন।'
       );
 
-      // 7) GA4 event
+      // ✅ GA4 Step 3: Track booking completed
+      trackEvent('step_3_booking_completed', {
+        doctor_id: selectedDoctor.id,
+        doctor_name: selectedDoctor.name,
+        serial_no: serialNo,
+        is_new_patient: isNewPatient,
+      });
+
+      // 7) GA4 event (Legacy)
       trackEvent('booking_complete', {
         doctor_id: selectedDoctor.id,
         doctor_name: selectedDoctor.name,
