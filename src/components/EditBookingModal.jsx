@@ -1,10 +1,9 @@
-// src/components/EditBookingModal.jsx
+// src/components/admin/EditBookingModal.jsx
 // ==================================================
 // ✏️ EditBookingModal — Change date/doctor with serial re-assignment
 // ==================================================
 // ✅ Fixed: Bengali day-name matching (trim + lowercase + id fallback)
 // ✅ Fixed: departments/panels empty state debugging
-// ✅ Fixed: proper panel detection
 // ==================================================
 import React, { useState, useEffect, useMemo } from 'react';
 import {
@@ -75,37 +74,22 @@ export default function EditBookingModal({
   // ==================================================
   useEffect(() => {
     if (!panels || panels.length === 0) {
-      console.warn('⚠️ [EditBookingModal] panels is empty');
       setAvailableDoctors([]);
       return;
     }
     if (!departments || departments.length === 0) {
-      console.warn('⚠️ [EditBookingModal] departments is empty');
       setAvailableDoctors([]);
       return;
     }
 
     const dayName = getBanglaDay(newDate);
+    const dayLower = dayName.toLowerCase().trim();
 
-    // Try multiple strategies to find the panel
-    let dayPanel = panels.find((p) => p.name === dayName || p.id === dayName);
-
-    if (!dayPanel) {
-      const dayLower = dayName.toLowerCase().trim();
-      dayPanel = panels.find((p) => {
-        const nameLower = (p.name || '').toLowerCase().trim();
-        const idLower = (p.id || '').toLowerCase().trim();
-        return nameLower === dayLower || idLower === dayLower;
-      });
-    }
-
-    console.log('🔍 [EditBookingModal] Panel lookup:', {
-      newDate,
-      dayName,
-      panelsCount: panels.length,
-      departmentsCount: departments.length,
-      panelNames: panels.map((p) => p.name || p.id),
-      matchedPanel: dayPanel ? { id: dayPanel.id, name: dayPanel.name } : null,
+    // ✅ Robust matching
+    const dayPanel = panels.find((p) => {
+      const nameLower = (p.name || '').toLowerCase().trim();
+      const idLower = (p.id || '').toLowerCase().trim();
+      return nameLower === dayLower || idLower === dayLower;
     });
 
     if (!dayPanel) {
@@ -129,7 +113,6 @@ export default function EditBookingModal({
       });
     });
 
-    console.log(`✅ [EditBookingModal] Found ${docs.length} doctors for ${dayName}`);
     setAvailableDoctors(docs);
 
     // If current doctor not in this date's list, auto-deselect

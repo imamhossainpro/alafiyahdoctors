@@ -2,20 +2,8 @@
 // ==================================================
 // 📅 BookingSystem — Booking Form + Redirect to Success
 // ==================================================
-// ✅ Chamber OFF — disabled doctor + next date suggestion
-// ✅ One-time doctor support (per-date only)
-// ✅ Direct doctor link support (preselectedDoctorId)
-// ✅ Date picker: only enabled on doctor's chamber days
-// ✅ Doctor image / User icon fallback in profile card
-// ✅ Doctor quals + workplace + specialty shown
-// ✅ Referral source NOT auto-selected
-// ✅ GA4 booking_complete event
-// ✅ Meta Pixel — Schedule + CompleteRegistration
-// ✅ Mobile stored in international format (8801XXXXXXXXX)
-// ✅ Doctor image lightbox (click to view full size)
-// ✅ Location tracking (GPS + City + Distance + Device)
-// ✅ Booking summary shows AGE
-// ✅ Redirect to /booking-success/:appointmentId on submit
+// ✅ FIXED: Bengali day-name matching (trim + lowercase + id fallback)
+// ✅ FIXED: Detailed empty-state messages for debugging
 // ==================================================
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -193,7 +181,7 @@ function CustomCalendar({ selectedDate, onDateChange, allowedDays }) {
 }
 
 // ==================================================
-// ✅ CSS
+// ✅ CSS (আগের মতোই আছে, কোনো পরিবর্তন নেই)
 // ==================================================
 const BookingCSS = `
   .booking-wrapper { max-width: 650px; margin: 40px auto; padding: 20px; font-family: 'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif; background: #f4f7f6; border-radius: 20px; }
@@ -488,68 +476,68 @@ export default function BookingSystem({
   }, [preselectedDoctorId, departments]);
 
   // ==================================================
-// ✅ Chamber OFF alert — সব ক্ষেত্রে (direct + normal booking)
-// ==================================================
-useEffect(() => {
-  if (!selectedDoctor) {
-    setChamberOffAlert(null);
-    return;
-  }
-  if (!offDoctorIds.has(selectedDoctor.id)) {
-    setChamberOffAlert(null);
-    return;
-  }
+  // ✅ Chamber OFF alert — সব ক্ষেত্রে (direct + normal booking)
+  // ==================================================
+  useEffect(() => {
+    if (!selectedDoctor) {
+      setChamberOffAlert(null);
+      return;
+    }
+    if (!offDoctorIds.has(selectedDoctor.id)) {
+      setChamberOffAlert(null);
+      return;
+    }
 
-  let cancelled = false;
-  (async () => {
-    const today = new Date();
-    let suggested = null;
+    let cancelled = false;
+    (async () => {
+      const today = new Date();
+      let suggested = null;
 
-    // Next available date — skip OFF days + skip non-chamber days
-    for (let i = 1; i <= MAX_DAYS_AHEAD; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() + i);
-      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      const dayName = BANGLA_DAYS[d.getDay()];
+      // Next available date — skip OFF days + skip non-chamber days
+      for (let i = 1; i <= MAX_DAYS_AHEAD; i++) {
+        const d = new Date(today);
+        d.setDate(today.getDate() + i);
+        const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const dayName = BANGLA_DAYS[d.getDay()];
 
-      // Skip if doctor doesn't chamber on this day (only for direct booking)
-      if (isDirectBooking && doctorAllowedDays.length > 0) {
-        if (!doctorAllowedDays.includes(dayName)) continue;
-      }
+        // Skip if doctor doesn't chamber on this day (only for direct booking)
+        if (isDirectBooking && doctorAllowedDays.length > 0) {
+          if (!doctorAllowedDays.includes(dayName)) continue;
+        }
 
-      // For normal booking — find a day where doctor has a panel
-      if (!isDirectBooking) {
-        const hasPanel = panels.some(
-          (p) => p.name === dayName && (p.activeDoctorIds || []).includes(selectedDoctor.id)
-        );
-        if (!hasPanel) continue;
-      }
+        // For normal booking — find a day where doctor has a panel
+        if (!isDirectBooking) {
+          const hasPanel = panels.some(
+            (p) => p.name === dayName && (p.activeDoctorIds || []).includes(selectedDoctor.id)
+          );
+          if (!hasPanel) continue;
+        }
 
-      // Check if doctor is OFF on this date
-      try {
-        const { offIds } = await getOverridesForDate(hospitalId, dateStr);
-        if (!offIds.has(selectedDoctor.id)) {
+        // Check if doctor is OFF on this date
+        try {
+          const { offIds } = await getOverridesForDate(hospitalId, dateStr);
+          if (!offIds.has(selectedDoctor.id)) {
+            suggested = dateStr;
+            break;
+          }
+        } catch {
           suggested = dateStr;
           break;
         }
-      } catch {
-        suggested = dateStr;
-        break;
       }
-    }
 
-    if (!cancelled) {
-      setChamberOffAlert({
-        doctor: selectedDoctor,
-        suggestedDate: suggested,
-      });
-    }
-  })();
+      if (!cancelled) {
+        setChamberOffAlert({
+          doctor: selectedDoctor,
+          suggestedDate: suggested,
+        });
+      }
+    })();
 
-  return () => {
-    cancelled = true;
-  };
-}, [selectedDoctor, offDoctorIds, hospitalId, isDirectBooking, doctorAllowedDays, panels]);
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDoctor, offDoctorIds, hospitalId, isDirectBooking, doctorAllowedDays, panels]);
 
   // ==================================================
   // ✅ Direct booking — auto-move to allowed date
@@ -580,7 +568,7 @@ useEffect(() => {
   }, [isDirectBooking, doctorAllowedDays.join(',')]);
 
   // ==================================================
-  // ✅ Load available doctors for selected date
+  // ✅ Load available doctors for selected date (FIXED)
   // ==================================================
   useEffect(() => {
     if (isDirectBooking) return;
@@ -599,8 +587,22 @@ useEffect(() => {
       const dayName = BANGLA_DAYS[englishDay];
       setSelectedDayName(dayName);
 
-      const dayPanel = panels.find((p) => p.name === dayName);
+      // 🔍 DEBUG: Panels & Day Name matching
+      console.log('📅 Date:', selectedDate, '| Day:', dayName);
+      console.log('📋 Panels:', panels.map(p => ({ id: p.id, name: p.name })));
+
+      // ✅ FIXED: Robust matching (trim + lowercase + id fallback)
+      const dayLower = dayName.toLowerCase().trim();
+      const dayPanel = panels.find((p) => {
+        const nameLower = (p.name || '').toLowerCase().trim();
+        const idLower = (p.id || '').toLowerCase().trim();
+        return nameLower === dayLower || idLower === dayLower;
+      });
+
+      console.log('🎯 Matched Panel:', dayPanel ? dayPanel.name : 'NONE');
+
       const activeIds = dayPanel ? (dayPanel.activeDoctorIds || []) : [];
+      console.log('👨‍⚕️ Active IDs:', activeIds);
 
       let filteredDocs = [];
 
@@ -633,6 +635,7 @@ useEffect(() => {
         console.warn('⚠️ One-time doctors load error:', err);
       }
 
+      console.log('✅ Final Filtered Doctors:', filteredDocs.length);
       setAvailableDoctors(filteredDocs);
       setSelectedDoctor(null);
     };
@@ -986,64 +989,62 @@ useEffect(() => {
           <h2 className="booking-title">রোগীর ডাক্তার বুকিং ফর্ম</h2>
 
           {/* ✅ Chamber OFF alert (direct booking) */}
-          {/* ✅ Chamber OFF alert — একই মেসেজে সব ক্ষেত্রে */}
-        {selectedDoctor && offDoctorIds.has(selectedDoctor.id) && (
-          <div
-            style={{
-              background: '#fef2f2',
-              border: '2px solid #fca5a5',
-              borderRadius: 12,
-              padding: '16px 20px',
-              marginBottom: 20,
-              color: '#991b1b',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-              <Ban size={24} style={{ flexShrink: 0, marginTop: 2 }} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 6 }}>
-                  আজকে {selectedDoctor.name} এর চেম্বার অফ রেখেছেন
-                </div>
-                <div style={{ fontSize: 13.5, lineHeight: 1.6, marginBottom: 14 }}>
-                  আপনি চাইলে পরবর্তী চেম্বারে দিন সিরিয়াল নিতে পারবেন।
-                </div>
-
-                {chamberOffAlert?.suggestedDate && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedDate(chamberOffAlert.suggestedDate);
-                      // ✅ Alert আর দেখানোর দরকার নেই — নতুন tanggal সিলেক্ট হলেই ঠিক হবে
-                    }}
-                    style={{
-                      padding: '10px 20px',
-                      background: '#1c5fa8',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: 8,
-                      fontSize: 14,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 8,
-                    }}
-                  >
-                    <CalendarDays size={16} />
-                    {chamberOffAlert.suggestedDate} তারিখে সিরিয়াল নিন →
-                  </button>
-                )}
-
-                {!chamberOffAlert?.suggestedDate && (
-                  <div style={{ fontSize: 12.5, opacity: 0.85, fontStyle: 'italic' }}>
-                    পরবর্তী উপলব্ধ তারিখ খোঁজা হচ্ছে...
+          {selectedDoctor && offDoctorIds.has(selectedDoctor.id) && (
+            <div
+              style={{
+                background: '#fef2f2',
+                border: '2px solid #fca5a5',
+                borderRadius: 12,
+                padding: '16px 20px',
+                marginBottom: 20,
+                color: '#991b1b',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                <Ban size={24} style={{ flexShrink: 0, marginTop: 2 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 6 }}>
+                    আজকে {selectedDoctor.name} এর চেম্বার অফ রেখেছেন
                   </div>
-                )}
+                  <div style={{ fontSize: 13.5, lineHeight: 1.6, marginBottom: 14 }}>
+                    আপনি চাইলে পরবর্তী চেম্বারে দিন সিরিয়াল নিতে পারবেন।
+                  </div>
+
+                  {chamberOffAlert?.suggestedDate && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedDate(chamberOffAlert.suggestedDate);
+                      }}
+                      style={{
+                        padding: '10px 20px',
+                        background: '#1c5fa8',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: 8,
+                        fontSize: 14,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 8,
+                      }}
+                    >
+                      <CalendarDays size={16} />
+                      {chamberOffAlert.suggestedDate} তারিখে সিরিয়াল নিন →
+                    </button>
+                  )}
+
+                  {!chamberOffAlert?.suggestedDate && (
+                    <div style={{ fontSize: 12.5, opacity: 0.85, fontStyle: 'italic' }}>
+                      পরবর্তী উপলব্ধ তারিখ খোঁজা হচ্ছে...
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
           {/* ✅ Location status badge */}
           {locationStatus !== 'idle' && (
@@ -1342,10 +1343,32 @@ useEffect(() => {
                       {availableDoctors.length === 0 ? (
                         <div>
                           <p>⚠️ এই দিনে ({selectedDayName}) কোনো ডাক্তারের সিরিয়াল নেই।</p>
-                          <p style={{ fontSize: '12px', marginTop: '5px', color: '#94a3b8' }}>
-                            {panels?.length === 0
-                              ? 'প্যানেল ডেটা পাওয়া যায়নি।'
-                              : 'অন্য কোনো দিন নির্বাচন করুন।'}
+                          
+                          {/* 🔍 DEBUGGING MESSAGES */}
+                          {panels?.length === 0 && (
+                            <p style={{ fontSize: '12px', marginTop: '5px', color: '#dc2626' }}>
+                              (কারণ: প্যানেল ডেটা লোড হয়নি)
+                            </p>
+                          )}
+                          {panels?.length > 0 && !panels.find(p => 
+                            (p.name || '').toLowerCase().trim() === selectedDayName.toLowerCase().trim() ||
+                            (p.id || '').toLowerCase().trim() === selectedDayName.toLowerCase().trim()
+                          ) && (
+                            <p style={{ fontSize: '12px', marginTop: '5px', color: '#dc2626' }}>
+                              (কারণ: "{selectedDayName}" নামে কোনো প্যানেল তৈরি করা হয়নি)
+                            </p>
+                          )}
+                          {panels?.length > 0 && panels.find(p => 
+                            (p.name || '').toLowerCase().trim() === selectedDayName.toLowerCase().trim() ||
+                            (p.id || '').toLowerCase().trim() === selectedDayName.toLowerCase().trim()
+                          )?.activeDoctorIds?.length === 0 && (
+                            <p style={{ fontSize: '12px', marginTop: '5px', color: '#dc2626' }}>
+                              (কারণ: "{selectedDayName}" প্যানেলে কোনো ডাক্তার assign করা হয়নি)
+                            </p>
+                          )}
+
+                          <p style={{ fontSize: '12px', marginTop: '10px', color: '#94a3b8' }}>
+                            অন্য কোনো দিন নির্বাচন করুন।
                           </p>
                         </div>
                       ) : (
