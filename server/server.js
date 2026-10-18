@@ -1,9 +1,9 @@
 // server.cjs
 // ==================================================
-// 🏥 আল-আফিয়া হাসপাতাল — Backend Server (Fully Updated)
+// 🏥 আল-আফিয়া হাসপাতাল — Backend Server (Fully Fixed)
 // ==================================================
-// ✅ WhatsApp via Baileys (Fixed: Waiting for message issue)
-// ✅ SMS via Automas Technologies (Fixed: Dual sending)
+// ✅ WhatsApp via Baileys — WITH TIMEOUT + LOGGING + AUTO-RECONNECT
+// ✅ SMS via Automas Technologies
 // ✅ Email via Gmail
 // ✅ FCM Push Notifications
 // ✅ GA4 Analytics Data API
@@ -111,6 +111,36 @@ let isConnected = false;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 5;
 
+// ✅ Status tracking (for / endpoint)
+let sessionStartTime = null;
+let lastMessageSentAt = null;
+let lastMessageError = null;
+let lastMessageTarget = null;
+
+// ==================================================
+// ✅ State check helpers
+// ==================================================
+function isWhatsAppReady() {
+  return isConnected === true && sock !== null && sock.user != null;
+}
+
+// ✅ Safe sendMessage with 15s timeout
+async function safeSendMessage(jid, payload, label = 'WhatsApp') {
+  if (!isWhatsAppReady()) {
+    throw new Error(`${label} not ready (isConnected=${isConnected}, sock=${!!sock})`);
+  }
+
+  const promise = sock.sendMessage(jid, payload);
+  const timeout = new Promise((_, reject) =>
+    setTimeout(
+      () => reject(new Error(`${label} sendMessage timeout after 15s — session likely dead`)),
+      15000
+    )
+  );
+
+  return Promise.race([promise, timeout]);
+}
+
 // ---------- Email Transporter ----------
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -211,7 +241,7 @@ async function sendToDevice(fcmToken, notification, data = {}) {
 }
 
 // ==================================================
-// 📱 SMS (Automas Technologies) — UPDATED
+// 📱 SMS (Automas Technologies)
 // ==================================================
 async function sendSMS(phoneNumber, message) {
   try {
@@ -237,7 +267,6 @@ async function sendSMS(phoneNumber, message) {
 
     console.log(`📤 Sending SMS to: ${number}...`);
 
-    // Automas API তে ডেটা পাঠানোর সঠিক ফরম্যাট
     const payload = {
       api_key: apiKey,
       senderid: senderId,
@@ -284,7 +313,7 @@ async function sendSMS(phoneNumber, message) {
 }
 
 // ==================================================
-// ✅ WhatsApp Connection
+// ✅ WhatsApp Connection (FIXED)
 // ==================================================
 async function connectToWhatsApp() {
   try {
@@ -315,24 +344,46 @@ async function connectToWhatsApp() {
 
       if (connection === 'close') {
         isConnected = false;
+        sessionStartTime = null;
+
         const statusCode = lastDisconnect?.error?.output?.statusCode;
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
         console.log(`\n🔌 Connection closed | statusCode: ${statusCode}`);
+        console.log(`   error: ${lastDisconnect?.error?.message || 'N/A'}`);
 
         if (shouldReconnect) {
           reconnectAttempts++;
           if (reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
             const delay = Math.min(3000 * reconnectAttempts, 15000);
+            console.log(`   → Reconnect attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} in ${delay}ms`);
             setTimeout(() => connectToWhatsApp(), delay);
+          } else {
+            console.error(`   → Max reconnect attempts reached. Manual restart required.`);
           }
         } else {
-          console.log('❌ WhatsApp logged out!');
+          console.log('❌ WhatsApp logged out! New QR scan required.');
         }
       } else if (connection === 'open') {
-        isConnected = true;
-        reconnectAttempts = 0;
-        console.log('\n✅ WhatsApp connected!');
+        // ✅ FIX: Only mark connected if sock.user is set
+        if (sock?.user) {
+          isConnected = true;
+          sessionStartTime = Date.now();
+          reconnectAttempts = 0;
+
+          console.log('\n✅ WhatsApp connected!');
+          console.log(`   Logged in as: ${sock.user.id}`);
+          console.log(`   Notification target: ${NOTIFICATION_TARGET}@s.whatsapp.net`);
+
+          if (sock.user.id.startsWith(NOTIFICATION_TARGET)) {
+            console.error('\n⚠️⚠️⚠️ WARNING ⚠️⚠️⚠️');
+            console.error('   NOTIFICATION_TARGET === LOGIN NUMBER');
+            console.error('   Baileys may fail silently when sending to yourself!');
+            console.error('   Use a DIFFERENT number for NOTIFICATION_TARGET.\n');
+          }
+        } else {
+          console.warn('⚠️ Connection "open" but sock.user not yet available');
+        }
       }
     });
   } catch (error) {
@@ -342,12 +393,26 @@ async function connectToWhatsApp() {
 }
 
 // ==================================================
-// 🆕 TRIGGER 1: Hospital WhatsApp Notification
+// 🆕 TRIGGER 1: Hospital WhatsApp Notification (FIXED)
 // ==================================================
 async function sendHospitalNotification(data, appointmentId) {
-  if (!isConnected || !sock) return;
+  console.log('\n========================================');
+  console.log('🔔 [HOSPITAL-NOTIFY] Booking received:', appointmentId);
+  console.log('   isConnected:', isConnected);
+  console.log('   sock exists:', !!sock);
+  console.log('   sock.user.id:', sock?.user?.id || 'N/A');
+  console.log('   isWhatsAppReady():', isWhatsAppReady());
+  console.log('   Target phone:', NOTIFICATION_TARGET);
+  console.log('========================================\n');
 
-  const jid = NOTIFICATION_TARGET + '@s.whatsapp.net';
+  if (!isWhatsAppReady()) {
+    console.error('❌ [HOSPITAL-NOTIFY] ABORT — WhatsApp not ready!');
+    console.error('   → Check QR scan / session validity');
+    lastMessageError = 'WhatsApp not ready at ' + new Date().toISOString();
+    return;
+  }
+
+  const jid = `${NOTIFICATION_TARGET}@s.whatsapp.net`;
   const formattedDate = formatDateDDMMYYYY(data.bookingDate);
 
   const englishPatientName = data.nameEn || data.name || '';
@@ -366,10 +431,38 @@ Status: Pending
 Booking ID: ${appointmentId}`;
 
   try {
-    await sock.sendMessage(jid, { text: msg });
-    console.log(`📨 Hospital WhatsApp notified → ${NOTIFICATION_TARGET}`);
+    console.log(`📤 [HOSPITAL-NOTIFY] Sending to JID: ${jid}`);
+    console.log(`📝 Message length: ${msg.length} chars`);
+
+    const result = await safeSendMessage(jid, { text: msg }, 'HOSPITAL-NOTIFY');
+
+    console.log('✅ [HOSPITAL-NOTIFY] SUCCESS!');
+    console.log('   Message ID:', result?.key?.id);
+    console.log('   Remote JID:', result?.key?.remoteJid);
+    console.log('   Status:', result?.status);
+
+    lastMessageSentAt = new Date().toISOString();
+    lastMessageTarget = jid;
+    lastMessageError = null;
   } catch (err) {
-    console.error('❌ WhatsApp notification failed:', err.message);
+    console.error('❌ [HOSPITAL-NOTIFY] FAILED:', err.message);
+    console.error('   Full error:', err);
+
+    lastMessageError = `${err.message} at ${new Date().toISOString()}`;
+
+    // ✅ Force reconnect on session-dead signals
+    if (
+      err.message.includes('timeout') ||
+      err.message.includes('closed') ||
+      err.message.includes('not ready')
+    ) {
+      console.warn('⚠️ Session appears dead — forcing reconnect...');
+      isConnected = false;
+      try {
+        sock?.end(undefined);
+      } catch (e) {}
+      setTimeout(() => connectToWhatsApp(), 3000);
+    }
   }
 }
 
@@ -393,7 +486,7 @@ Arrival Time: ${arrivalTime}
 
 Please arrive on time. Contact: ${HOSPITAL_CONTACT}`;
 
-  // ✅ ফোন নম্বর ফরম্যাট (8801XXXXXXXXX)
+  // ✅ ফোন নম্বর ফরম্যাট
   let formattedMobile = data.mobile || '';
   if (formattedMobile) {
     formattedMobile = formattedMobile.replace(/[^0-9]/g, '');
@@ -405,22 +498,24 @@ Please arrive on time. Contact: ${HOSPITAL_CONTACT}`;
   }
 
   // ---------- ১. WhatsApp ----------
-  if (isConnected && sock && formattedMobile) {
+  if (isWhatsAppReady() && formattedMobile) {
     try {
       const jid = formattedMobile + '@s.whatsapp.net';
-      await sock.sendMessage(jid, { text: unifiedMessage });
-      console.log(`📱 WhatsApp sent to patient: ${formattedMobile}`);
-      
-      // Waiting for message সমস্যা এড়াতে ২ সেকেন্ড ডিলে
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      console.log(`📱 [PATIENT-WA] Sending to ${jid}...`);
+      await safeSendMessage(jid, { text: unifiedMessage }, 'PATIENT-WA');
+      console.log(`✅ [PATIENT-WA] Sent to patient: ${formattedMobile}`);
+      lastMessageSentAt = new Date().toISOString();
+      lastMessageTarget = jid;
     } catch (err) {
-      console.error('❌ WhatsApp error:', err.message);
+      console.error('❌ [PATIENT-WA] Failed:', err.message);
+      lastMessageError = `${err.message} at ${new Date().toISOString()}`;
     }
+  } else {
+    console.warn(`⚠️ [PATIENT-WA] Skipped — ready=${isWhatsAppReady()}, mobile=${!!formattedMobile}`);
   }
 
   // ---------- ২. SMS ----------
   if (formattedMobile) {
-    // SMS এর জন্য শর্ট মেসেজ (যাতে খরচ কম হয় ও ১৬০ ক্যারেক্টারে থাকে)
     const smsText = `Assalamu Alaikum. Your appointment with ${englishDoctorName} at Al-Afiyah Hospital is confirmed.
 Patient: ${englishPatientName}
 Serial: ${serial}
@@ -507,6 +602,58 @@ Contact: ${HOSPITAL_CONTACT}`;
 }
 
 // ==================================================
+// 🧪 TEST ENDPOINT — Manual WhatsApp test
+// ==================================================
+app.post('/api/test-whatsapp', async (req, res) => {
+  const { to, text } = req.body;
+  const targetJid = `${to || NOTIFICATION_TARGET}@s.whatsapp.net`;
+
+  console.log('\n🧪 [TEST] Manual WhatsApp test triggered');
+  console.log('   Target:', targetJid);
+  console.log('   isConnected:', isConnected);
+  console.log('   isWhatsAppReady():', isWhatsAppReady());
+  console.log('   sock.user.id:', sock?.user?.id || 'N/A');
+
+  if (!isWhatsAppReady()) {
+    return res.json({
+      success: false,
+      reason: 'WhatsApp not ready',
+      isConnected,
+      hasSock: !!sock,
+      hasUser: !!sock?.user,
+    });
+  }
+
+  try {
+    const result = await safeSendMessage(
+      targetJid,
+      {
+        text:
+          text ||
+          `🧪 Test message from server at ${new Date().toLocaleString('bn-BD')}`,
+      },
+      'TEST'
+    );
+
+    console.log('✅ [TEST] Sent successfully!', result?.key?.id);
+    res.json({
+      success: true,
+      messageId: result?.key?.id,
+      targetJid,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('❌ [TEST] Failed:', err.message);
+    res.json({
+      success: false,
+      error: err.message,
+      targetJid,
+      stack: err.stack,
+    });
+  }
+});
+
+// ==================================================
 // 📊 GA4 Analytics Endpoint
 // ==================================================
 app.get('/api/analytics/ga4', async (req, res) => {
@@ -536,8 +683,18 @@ app.get('/api/analytics/ga4', async (req, res) => {
       ],
     });
 
-    let overview = { activeUsers: 0, newUsers: 0, pageViews: 0, sessions: 0, avgSessionDuration: 0 };
-    if (overviewResponse && overviewResponse.rows && overviewResponse.rows.length > 0) {
+    let overview = {
+      activeUsers: 0,
+      newUsers: 0,
+      pageViews: 0,
+      sessions: 0,
+      avgSessionDuration: 0,
+    };
+    if (
+      overviewResponse &&
+      overviewResponse.rows &&
+      overviewResponse.rows.length > 0
+    ) {
       const values = overviewResponse.rows[0].metricValues;
       overview = {
         activeUsers: parseInt(values[0]?.value || '0', 10),
@@ -562,10 +719,15 @@ app.post('/api/queue/next', async (req, res) => {
   try {
     const { hospitalId, doctorId, date, nextSerial } = req.body;
     if (!hospitalId || !doctorId || !date) {
-      return res.status(400).json({ success: false, error: 'Missing fields' });
+      return res
+        .status(400)
+        .json({ success: false, error: 'Missing fields' });
     }
 
-    const appointmentsRef = db.collection('hospitals').doc(hospitalId).collection('appointments');
+    const appointmentsRef = db
+      .collection('hospitals')
+      .doc(hospitalId)
+      .collection('appointments');
     const snapshot = await appointmentsRef
       .where('doctorId', '==', doctorId)
       .where('bookingDate', '==', date)
@@ -573,19 +735,29 @@ app.post('/api/queue/next', async (req, res) => {
       .limit(1)
       .get();
 
-    if (snapshot.empty) return res.json({ success: false, error: 'No appointment found' });
+    if (snapshot.empty)
+      return res.json({ success: false, error: 'No appointment found' });
 
     const appointment = snapshot.docs[0].data();
     const userId = appointment.userId;
-    if (!userId) return res.json({ success: false, error: 'No user account' });
+    if (!userId)
+      return res.json({ success: false, error: 'No user account' });
 
-    const userDoc = await db.collection('hospitals').doc(hospitalId).collection('users').doc(userId).get();
-    if (!userDoc.exists) return res.json({ success: false, error: 'User not found' });
+    const userDoc = await db
+      .collection('hospitals')
+      .doc(hospitalId)
+      .collection('users')
+      .doc(userId)
+      .get();
+    if (!userDoc.exists)
+      return res.json({ success: false, error: 'User not found' });
 
     const userData = userDoc.data();
     let fcmTokens = [];
     if (Array.isArray(userData.fcmTokens)) {
-      fcmTokens = userData.fcmTokens.map((t) => (typeof t === 'string' ? t : t.token));
+      fcmTokens = userData.fcmTokens.map((t) =>
+        typeof t === 'string' ? t : t.token
+      );
     } else if (userData.fcmToken) {
       fcmTokens = [userData.fcmToken];
     }
@@ -599,7 +771,15 @@ app.post('/api/queue/next', async (req, res) => {
       );
     }
 
-    await saveInAppNotification(userId, { title: 'Your serial is next!', body: `Serial #${nextSerial}`, type: 'queue_update' }, { serialNo: String(nextSerial) });
+    await saveInAppNotification(
+      userId,
+      {
+        title: 'Your serial is next!',
+        body: `Serial #${nextSerial}`,
+        type: 'queue_update',
+      },
+      { serialNo: String(nextSerial) }
+    );
     res.json({ success: true, result: fcmResult });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -611,12 +791,26 @@ app.post('/api/queue/next', async (req, res) => {
 // ==================================================
 app.post('/api/appointment/confirm-with-message', async (req, res) => {
   try {
-    const { hospitalId, appointmentId, customSerial, customDoctorTime, customNote } = req.body;
-    if (!hospitalId || !appointmentId) return res.status(400).json({ success: false, error: 'Missing IDs' });
+    const {
+      hospitalId,
+      appointmentId,
+      customSerial,
+      customDoctorTime,
+      customNote,
+    } = req.body;
+    if (!hospitalId || !appointmentId)
+      return res
+        .status(400)
+        .json({ success: false, error: 'Missing IDs' });
 
-    const apptRef = db.collection('hospitals').doc(hospitalId).collection('appointments').doc(appointmentId);
+    const apptRef = db
+      .collection('hospitals')
+      .doc(hospitalId)
+      .collection('appointments')
+      .doc(appointmentId);
     const apptDoc = await apptRef.get();
-    if (!apptDoc.exists) return res.status(404).json({ success: false, error: 'Not found' });
+    if (!apptDoc.exists)
+      return res.status(404).json({ success: false, error: 'Not found' });
 
     const data = apptDoc.data();
     const updates = {
@@ -636,13 +830,21 @@ app.post('/api/appointment/confirm-with-message', async (req, res) => {
       doctorTime: customDoctorTime || data.doctorTime,
     };
 
+    let notificationError = null;
     try {
       await sendPatientConfirmation(editedData, appointmentId);
     } catch (notifErr) {
       console.error('⚠️ Notification failed:', notifErr.message);
+      notificationError = notifErr.message;
     }
 
-    res.json({ success: true, message: 'Confirmed and sent' });
+    res.json({
+      success: true,
+      message: notificationError
+        ? 'Confirmed but notification failed'
+        : 'Confirmed and sent',
+      notificationError,
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -654,12 +856,24 @@ app.post('/api/appointment/confirm-with-message', async (req, res) => {
 app.post('/api/notification/send-promo', async (req, res) => {
   try {
     const { title, body } = req.body;
-    if (!title || !body) return res.status(400).json({ success: false, error: 'Missing data' });
+    if (!title || !body)
+      return res
+        .status(400)
+        .json({ success: false, error: 'Missing data' });
 
-    const usersSnap = await db.collection('hospitals').doc(HOSPITAL_ID).collection('users').where('approved', '==', true).get();
+    const usersSnap = await db
+      .collection('hospitals')
+      .doc(HOSPITAL_ID)
+      .collection('users')
+      .where('approved', '==', true)
+      .get();
     let count = 0;
     for (const doc of usersSnap.docs) {
-      await saveInAppNotification(doc.id, { title, body, type: 'promo' }, { isPromo: true });
+      await saveInAppNotification(
+        doc.id,
+        { title, body, type: 'promo' },
+        { isPromo: true }
+      );
       count++;
     }
     res.json({ success: true, sent: count });
@@ -669,54 +883,98 @@ app.post('/api/notification/send-promo', async (req, res) => {
 });
 
 // ==================================================
-// 🏠 Root API
+// 🏠 Root API — Health check
 // ==================================================
 app.get('/', (req, res) => {
   res.json({
     status: 'ok',
     hospital: HOSPITAL_ID,
     whatsapp: isConnected ? 'connected' : 'disconnected',
+    whatsappReady: isWhatsAppReady(),
+    whatsappUser: sock?.user?.id || null,
+    sessionAgeMinutes: sessionStartTime
+      ? Math.floor((Date.now() - sessionStartTime) / 60000)
+      : null,
+    lastMessageSentAt,
+    lastMessageTarget,
+    lastMessageError,
+    notificationTarget: NOTIFICATION_TARGET,
     timestamp: new Date().toISOString(),
   });
 });
 
 // ==================================================
-// 🔥 Firestore Listener
+// 🔥 Firestore Listener (FIXED)
 // ==================================================
 const previousStatuses = new Map();
+
+// ✅ Periodic cleanup for previousStatuses (memory leak prevention)
+setInterval(() => {
+  if (previousStatuses.size > 1000) {
+    console.log('🧹 [FIRESTORE] Cleaning previousStatuses (size:', previousStatuses.size, ')');
+    previousStatuses.clear();
+  }
+}, 60 * 60 * 1000); // প্রতি ঘণ্টায়
+
 db.collection(`hospitals/${HOSPITAL_ID}/appointments`).onSnapshot(
   (snapshot) => {
-    snapshot.docChanges().forEach(async (change) => {
+    const changes = snapshot.docChanges();
+    if (changes.length > 0) {
+      console.log(`\n📡 [FIRESTORE] Snapshot — ${changes.length} change(s)`);
+    }
+
+    changes.forEach(async (change) => {
       const docId = change.doc.id;
       const data = change.doc.data();
       const currentStatus = data.status;
 
+      console.log(
+        `📡 [FIRESTORE] Change: ${change.type} | docId: ${docId} | status: ${currentStatus}`
+      );
+
       if (change.type === 'added') {
         previousStatuses.set(docId, currentStatus);
         if (data.status === 'pending') {
+          console.log('🔔 [FIRESTORE] → Triggering hospital notification');
           await sendHospitalNotification(data, docId);
         }
       }
 
       if (change.type === 'modified') {
         const prev = previousStatuses.get(docId);
-        if (prev === 'pending' && currentStatus === 'confirmed' && data.confirmedBy !== 'admin') {
+
+        if (
+          prev === 'pending' &&
+          currentStatus === 'confirmed' &&
+          data.confirmedBy !== 'admin'
+        ) {
+          console.log('🔔 [FIRESTORE] → Triggering patient confirmation');
           await sendPatientConfirmation(data, docId);
         }
+
         previousStatuses.set(docId, currentStatus);
       }
     });
   },
-  (error) => console.error('❌ Firestore listener:', error.message)
+  (error) => console.error('❌ [FIRESTORE] listener error:', error.message)
 );
 
 // ==================================================
 // 🚀 Run Server
 // ==================================================
-app.listen(PORT, () => console.log(`🚀 Backend running on port: ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 Backend running on port: ${PORT}`);
+  console.log(`🏥 Hospital: ${HOSPITAL_ID}`);
+  console.log(`📱 Notification target: ${NOTIFICATION_TARGET}`);
+  console.log(`🧪 Test endpoint: POST /api/test-whatsapp`);
+});
+
 connectToWhatsApp();
 
 process.on('SIGINT', () => {
-  if (sock) try { sock.end(undefined); } catch (e) {}
+  if (sock)
+    try {
+      sock.end(undefined);
+    } catch (e) {}
   process.exit(0);
 });
