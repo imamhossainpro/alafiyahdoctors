@@ -2,8 +2,7 @@
 // ==================================================
 // 💬 ChatbotWidget — Al-Afiyah Hospital
 // ==================================================
-// ✅ Phase 1: TypingIndicator, retry, timeout, quick-actions, mobile-friendly
-// ✅ AI provider / Firebase / booking — অপরিবর্তিত
+// ✅ Custom Quick Actions & Google Maps Link Integration
 // ==================================================
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
@@ -16,11 +15,11 @@ import {
   Mic,
   CalendarPlus,
   RotateCcw,
-  AlertCircle,
+  MapPin,
 } from 'lucide-react';
 import axios from 'axios';
 
-// ✅ Production API URL (localhost bug fixed)
+// ✅ Production API URL
 const API_BASE_URL =
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) ||
   'https://api.alafiyahhospital.com';
@@ -36,14 +35,13 @@ const GENERIC_ERROR_RESPONSE =
   'দুঃখিত, এই মুহূর্তে উত্তর দিতে পারছি না। অনুগ্রহ করে আবার চেষ্টা করুন।';
 
 // ==================================================
-// ✅ Quick-action chips
+// ✅ Quick-action chips (আপনার চাহিদা অনুযায়ী আপডেট করা)
 // ==================================================
 const QUICK_ACTIONS = [
-  { label: 'ডাক্তারের সিরিয়াল নিন', query: 'কীভাবে সিরিয়াল নিতে পারি?' },
   { label: 'আজকের ডাক্তার তালিকা', query: 'আজকের ডাক্তার তালিকা' },
-  { label: 'ডাক্তার দেখানোর সময়', query: 'ডাক্তার দেখানোর সময় কখন?' },
-  { label: 'টেস্টের মূল্য', query: 'টেস্টের মূল্য কত?' },
-  { label: 'হাসপাতালের ঠিকানা', query: 'হাসপাতালের ঠিকানা কী?' },
+  { label: 'টেস্টের মূল্য', query: 'টেস্টের মূল্য' },
+  { label: 'হাসপাতালের ঠিকানা', query: 'হাসপাতালের ঠিকানা' },
+  { label: 'যোগাযোগ করুন', query: 'হাসপাতালের ফোন নম্বর' },
 ];
 
 // ==================================================
@@ -131,7 +129,6 @@ export default function ChatbotWidget() {
   useEffect(() => {
     if (!messagesContainerRef.current) return;
     const el = messagesContainerRef.current;
-    // requestAnimationFrame — DOM update-এর পর
     const raf = requestAnimationFrame(() => {
       el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
     });
@@ -139,7 +136,7 @@ export default function ChatbotWidget() {
   }, [messages, isLoading]);
 
   // ==================================================
-  // ✅ Core message sender (shared by input + quick actions + retry)
+  // ✅ Core message sender
   // ==================================================
   const sendMessage = useCallback(
     async (rawText) => {
@@ -149,17 +146,14 @@ export default function ChatbotWidget() {
 
       setIsSubmitting(true);
 
-      // ✅ 1. User message instantly
       setMessages((prev) => [
         ...prev,
         { role: 'user', text: userMsg, doctors: [], ts: Date.now() },
       ]);
       setInput('');
 
-      // ✅ 2. Activate typing indicator
       setIsLoading(true);
 
-      // ✅ Abort controller for timeout / unmount
       const controller = new AbortController();
       abortControllerRef.current = controller;
       const timeoutId = setTimeout(() => controller.abort('timeout'), REQUEST_TIMEOUT_MS);
@@ -177,7 +171,6 @@ export default function ChatbotWidget() {
           (res?.data?.answer && String(res.data.answer).trim()) || '';
         const doctors = Array.isArray(res?.data?.doctors) ? res.data.doctors : [];
 
-        // ✅ 6. Empty-response state
         if (!answerText && doctors.length === 0) {
           setMessages((prev) => [
             ...prev,
@@ -230,7 +223,7 @@ export default function ChatbotWidget() {
           abortControllerRef.current = null;
         }
         if (isMountedRef.current) {
-          setIsLoading(false); // ✅ 3. Indicator off
+          setIsLoading(false);
           setIsSubmitting(false);
         }
       }
@@ -238,19 +231,16 @@ export default function ChatbotWidget() {
     [isLoading, isSubmitting]
   );
 
-  // ✅ Form submit handler
   const handleSubmit = (e) => {
     e?.preventDefault();
     sendMessage(input);
   };
 
-  // ✅ Retry handler — same message আবার পাঠাবে
   const handleRetry = (retryText) => {
     if (!retryText) return;
     sendMessage(retryText);
   };
 
-  // ✅ Quick action
   const handleQuickAction = (q) => {
     sendMessage(q);
   };
@@ -292,7 +282,6 @@ export default function ChatbotWidget() {
           { role: 'bot', text: `✅ ${successMsg}`, doctors: [], ts: Date.now() },
         ]);
 
-        // ✅ বুকিং-পরবর্তী prompt
         setTimeout(() => {
           if (!isMountedRef.current) return;
           setMessages((prev) => [
@@ -702,7 +691,7 @@ export default function ChatbotWidget() {
           <div className="chat-header">
             <div>
               <h3>আল-আফিয়া সহায়ক</h3>
-              <p>ডাক্তার খুঁজুন · সিরিয়াল নিন · সময় জানুন</p>
+              <p>ডাক্তার খুঁজুন · সময় জানুন</p>
             </div>
             <button
               className="chat-close"
@@ -724,7 +713,33 @@ export default function ChatbotWidget() {
                   {msg.role === 'bot' ? <Bot size={18} /> : <User size={18} />}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="chat-bubble">{msg.text}</div>
+                  <div className="chat-bubble">
+                    {msg.text}
+                    {/* ✅ গুগল ম্যাপ লিংক (শুধু ঠিকানা থাকলে দেখাবে) */}
+                    {msg.text && msg.text.includes('বাকলিয়া') && (
+                      <div style={{ marginTop: '10px' }}>
+                        <a 
+                          href="https://maps.google.com/?q=Al-Afiyah+Hospital+Bakalia+Chattogram" 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          style={{ 
+                            display: 'inline-flex', 
+                            alignItems: 'center', 
+                            gap: '4px', 
+                            background: '#e0f2fe', 
+                            color: '#0369a1', 
+                            padding: '6px 12px', 
+                            borderRadius: '8px', 
+                            textDecoration: 'none', 
+                            fontWeight: '600', 
+                            fontSize: '13px' 
+                          }}
+                        >
+                          <MapPin size={14} /> গুগল ম্যাপে দেখুন
+                        </a>
+                      </div>
+                    )}
+                  </div>
 
                   {/* Retry */}
                   {msg.isError && msg.retryText && (
