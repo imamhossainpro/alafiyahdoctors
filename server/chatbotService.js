@@ -119,19 +119,55 @@ async function getChatbotAnswer(userQuestion) {
       return { text: FIXED_RESPONSES.booking, doctors: [] };
     }
 
-    // ✅ ২. আজকের ডাক্তার চেক
+    // ✅ ২. দিন/তারিখ বুঝতে চেষ্টা করা (আজ, আগামীকাল, নির্দিষ্ট তারিখ)
+    let targetDate = new Date(); // ডিফল্ট আজকের তারিখ
+    const daysBn = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
+    const monthsBn = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
+
+    if (lowerQuestion.includes('কাল') || lowerQuestion.includes('tomorrow') || lowerQuestion.includes('আগামীকাল')) {
+      targetDate.setDate(targetDate.getDate() + 1); // ১ দিন পর
+    } else if (lowerQuestion.includes('পরশু')) {
+      targetDate.setDate(targetDate.getDate() + 2); // ২ দিন পর
+    } else {
+      // নির্দিষ্ট তারিখ খোঁজা (যেমন: "২৫ অক্টোবর", "25 october")
+      const dateMatch = lowerQuestion.match(/(\d{1,2})\s*(জানুয়ারি|ফেব্রুয়ারি|মার্চ|এপ্রিল|মে|জুন|জুলাই|আগস্ট|সেপ্টেম্বর|অক্টোবর|নভেম্বর|ডিসেম্বর)/i) || 
+                        lowerQuestion.match(/(\d{1,2})\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i);
+      
+      const isoMatch = lowerQuestion.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+
+      if (dateMatch) {
+        const day = parseInt(dateMatch[1]);
+        let monthKeyword = dateMatch[2].toLowerCase();
+        let monthIndex = monthsBn.findIndex(m => m.toLowerCase().includes(monthKeyword) || monthKeyword.includes(m.toLowerCase()));
+        
+        if (monthIndex === -1) {
+           const enMonths = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+           monthIndex = enMonths.indexOf(monthKeyword.substring(0, 3));
+        }
+        if (monthIndex !== -1) {
+          targetDate.setMonth(monthIndex, day);
+        }
+      } else if (isoMatch) {
+        targetDate = new Date(isoMatch[1], parseInt(isoMatch[2]) - 1, parseInt(isoMatch[3]));
+      }
+    }
+
+    const targetDayBn = daysBn[targetDate.getDay()];
+    const isAskingForSpecificDate = 
+      lowerQuestion.includes('কাল') || 
+      lowerQuestion.includes('আগামীকাল') || 
+      lowerQuestion.includes('পরশু') || 
+      lowerQuestion.includes('tomorrow') || 
+      lowerQuestion.match(/(\d{1,2})\s*(জানুয়ারি|ফেব্রুয়ারি|মার্চ|এপ্রিল|মে|জুন|জুলাই|আগস্ট|সেপ্টেম্বর|অক্টোবর|নভেম্বর|ডিসেম্বর)/i) !== null;
+
     const isAskingForToday = lowerQuestion.includes('আজ') || lowerQuestion.includes('today') || lowerQuestion.includes('আজকের');
     const departmentsList = ['মেডিসিন', 'গাইনী', 'সার্জারি', 'কার্ডিওলজি', 'অর্থোপেডিক', 'শিশু', 'চর্ম', 'নাক-কান-গলা'];
     const matchedDeptKeyword = departmentsList.find(dept => lowerQuestion.includes(dept));
 
-    const daysBn = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
-    const today = new Date();
-    const todayBn = daysBn[today.getDay()];
-
-    // প্যানেল লোড
+    // প্যানেল লোড (নির্দিষ্ট দিনের জন্য)
     let activeDoctorIds = [];
     try {
-      const panelRef = db.collection('hospitals').doc(HOSPITAL_ID).collection('panels').doc(todayBn);
+      const panelRef = db.collection('hospitals').doc(HOSPITAL_ID).collection('panels').doc(targetDayBn);
       const panelSnap = await panelRef.get();
       if (panelSnap.exists) {
         activeDoctorIds = panelSnap.data().activeDoctorIds || [];
@@ -196,7 +232,7 @@ async function getChatbotAnswer(userQuestion) {
         isSpecificDoctorSearch = true;
         matchedDoctors = specificMatches.sort((a, b) => b.score - a.score).slice(0, 1); 
       } else {
-        if (isAskingForToday) {
+        if (isAskingForSpecificDate || isAskingForToday) {
           matchedDoctors = scoredDocs.sort((a, b) => a.originalIndex - b.originalIndex).slice(0, 15); 
         } else {
           let relevantDocs = scoredDocs.filter(doc => doc.score > 0.2);
@@ -211,15 +247,22 @@ async function getChatbotAnswer(userQuestion) {
     // ✅ ডাক্তার পাওয়া গেলে
     if (matchedDoctors.length > 0) {
       let responseText = `${matchedDoctors.length} জন ডাক্তার পাওয়া গেছে:`;
-      if (isSpecificDoctorSearch) responseText = `ডাক্তারের তথ্য নিচে দেওয়া হলো।`;
-      else if (isAskingForToday && matchedDeptKeyword) responseText = `আজকের ${matchedDeptKeyword} বিভাগের ডাক্তার:`;
-      else if (isAskingForToday) responseText = `আজকের ডাক্তার:`;
+      if (isSpecificDoctorSearch) {
+        responseText = `ডাক্তারের তথ্য নিচে দেওয়া হলো।`;
+      } else if (isAskingForSpecificDate) {
+        const dateStr = targetDate.toLocaleDateString('bn-BD', { day: 'numeric', month: 'long' });
+        responseText = matchedDeptKeyword 
+          ? `${dateStr} তারিখে ${matchedDeptKeyword} বিভাগের ডাক্তার:` 
+          : `${dateStr} তারিখের ডাক্তার:`;
+      } else if (isAskingForToday) {
+        responseText = matchedDeptKeyword ? `আজকের ${matchedDeptKeyword} বিভাগের ডাক্তার:` : `আজকের ডাক্তার:`;
+      }
 
       return { text: responseText, doctors: matchedDoctors };
     }
 
     // ✅ ডাক্তার না পাওয়া গেলে
-    if (matchedDeptKeyword || isAskingForToday || /ডাক্তার|ডাঃ|doctor|dr\b/i.test(userQuestion)) {
+    if (matchedDeptKeyword || isAskingForToday || isAskingForSpecificDate || /ডাক্তার|ডাঃ|doctor|dr\b/i.test(userQuestion)) {
       return { text: 'এই বিষয়ে কোনো ডাক্তার পাওয়া যায়নি। অন্য নাম বা বিভাগ দিয়ে খুঁজুন।', doctors: [] };
     }
 
