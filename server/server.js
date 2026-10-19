@@ -1,15 +1,8 @@
 // server.js
-// ==================================================
-// 🏥 আল-আফিয়া হাসপাতাল — Backend Server (Fully Fixed + Chatbot Source)
-// ==================================================
 require('dotenv').config();
 const express = require('express');
 const makeWASocket = require('@whiskeysockets/baileys').default;
-const {
-  useMultiFileAuthState,
-  DisconnectReason,
-  fetchLatestBaileysVersion,
-} = require('@whiskeysockets/baileys');
+const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const qrcode = require('qrcode-terminal');
 const nodemailer = require('nodemailer');
@@ -19,9 +12,6 @@ const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
 
-// ==================================================
-// ✅ Load service account
-// ==================================================
 let serviceAccount;
 try {
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
@@ -39,23 +29,12 @@ try {
 
 initializeApp({ credential: cert(serviceAccount) });
 const db = getFirestore();
-
 const { getChatbotAnswer } = require('./chatbotService');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// ==================================================
-// ✅ CORS Middleware
-// ==================================================
-const ALLOWED_ORIGINS = [
-  'https://doctors.alafiyahhospital.com',
-  'https://alafiyahhospital.com',
-  'https://www.alafiyahhospital.com',
-  'https://api.alafiyahhospital.com',
-  'http://localhost:5173',
-  'http://localhost:3000',
-];
+const ALLOWED_ORIGINS = ['https://doctors.alafiyahhospital.com', 'https://alafiyahhospital.com', 'https://www.alafiyahhospital.com', 'https://api.alafiyahhospital.com', 'http://localhost:5173', 'http://localhost:3000'];
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
@@ -68,18 +47,12 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Max-Age', '86400');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(204).end();
-  }
+  if (req.method === 'OPTIONS') return res.status(204).end();
   next();
 });
 
 app.use(express.json());
 
-// ==================================================
-// ---------- Constants ----------
-// ==================================================
 const HOSPITAL_ID = process.env.HOSPITAL_ID || 'alafiyah_main';
 const HOSPITAL_NAME_EN = 'Al-Afiyah Hospital';
 const HOSPITAL_CONTACT = '01886-776512';
@@ -95,9 +68,7 @@ let lastMessageSentAt = null;
 let lastMessageError = null;
 let lastMessageTarget = null;
 
-function isWhatsAppReady() {
-  return isConnected === true && sock !== null && sock.user != null;
-}
+function isWhatsAppReady() { return isConnected === true && sock !== null && sock.user != null; }
 
 async function safeSendMessage(jid, payload, label = 'WhatsApp') {
   if (!isWhatsAppReady()) throw new Error(`${label} not ready`);
@@ -160,7 +131,6 @@ async function sendToDevice(fcmToken, notification, data = {}) {
     const response = await getMessaging().send(message);
     return { success: true, messageId: response };
   } catch (error) {
-    console.error('❌ FCM send error:', error.message);
     return { success: false, error: error.message };
   }
 }
@@ -175,8 +145,7 @@ async function sendSMS(phoneNumber, message) {
     if (number.startsWith('88')) number = number.substring(2);
     if (!number.startsWith('0')) number = '0' + number;
     const isLongMessage = message.length > 160;
-    const messageType = isLongMessage ? 'long' : 'text';
-    const payload = { api_key: apiKey, senderid: senderId, type: messageType, scheduledDateTime: '', msg: message, contacts: number };
+    const payload = { api_key: apiKey, senderid: senderId, type: isLongMessage ? 'long' : 'text', scheduledDateTime: '', msg: message, contacts: number };
     const response = await axios.post(apiUrl, payload, { headers: { 'Content-Type': 'application/json' }, timeout: 15000 });
     const resp = response.data;
     let resultsArray = null;
@@ -185,7 +154,6 @@ async function sendSMS(phoneNumber, message) {
     if (resultsArray && resultsArray.length > 0 && resultsArray[0].status === 0) return true;
     return false;
   } catch (error) {
-    console.error('❌ SMS API error:', error.message);
     return false;
   }
 }
@@ -370,8 +338,21 @@ app.post('/api/book-appointment', async (req, res) => {
     }
     if (!selectedDoctor) return res.status(404).json({ success: false, error: 'ডাক্তার পাওয়া যায়নি' });
 
-    // ২. সিরিয়াল নম্বর জেনারেট করা
     const dateToBook = bookingDate || new Date().toISOString().split('T')[0];
+
+    // ✅ ডুপ্লিকেট বুকিং চেক (একই রোগী, একই ডাক্তার, একই দিনে একবারই বুকিং করতে পারবে)
+    const existingApptSnap = await db.collection('hospitals').doc('alafiyah_main').collection('appointments')
+      .where('doctorId', '==', doctorId)
+      .where('bookingDate', '==', dateToBook)
+      .where('mobile', '==', mobile)
+      .where('status', '!=', 'cancelled')
+      .get();
+
+    if (!existingApptSnap.empty) {
+      return res.status(400).json({ success: false, error: 'এই রোগী ইতিমধ্যে এই ডাক্তারের জন্য আজ বুকিং করেছেন।' });
+    }
+
+    // ২. সিরিয়াল নম্বর জেনারেট করা
     const counterKey = `${selectedDoctor.id}_${dateToBook}`;
     const counterRef = db.collection('hospitals').doc('alafiyah_main').collection('counters').doc(counterKey);
     const counterSnap = await counterRef.get();
@@ -455,6 +436,11 @@ app.post('/api/book-appointment', async (req, res) => {
     } catch (notifErr) {
       console.error('❌ In-app notification error:', notifErr.message);
     }
+
+    // ✅ সরাসরি হোয়াটসঅ্যাপ নোটিফিকেশন পাঠান
+    sendHospitalNotification(appointmentData, apptRef.id).catch((err) =>
+      console.error('❌ [BOOKING-NOTIFY] Direct notification error:', err.message)
+    );
 
     res.json({
       success: true,
