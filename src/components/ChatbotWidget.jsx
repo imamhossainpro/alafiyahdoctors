@@ -90,7 +90,7 @@ export default function ChatbotWidget() {
     {
       role: 'bot',
       text:
-        'আসসালামু আলাইকুম! আল-আফিয়া হাসপাতালে স্বাগতম। আমি আপনাকে কীভাবে সাহায্য করতে পারি?',
+        'আসসালামু আলাইকুম! আল-আফিয়াহ হাসপাতালে স্বাগতম। আমি আপনাকে কীভাবে সাহায্য করতে পারি?',
       doctors: [],
     },
   ]);
@@ -690,7 +690,7 @@ export default function ChatbotWidget() {
           {/* Header */}
           <div className="chat-header">
             <div>
-              <h3>আল-আফিয়া সহায়ক</h3>
+              <h3>আল-আফিয়াহ সহায়ক</h3>
               <p>ডাক্তার খুঁজুন · সময় জানুন</p>
             </div>
             <button

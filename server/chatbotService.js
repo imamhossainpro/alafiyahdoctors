@@ -106,10 +106,10 @@ async function getChatbotAnswer(userQuestion) {
     const lowerQuestion = userQuestion.toLowerCase();
 
     // ✅ ১. ফিক্সড উত্তর চেক (ঠিকানা, ফোন, টেস্ট, বুকিং)
-    if (lowerQuestion.includes('ঠিকানা') || lowerQuestion.includes('লোকেশন') || lowerQuestion.includes('location')) {
+    if (lowerQuestion.includes('ঠিকানা') || lowerQuestion.includes('লোকেশন') || lowerQuestion.includes('location') || lowerQuestion.includes('ম্যাপ')) {
       return { text: FIXED_RESPONSES.address, doctors: [] };
     }
-    if (lowerQuestion.includes('ফোন') || lowerQuestion.includes('মোবাইল') || lowerQuestion.includes('যোগাযোগ')) {
+    if (lowerQuestion.includes('ফোন') || lowerQuestion.includes('মোবাইল') || lowerQuestion.includes('যোগাযোগ') || lowerQuestion.includes('কল')) {
       return { text: FIXED_RESPONSES.phone, doctors: [] };
     }
     if (lowerQuestion.includes('টেস্ট') || lowerQuestion.includes('মূল্য') || lowerQuestion.includes('প্যাথলজি') || lowerQuestion.includes('ডায়াগনস্টিক')) {
