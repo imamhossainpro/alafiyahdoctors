@@ -17,6 +17,9 @@ const DoctorDashboard = lazy(() => import('./components/DoctorDashboard'));
 // ✅ NEW: Public All Doctors directory
 const AllDoctorsPage = lazy(() => import('./AllDoctorsPage'));
 
+// ✅ NEW: Chatbot Training Page (Admin)
+const TrainChatbot = lazy(() => import('./components/admin/TrainChatbot'));
+
 const Loader = () => (
   <div style={{
     display: 'flex', justifyContent: 'center', alignItems: 'center',
@@ -53,6 +56,9 @@ function App() {
           <Route path="/edit" element={<DoctorPanelBuilder />} />
           <Route path="/dashboard" element={<DoctorPanelBuilder />} />
           <Route path="/admin" element={<DoctorPanelBuilder />} />
+          
+          {/* ✅ NEW: Chatbot Training Route */}
+          <Route path="/admin/train-chatbot" element={<TrainChatbot />} />
 
           <Route path="/mou" element={<DoctorPanelBuilder />} />
           <Route path="/mou/:mouId" element={<DoctorPanelBuilder />} />

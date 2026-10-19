@@ -1,12 +1,12 @@
 // src/components/AdminDashboard.jsx
 import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { OverviewSkeleton } from './ui/SkeletonScreens';
 import { useHospital } from '../context/HospitalContext';
 import { useAuth } from '../context/AuthContext';
 import { usePermission } from '../context/PermissionContext';
 import { db, updateDoc, doc, collection, getDocs, getDoc, onSnapshot } from '../firebase';
-import { RefreshCw, Shield, FileText, Search, FileSignature, UserCheck, BarChart3 } from 'lucide-react';
+import { RefreshCw, Shield, FileText, Search, FileSignature, UserCheck, BarChart3, Bot } from 'lucide-react';
 import {
   updateAppointmentStatus,
   archiveAppointment,
@@ -33,9 +33,7 @@ const LocationManager = lazy(() => import('./admin/LocationManager'));
 const UserAccessManager = lazy(() => import('./admin/UserAccessManager'));
 const QueueControlPanel = lazy(() => import('./admin/QueueControlPanel'));
 const PromoManager = lazy(() => import('./admin/PromoManager'));
-// ✅ NEW: Doctor Profile Edit Requests
 const ProfileEditRequests = lazy(() => import('./admin/ProfileEditRequests'));
-// ✅ NEW: Analytics Dashboard
 const AnalyticsDashboard = lazy(() => import('./admin/AnalyticsDashboard'));
 
 // ==================================================
@@ -231,9 +229,6 @@ export default function AdminDashboard({ user: propUser }) {
   const [logModuleFilter, setLogModuleFilter] = useState('all');
   const [logActionFilter, setLogActionFilter] = useState('all');
 
-  // ==================================================
-  // ✅ Initial Load – Marketing Team
-  // ==================================================
   useEffect(() => {
     if (!hospitalId) return;
     let mounted = true;
@@ -259,9 +254,6 @@ export default function AdminDashboard({ user: propUser }) {
     };
   }, [hospitalId]);
 
-  // ==================================================
-  // ✅ Real-time Appointments
-  // ==================================================
   useEffect(() => {
     if (!hospitalId) return;
     const ref = collection(db, 'hospitals', hospitalId, 'appointments');
@@ -278,9 +270,6 @@ export default function AdminDashboard({ user: propUser }) {
     return () => unsub();
   }, [hospitalId]);
 
-  // ==================================================
-  // ✅ Real-time Departments + Panels
-  // ==================================================
   useEffect(() => {
     if (!hospitalId) return;
 
@@ -312,9 +301,6 @@ export default function AdminDashboard({ user: propUser }) {
     };
   }, [hospitalId]);
 
-  // ==================================================
-  // ✅ Real-time users list (for AdminPanel)
-  // ==================================================
   useEffect(() => {
     if (!hospitalId || !can('user.view')) {
       setAllUsers([]);
@@ -349,9 +335,6 @@ export default function AdminDashboard({ user: propUser }) {
     return () => unsub();
   }, [hospitalId, can]);
 
-  // ==================================================
-  // ✅ Real-time pending profile requests count
-  // ==================================================
   useEffect(() => {
     if (!hospitalId) return;
     if (!(user?.role === 'admin' || user?.role === 'sub-admin')) return;
@@ -368,9 +351,6 @@ export default function AdminDashboard({ user: propUser }) {
     return () => unsub();
   }, [hospitalId, user?.role]);
 
-  // ==================================================
-  // ✅ Silent Refresh
-  // ==================================================
   const refreshData = async () => {
     if (!hospitalId) return;
     try {
@@ -383,9 +363,6 @@ export default function AdminDashboard({ user: propUser }) {
     }
   };
 
-  // ==================================================
-  // ✅ Activity Logs
-  // ==================================================
   useEffect(() => {
     if (!hospitalId || tab !== 'logs' || !can('activity_log.view')) return;
     setLogsLoading(true);
@@ -406,9 +383,6 @@ export default function AdminDashboard({ user: propUser }) {
     };
   }, [hospitalId, tab, can]);
 
-  // ==================================================
-  // ✅ Status Change
-  // ==================================================
   const handleStatusChange = async (id, newStatus) => {
     if (!hospitalId) return;
     if (!can('booking.status_change')) {
@@ -442,9 +416,6 @@ export default function AdminDashboard({ user: propUser }) {
     }
   };
 
-  // ==================================================
-  // ✅ ARCHIVE
-  // ==================================================
   const handleArchive = async (appointmentId) => {
     if (!can('booking.archive')) {
       alert('❌ আপনার আর্কাইভ করার permission নেই।');
@@ -473,9 +444,6 @@ export default function AdminDashboard({ user: propUser }) {
     }
   };
 
-  // ==================================================
-  // ✅ RESTORE
-  // ==================================================
   const handleRestore = async (appointmentId) => {
     if (!can('archive.restore')) {
       alert('❌ আপনার restore permission নেই।');
@@ -505,9 +473,6 @@ export default function AdminDashboard({ user: propUser }) {
     }
   };
 
-  // ==================================================
-  // ✅ PERMANENT DELETE
-  // ==================================================
   const handlePermanentDelete = async (appointmentId) => {
     if (!can('archive.delete')) {
       alert('❌ আপনার permanent delete permission নেই।');
@@ -539,9 +504,6 @@ export default function AdminDashboard({ user: propUser }) {
     }
   };
 
-  // ==================================================
-  // ✅ AdminPanel handlers
-  // ==================================================
   const handleApprove = async (userId) => {
     if (!hospitalId) return;
     try {
@@ -592,9 +554,6 @@ export default function AdminDashboard({ user: propUser }) {
     }
   };
 
-  // ==================================================
-  // ✅ Filter Presets
-  // ==================================================
   const applyPreset = (preset) => {
     setFilterPreset(preset);
     const now = new Date();
@@ -637,9 +596,6 @@ export default function AdminDashboard({ user: propUser }) {
     }
   };
 
-  // ==================================================
-  // ✅ Filtered Data
-  // ==================================================
   const filteredAppointments = useMemo(() => {
     if (!appointments || !Array.isArray(appointments)) return [];
     return appointments.filter((item) => {
@@ -671,9 +627,6 @@ export default function AdminDashboard({ user: propUser }) {
     [filteredAppointments]
   );
 
-  // ==================================================
-  // ✅ Activity Log — unique users for filter
-  // ==================================================
   const uniqueLogUsers = useMemo(() => {
     const map = new Map();
     (activityLogs || []).forEach((log) => {
@@ -687,9 +640,6 @@ export default function AdminDashboard({ user: propUser }) {
     return Array.from(map.values());
   }, [activityLogs]);
 
-  // ==================================================
-  // ✅ Filtered Activity Logs
-  // ==================================================
   const filteredAuditLogs = useMemo(() => {
     if (!activityLogs || !Array.isArray(activityLogs)) return [];
     return activityLogs.filter((item) => {
@@ -710,18 +660,12 @@ export default function AdminDashboard({ user: propUser }) {
     });
   }, [activityLogs, startDate, endDate, logUserFilter, logModuleFilter, logActionFilter]);
 
-  // ==================================================
-  // ✅ Loading State
-  // ==================================================
   if (loading) return <OverviewSkeleton />;
 
   if (error) {
     return <div style={{ padding: '20px', color: '#dc2626' }}>❌ Error: {error}</div>;
   }
 
-  // ==================================================
-  // ✅ No Access Check
-  // ==================================================
   const hasAnyTab =
     can('dashboard.view') ||
     can('booking.view') ||
@@ -746,9 +690,6 @@ export default function AdminDashboard({ user: propUser }) {
     );
   }
 
-  // ==================================================
-  // ✅ RENDER
-  // ==================================================
   return (
     <div style={{ padding: '20px', width: '100%', boxSizing: 'border-box', background: '#f9fafb', color: '#1f2937' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
@@ -772,7 +713,6 @@ export default function AdminDashboard({ user: propUser }) {
             </button>
           )}
 
-          {/* ✅ NEW: Analytics Dashboard Tab */}
           {can('dashboard.view') && (
             <button
               onClick={() => { setShowArchived(false); setTab('analytics'); }}
@@ -877,6 +817,26 @@ export default function AdminDashboard({ user: propUser }) {
               বুকিং লিস্ট
             </button>
           )}
+
+          {/* ✅ NEW: চ্যাটবট ট্রেইনিং লিংক (আপনার দেওয়া কোডটি এখানে ঠিক করা হয়েছে) */}
+          <Link
+            to="/admin/train-chatbot"
+            style={{
+              padding: '8px 16px',
+              background: '#ffffff',
+              color: '#333333',
+              border: '1px solid #e2e8f0',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              fontWeight: '600',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              textDecoration: 'none',
+            }}
+          >
+            <Bot size={14} /> চ্যাটবট ট্রেইনিং
+          </Link>
 
           {can('marketing_report.view') && (
             <button
@@ -996,7 +956,6 @@ export default function AdminDashboard({ user: propUser }) {
         </SafeArea>
       )}
 
-      {/* ✅ NEW: Analytics Dashboard Content */}
       {tab === 'analytics' && can('dashboard.view') && (
         <SafeArea>
           <Suspense fallback={<TabLoader />}>
@@ -1100,7 +1059,6 @@ export default function AdminDashboard({ user: propUser }) {
         </SafeArea>
       )}
 
-      {/* ✅ Activity Log */}
       {tab === 'logs' && can('activity_log.view') && (
         <SafeArea>
           <div style={{ background: '#fff', padding: '20px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
