@@ -399,7 +399,6 @@ async function connectToWhatsApp() {
 
 // ==================================================
 // 🆕 TRIGGER 1: Hospital WhatsApp Notification
-// (✅ Chatbot source tag added)
 // ==================================================
 async function sendHospitalNotification(data, appointmentId) {
   console.log('\n========================================');
@@ -431,11 +430,21 @@ Status: Pending
 Booking ID: ${appointmentId}`;
 
   try {
-    const result = await safeSendMessage(jid, { text: msg }, 'HOSPITAL-NOTIFY');
-    console.log('✅ [HOSPITAL-NOTIFY] SUCCESS!');
-    lastMessageSentAt = new Date().toISOString();
-    lastMessageTarget = jid;
-    lastMessageError = null;
+    // ✅ Callback / Delay ব্যবহার করে মেসেজ পাঠানো
+    await new Promise((resolve, reject) => {
+      setTimeout(async () => {
+        try {
+          const result = await safeSendMessage(jid, { text: msg }, 'HOSPITAL-NOTIFY');
+          console.log('✅ [HOSPITAL-NOTIFY] SUCCESS!');
+          lastMessageSentAt = new Date().toISOString();
+          lastMessageTarget = jid;
+          lastMessageError = null;
+          resolve(result);
+        } catch (err) {
+          reject(err);
+        }
+      }, 1500); // ১.৫ সেকেন্ড ওয়েট করবে
+    });
   } catch (err) {
     console.error('❌ [HOSPITAL-NOTIFY] FAILED:', err.message);
     lastMessageError = `${err.message} at ${new Date().toISOString()}`;
@@ -478,17 +487,30 @@ Please arrive on time. Contact: ${HOSPITAL_CONTACT}`;
 
   if (isWhatsAppReady() && formattedMobile) {
     try {
-      const jid = formattedMobile + '@s.whatsapp.net';
-      await safeSendMessage(jid, { text: unifiedMessage }, 'PATIENT-WA');
-      console.log(`✅ [PATIENT-WA] Sent to patient: ${formattedMobile}`);
-      lastMessageSentAt = new Date().toISOString();
-      lastMessageTarget = jid;
+      // ✅ Callback / Delay ব্যবহার করে মেসেজ পাঠানো (Waiting for message ফিক্স)
+      await new Promise((resolve, reject) => {
+        setTimeout(async () => {
+          try {
+            const jid = formattedMobile + '@s.whatsapp.net';
+            await safeSendMessage(jid, { text: unifiedMessage }, 'PATIENT-WA');
+            console.log(`✅ [PATIENT-WA] Sent to patient: ${formattedMobile}`);
+            lastMessageSentAt = new Date().toISOString();
+            lastMessageTarget = jid;
+            resolve();
+          } catch (err) {
+            reject(err);
+          }
+        }, 1000); // ১ সেকেন্ড ওয়েট করবে
+      });
     } catch (err) {
       console.error('❌ [PATIENT-WA] Failed:', err.message);
       lastMessageError = `${err.message} at ${new Date().toISOString()}`;
     }
   }
 
+  // ==================================================
+  // SMS Notification
+  // ==================================================
   if (formattedMobile) {
     const smsText = `Assalamu Alaikum. Your appointment with ${englishDoctorName} at Al-Afiyah Hospital is confirmed.
 Patient: ${englishPatientName}
@@ -499,6 +521,9 @@ Contact: ${HOSPITAL_CONTACT}`;
     await sendSMS(formattedMobile, smsText);
   }
 
+  // ==================================================
+  // Email Notification
+  // ==================================================
   if (data.email) {
     try {
       const emailHtml = `
@@ -516,11 +541,21 @@ Contact: ${HOSPITAL_CONTACT}`;
         subject: `Booking Confirmed - Serial ${serial}`,
         html: emailHtml,
       });
-    } catch (err) {}
+      console.log(`✅ [EMAIL] Sent to: ${data.email}`);
+    } catch (err) {
+      console.error('❌ [EMAIL] Failed:', err.message);
+    }
   }
 
+  // ==================================================
+  // In-App Notification (FCM)
+  // ==================================================
   if (data.userId) {
-    await saveInAppNotification(data.userId, { title: 'Booking Confirmed', body: `Serial #${serial} · ${englishDoctorName}`, type: 'booking_confirmed' }, { appointmentId });
+    await saveInAppNotification(
+      data.userId, 
+      { title: 'Booking Confirmed', body: `Serial #${serial} · ${englishDoctorName}`, type: 'booking_confirmed' }, 
+      { appointmentId }
+    );
   }
 }
 
