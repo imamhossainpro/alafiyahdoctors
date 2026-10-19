@@ -429,6 +429,33 @@ app.post('/api/book-appointment', async (req, res) => {
 
     const apptRef = await db.collection('hospitals').doc('alafiyah_main').collection('appointments').add(appointmentData);
 
+    // ✅ ৪. অ্যাডমিনদের জন্য ইন-অ্যাপ নোটিফিকেশন তৈরি করা (বেল আইকনে দেখানোর জন্য)
+    try {
+      const adminsSnap = await db.collection('hospitals').doc('alafiyah_main').collection('users')
+        .where('role', 'in', ['admin', 'sub-admin']).get();
+
+      const notifPromises = [];
+      adminsSnap.forEach((adminDoc) => {
+        const notifRef = db.collection('hospitals').doc('alafiyah_main')
+          .collection('users').doc(adminDoc.id).collection('notifications');
+        
+        notifPromises.push(notifRef.add({
+          title: '🤖 নতুন চ্যাটবট বুকিং',
+          body: `${name} (${mobile}) ডাক্তার ${selectedDoctor.name} এর জন্য বুকিং করেছেন।`,
+          type: 'chatbot_booking',
+          data: { appointmentId: apptRef.id, source: 'chatbot' },
+          isRead: false,
+          createdAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        }));
+      });
+
+      await Promise.all(notifPromises);
+      console.log('✅ In-app notifications sent to admins.');
+    } catch (notifErr) {
+      console.error('❌ In-app notification error:', notifErr.message);
+    }
+
     // ✅ সরাসরি হোয়াটসঅ্যাপ নোটিফিকেশন পাঠান
     sendHospitalNotification(appointmentData, apptRef.id).catch((err) =>
       console.error('❌ [BOOKING-NOTIFY] Direct notification error:', err.message)
