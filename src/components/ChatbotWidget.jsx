@@ -787,7 +787,7 @@ export default function ChatbotWidget() {
           <div className="chat-header">
             <div>
               <h3>আল-আফিয়াহ সহায়ক</h3>
-              <p>ডাক্তার খুঁজুন · সময় জানুন</p>
+              <p>প্রশ্ন করুন · ডাক্তার খুঁজুন</p>
             </div>
             <button
               className="chat-close"
@@ -968,7 +968,7 @@ export default function ChatbotWidget() {
       {/* ✅ মেসেঞ্জারের মতো পপআপ মেসেজ */}
       {showPopup && !isOpen && (
         <div className="chat-popup" onClick={handleOpenChat}>
-          <strong>আল-আফিয়া হাসপাতাল:</strong><br/>
+          <strong>আল-আফিয়াহ হসপিটাল:</strong><br/>
           আসসালামু আলাইকুম! কীভাবে সাহায্য করতে পারি?
         </div>
       )}
