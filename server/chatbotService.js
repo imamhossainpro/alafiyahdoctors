@@ -107,29 +107,53 @@ async function getChatbotAnswer(userQuestion) {
     // ✅ ২. ডাক্তার সংক্রান্ত প্রশ্ন কি না চেক
     const isDoctorQuery = /ডাক্তার|ডাঃ|doctor|dr\b|মেডিসিন|গাইনী|সার্জারি|কার্ডিও|শিশু|চর্ম|নাক|কান|গলা|specialist|বিশেষজ্ঞ/i.test(lowerQuestion);
 
-    if (!isDoctorQuery) {
-      // ২.১: অ্যাডমিনের শেখানো নলেজ চেক
+        if (!isDoctorQuery) {
+      // ২.১: অ্যাডমিনের শেখানো নলেজ চেক (স্মার্ট কিওয়ার্ড ম্যাচিং)
       const knowledgeSnap = await db.collection('hospitals').doc(HOSPITAL_ID).collection('chatbot_knowledge').get();
       let matchedKnowledge = null;
+      let highestMatchScore = 0;
+
+      // ক্লিন টেক্সট তৈরি (স্পেস ও বিরামচিহ্ন বাদ দিয়ে)
+      const cleanInput = lowerQuestion.replace(/[^\w\s\u0980-\u09FF]/gi, '').trim();
+      const inputWords = cleanInput.split(/\s+/);
 
       knowledgeSnap.forEach(doc => {
         const data = doc.data();
-        if (lowerQuestion.includes(data.question) || data.question.includes(lowerQuestion)) {
-          matchedKnowledge = data.answer;
+        const cleanQuestion = data.question.replace(/[^\w\s\u0980-\u09FF]/gi, '').trim();
+        const questionWords = cleanQuestion.split(/\s+/);
+        
+        // কতগুলো শব্দ মিলছে তা গণনা করা
+        let matchCount = 0;
+        questionWords.forEach(qw => {
+          if (inputWords.includes(qw) || cleanInput.includes(qw)) {
+            matchCount++;
+          }
+        });
+
+        // যদি অন্তত ১টি মূল শব্দ মিলে যায় (যেমন: "হ্যালো" এর সাথে "হাই" না মিললেও "সালাম" মিললে)
+        if (matchCount > 0) {
+          const score = matchCount / Math.max(questionWords.length, 1);
+          if (score > highestMatchScore) {
+            highestMatchScore = score;
+            matchedKnowledge = data.answer;
+          }
         }
       });
 
-      if (matchedKnowledge) {
+      // যদি কাছাকাছি কোনো শব্দ মিলে যায়
+      if (matchedKnowledge && highestMatchScore > 0.3) {
         return { text: matchedKnowledge, doctors: [] };
       }
 
-      // ২.২: নলেজে না থাকলে AI মানুষের মতো উত্তর দিবে
+      // ২.২: নলেজে না থাকলে AI মানুষের মতো বুদ্ধিমান উত্তর দিবে (Fallback)
       const aiPrompt = `
-        তুমি আল-আফিয়া হাসপাতালের একজন আন্তরিক ও বিনয়ী প্রতিনিধি। 
+        তুমি আল-আফিয়া হাসপাতালের একজন আন্তরিক, বিনয়ী এবং বুদ্ধিমান প্রতিনিধি। 
         রোগীর প্রশ্ন: "${userQuestion}"
-        তুমি মানুষের মতো স্বাভাবিকভাবে (২-৩ বাক্যে) উত্তর দাও। 
-        যদি কেউ "হ্যালো" বলে, তবে হাসপাতালের পক্ষ থেকে স্বাগতম জানাও।
-        অজানা প্রশ্নে বলো: "এই বিষয়ে বিস্তারিত জানতে আমাদের হেল্পলাইনে কল করুন: ০১৮৮৬-৭৭৬৫১২"।
+        
+        তুমি কোনো রোবট নও, মানুষের মতো স্বাভাবিকভাবে (২-৩ বাক্যে) উত্তর দাও। 
+        যদি কেউ "হ্যালো", "হাই" বা "সালাম" বলে, তবে হাসপাতালের পক্ষ থেকে স্বাগতম জানাও এবং জিজ্ঞেস করো কীভাবে সাহায্য করতে পারেন।
+        যদি রোগী হাসপাতাল, ডাক্তার বা স্বাস্থ্যসেবা সম্পর্কিত কিছু জিজ্ঞেস করে যা তুমি জানো না, তবে বিনয়ের সাথে বলো: "এই বিষয়ে বিস্তারিত জানতে আমাদের হেল্পলাইনে কল করুন: ০১৮৮৬-৭৭৬৫১২"।
+        অপ্রাসঙ্গিক বা আজেবাজে প্রশ্নের উত্তর দিও না, শুধু ভদ্রভাবে জানিয়ে দাও যে তুমি শুধু হাসপাতালের তথ্য দিতে পারো।
       `;
       const aiAnswer = await generateAnswer(aiPrompt);
       return { text: aiAnswer, doctors: [] };
