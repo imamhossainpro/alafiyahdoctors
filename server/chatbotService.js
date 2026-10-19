@@ -29,16 +29,8 @@ async function getEmbedding(text) {
   try {
     const response = await axios.post(
       url,
-      {
-        model: 'models/gemini-embedding-001',
-        content: { parts: [{ text: text }] },
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': GEMINI_API_KEY,
-        },
-      }
+      { model: 'models/gemini-embedding-001', content: { parts: [{ text: text }] } },
+      { headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY } }
     );
     return response.data.embedding.values;
   } catch (error) {
@@ -87,7 +79,7 @@ async function generateAnswer(prompt) {
   }
 }
 
-// ✅ ৩. কোসাইন সিমিলারিটি (ডাক্তার সার্চের জন্য)
+// ✅ ৩. কোসাইন সিমিলারিটি
 function cosineSimilarity(vecA, vecB) {
   let dot = 0, normA = 0, normB = 0;
   for (let i = 0; i < vecA.length; i++) {
@@ -102,79 +94,62 @@ function cosineSimilarity(vecA, vecB) {
 async function getChatbotAnswer(userQuestion) {
   try {
     if (!db) throw new Error('ডেটাবেস কানেক্টেড নেই।');
-
     const lowerQuestion = userQuestion.toLowerCase();
 
-    // ✅ ১. ফিক্সড উত্তর চেক (ঠিকানা, ফোন, টেস্ট, বুকিং)
-    if (lowerQuestion.includes('ঠিকানা') || lowerQuestion.includes('লোকেশন') || lowerQuestion.includes('location') || lowerQuestion.includes('ম্যাপ')) {
-      return { text: FIXED_RESPONSES.address, doctors: [] };
+    // ✅ ১. ফিক্সড উত্তর চেক
+    if (lowerQuestion.includes('ঠিকানা') || lowerQuestion.includes('লোকেশন')) {
+       return { text: FIXED_RESPONSES.address, doctors: [] };
     }
-    if (lowerQuestion.includes('ফোন') || lowerQuestion.includes('মোবাইল') || lowerQuestion.includes('যোগাযোগ') || lowerQuestion.includes('কল')) {
-      return { text: FIXED_RESPONSES.phone, doctors: [] };
-    }
-    if (lowerQuestion.includes('টেস্ট') || lowerQuestion.includes('মূল্য') || lowerQuestion.includes('প্যাথলজি') || lowerQuestion.includes('ডায়াগনস্টিক')) {
-      return { text: FIXED_RESPONSES.test, doctors: [] };
-    }
-    if (lowerQuestion.includes('সিরিয়াল') || lowerQuestion.includes('বুক')) {
-      return { text: FIXED_RESPONSES.booking, doctors: [] };
+    if (lowerQuestion.includes('ফোন') || lowerQuestion.includes('মোবাইল')) {
+       return { text: FIXED_RESPONSES.phone, doctors: [] };
     }
 
-    // ✅ ২. দিন/তারিখ বুঝতে চেষ্টা করা (আজ, আগামীকাল, নির্দিষ্ট তারিখ)
-    let targetDate = new Date(); // ডিফল্ট আজকের তারিখ
-    const daysBn = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
-    const monthsBn = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
+    // ✅ ২. ডাক্তার সংক্রান্ত প্রশ্ন কি না চেক
+    const isDoctorQuery = /ডাক্তার|ডাঃ|doctor|dr\b|মেডিসিন|গাইনী|সার্জারি|কার্ডিও|শিশু|চর্ম|নাক|কান|গলা|specialist|বিশেষজ্ঞ/i.test(lowerQuestion);
 
-    if (lowerQuestion.includes('কাল') || lowerQuestion.includes('tomorrow') || lowerQuestion.includes('আগামীকাল')) {
-      targetDate.setDate(targetDate.getDate() + 1); // ১ দিন পর
-    } else if (lowerQuestion.includes('পরশু')) {
-      targetDate.setDate(targetDate.getDate() + 2); // ২ দিন পর
-    } else {
-      // নির্দিষ্ট তারিখ খোঁজা (যেমন: "২৫ অক্টোবর", "25 october")
-      const dateMatch = lowerQuestion.match(/(\d{1,2})\s*(জানুয়ারি|ফেব্রুয়ারি|মার্চ|এপ্রিল|মে|জুন|জুলাই|আগস্ট|সেপ্টেম্বর|অক্টোবর|নভেম্বর|ডিসেম্বর)/i) || 
-                        lowerQuestion.match(/(\d{1,2})\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i);
-      
-      const isoMatch = lowerQuestion.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (!isDoctorQuery) {
+      // ২.১: অ্যাডমিনের শেখানো নলেজ চেক
+      const knowledgeSnap = await db.collection('hospitals').doc(HOSPITAL_ID).collection('chatbot_knowledge').get();
+      let matchedKnowledge = null;
 
-      if (dateMatch) {
-        const day = parseInt(dateMatch[1]);
-        let monthKeyword = dateMatch[2].toLowerCase();
-        let monthIndex = monthsBn.findIndex(m => m.toLowerCase().includes(monthKeyword) || monthKeyword.includes(m.toLowerCase()));
-        
-        if (monthIndex === -1) {
-           const enMonths = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-           monthIndex = enMonths.indexOf(monthKeyword.substring(0, 3));
+      knowledgeSnap.forEach(doc => {
+        const data = doc.data();
+        if (lowerQuestion.includes(data.question) || data.question.includes(lowerQuestion)) {
+          matchedKnowledge = data.answer;
         }
-        if (monthIndex !== -1) {
-          targetDate.setMonth(monthIndex, day);
-        }
-      } else if (isoMatch) {
-        targetDate = new Date(isoMatch[1], parseInt(isoMatch[2]) - 1, parseInt(isoMatch[3]));
+      });
+
+      if (matchedKnowledge) {
+        return { text: matchedKnowledge, doctors: [] };
       }
+
+      // ২.২: নলেজে না থাকলে AI মানুষের মতো উত্তর দিবে
+      const aiPrompt = `
+        তুমি আল-আফিয়া হাসপাতালের একজন আন্তরিক ও বিনয়ী প্রতিনিধি। 
+        রোগীর প্রশ্ন: "${userQuestion}"
+        তুমি মানুষের মতো স্বাভাবিকভাবে (২-৩ বাক্যে) উত্তর দাও। 
+        যদি কেউ "হ্যালো" বলে, তবে হাসপাতালের পক্ষ থেকে স্বাগতম জানাও।
+        অজানা প্রশ্নে বলো: "এই বিষয়ে বিস্তারিত জানতে আমাদের হেল্পলাইনে কল করুন: ০১৮৮৬-৭৭৬৫১২"।
+      `;
+      const aiAnswer = await generateAnswer(aiPrompt);
+      return { text: aiAnswer, doctors: [] };
     }
 
-    const targetDayBn = daysBn[targetDate.getDay()];
-    const isAskingForSpecificDate = 
-      lowerQuestion.includes('কাল') || 
-      lowerQuestion.includes('আগামীকাল') || 
-      lowerQuestion.includes('পরশু') || 
-      lowerQuestion.includes('tomorrow') || 
-      lowerQuestion.match(/(\d{1,2})\s*(জানুয়ারি|ফেব্রুয়ারি|মার্চ|এপ্রিল|মে|জুন|জুলাই|আগস্ট|সেপ্টেম্বর|অক্টোবর|নভেম্বর|ডিসেম্বর)/i) !== null;
-
+    // ✅ ৩. ডাক্তার সার্চ লজিক (এখানে আপনার আসল ডাক্তার খোঁজার কোড বসানো হলো)
     const isAskingForToday = lowerQuestion.includes('আজ') || lowerQuestion.includes('today') || lowerQuestion.includes('আজকের');
     const departmentsList = ['মেডিসিন', 'গাইনী', 'সার্জারি', 'কার্ডিওলজি', 'অর্থোপেডিক', 'শিশু', 'চর্ম', 'নাক-কান-গলা'];
     const matchedDeptKeyword = departmentsList.find(dept => lowerQuestion.includes(dept));
 
-    // প্যানেল লোড (নির্দিষ্ট দিনের জন্য)
+    const daysBn = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
+    const today = new Date();
+    const todayBn = daysBn[today.getDay()];
+
     let activeDoctorIds = [];
     try {
-      const panelRef = db.collection('hospitals').doc(HOSPITAL_ID).collection('panels').doc(targetDayBn);
+      const panelRef = db.collection('hospitals').doc(HOSPITAL_ID).collection('panels').doc(todayBn);
       const panelSnap = await panelRef.get();
-      if (panelSnap.exists) {
-        activeDoctorIds = panelSnap.data().activeDoctorIds || [];
-      }
-    } catch (err) {
-      console.error("Panel load error:", err.message);
-    }
+      if (panelSnap.exists) activeDoctorIds = panelSnap.data().activeDoctorIds || [];
+    } catch (err) {}
 
     const qEmbedding = await getEmbedding(userQuestion);
     const deptSnapshot = await db.collection('hospitals').doc(HOSPITAL_ID).collection('departments').get();
@@ -199,14 +174,9 @@ async function getChatbotAnswer(userQuestion) {
 
         if (subData && subData.embedding) {
           allDocs.push({ 
-            id: doc.id,
-            name: doc.name || 'Unknown',
-            specialty: doc.specialty || '',
-            timeSlots: doc.timeSlots || [],
-            imageUrl: doc.imageUrl || '',
-            deptName: deptData.name,
-            text: subData.text,
-            embedding: subData.embedding,
+            id: doc.id, name: doc.name || 'Unknown', specialty: doc.specialty || '',
+            timeSlots: doc.timeSlots || [], imageUrl: doc.imageUrl || '',
+            deptName: deptData.name, text: subData.text, embedding: subData.embedding,
             originalIndex: doctorsArray.findIndex(d => d.id === doc.id) 
           });
         }
@@ -217,10 +187,7 @@ async function getChatbotAnswer(userQuestion) {
     let isSpecificDoctorSearch = false;
 
     if (allDocs.length > 0) {
-      const scoredDocs = allDocs.map(doc => ({ 
-        ...doc, 
-        score: cosineSimilarity(qEmbedding, doc.embedding) 
-      }));
+      const scoredDocs = allDocs.map(doc => ({ ...doc, score: cosineSimilarity(qEmbedding, doc.embedding) }));
 
       const specificMatches = scoredDocs.filter(doc => {
          if (doc.name && lowerQuestion.includes(doc.name.toLowerCase())) return true;
@@ -232,49 +199,33 @@ async function getChatbotAnswer(userQuestion) {
         isSpecificDoctorSearch = true;
         matchedDoctors = specificMatches.sort((a, b) => b.score - a.score).slice(0, 1); 
       } else {
-        if (isAskingForSpecificDate || isAskingForToday) {
+        if (isAskingForToday) {
           matchedDoctors = scoredDocs.sort((a, b) => a.originalIndex - b.originalIndex).slice(0, 15); 
         } else {
           let relevantDocs = scoredDocs.filter(doc => doc.score > 0.2);
-          if (relevantDocs.length === 0) {
-            relevantDocs = scoredDocs.sort((a, b) => b.score - a.score).slice(0, 3);
-          }
+          if (relevantDocs.length === 0) relevantDocs = scoredDocs.sort((a, b) => b.score - a.score).slice(0, 3);
           matchedDoctors = relevantDocs.sort((a, b) => a.originalIndex - b.originalIndex).slice(0, 5);
         }
       }
     }
 
-    // ✅ ডাক্তার পাওয়া গেলে
     if (matchedDoctors.length > 0) {
       let responseText = `${matchedDoctors.length} জন ডাক্তার পাওয়া গেছে:`;
-      if (isSpecificDoctorSearch) {
-        responseText = `ডাক্তারের তথ্য নিচে দেওয়া হলো।`;
-      } else if (isAskingForSpecificDate) {
-        const dateStr = targetDate.toLocaleDateString('bn-BD', { day: 'numeric', month: 'long' });
-        responseText = matchedDeptKeyword 
-          ? `${dateStr} তারিখে ${matchedDeptKeyword} বিভাগের ডাক্তার:` 
-          : `${dateStr} তারিখের ডাক্তার:`;
-      } else if (isAskingForToday) {
-        responseText = matchedDeptKeyword ? `আজকের ${matchedDeptKeyword} বিভাগের ডাক্তার:` : `আজকের ডাক্তার:`;
-      }
-
+      if (isSpecificDoctorSearch) responseText = `ডাক্তারের তথ্য নিচে দেওয়া হলো।`;
+      else if (isAskingForToday && matchedDeptKeyword) responseText = `আজকের ${matchedDeptKeyword} বিভাগের ডাক্তার:`;
+      else if (isAskingForToday) responseText = `আজকের ডাক্তার:`;
       return { text: responseText, doctors: matchedDoctors };
     }
 
-    // ✅ ডাক্তার না পাওয়া গেলে
-    if (matchedDeptKeyword || isAskingForToday || isAskingForSpecificDate || /ডাক্তার|ডাঃ|doctor|dr\b/i.test(userQuestion)) {
+    if (matchedDeptKeyword || isAskingForToday) {
       return { text: 'এই বিষয়ে কোনো ডাক্তার পাওয়া যায়নি। অন্য নাম বা বিভাগ দিয়ে খুঁজুন।', doctors: [] };
     }
 
-    // ✅ সাধারণ প্রশ্ন (Groq LLM)
-    const generalPrompt = `প্রশ্ন: ${userQuestion}\nউপরের তথ্য থেকে সংক্ষেপে উত্তর দিন।`;
-    const answer = await generateAnswer(generalPrompt);
-
-    return { text: answer, doctors: [] };
+    return { text: 'ডাক্তারের তথ্য খুঁজে পাওয়া যায়নি।', doctors: [] };
 
   } catch (error) {
     console.error('Chatbot Service Error:', error.message);
-    throw new Error(error.message); 
+    throw new Error(error.message);
   }
 }
 

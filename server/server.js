@@ -647,6 +647,24 @@ app.post('/api/book-appointment', async (req, res) => {
   }
 });
 
+// server.js-এ যোগ করুন
+app.post('/api/admin/train-chatbot', async (req, res) => {
+  try {
+    const { question, answer } = req.body;
+    if (!question || !answer) return res.status(400).json({ error: 'প্রশ্ন ও উত্তর দিন' });
+
+    await db.collection('hospitals').doc(HOSPITAL_ID).collection('chatbot_knowledge').add({
+      question: question.toLowerCase().trim(),
+      answer: answer.trim(),
+      createdAt: new Date().toISOString()
+    });
+
+    res.json({ success: true, message: 'সফলভাবে ট্রেইন করা হয়েছে!' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================================================
 // 🧪 TEST ENDPOINT — Manual WhatsApp test
 // ==================================================

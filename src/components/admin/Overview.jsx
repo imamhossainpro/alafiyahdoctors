@@ -6,6 +6,7 @@
 // ✅ All KPIs, charts, trends respect the filter
 // ✅ Bengali date display
 // ✅ Location data: Multi-source priority matching (FIXED)
+// ✅ NEW: Chatbot Booking Stats (KPI + Source Pie Chart)
 // ==================================================
 import React, { useState, useEffect, useMemo } from 'react';
 import { OverviewSkeleton } from '../ui/SkeletonScreens';
@@ -14,7 +15,7 @@ import {
   BarChart, Bar, PieChart, Pie, Cell, Legend, LabelList,
   LineChart, Line,
 } from 'recharts';
-import { X, MapPin, TrendingUp, Calendar, Filter } from 'lucide-react';
+import { X, MapPin, TrendingUp, Calendar, Filter, Bot } from 'lucide-react';
 import { subscribeToPatients } from '../../services/patientService';
 import { getAllLocations } from '../../services/locationService';
 import { useHospital } from '../../context/HospitalContext';
@@ -368,28 +369,20 @@ const getPatientTypeForOverview = (appt, patientMap) => {
 // ✅ Helper: Extract location key from appointment (multi-source)
 // ==================================================
 const extractLocationKey = (appt, locationIdToName) => {
-  // ---------- Priority 1: locationId → Location Manager name ----------
   if (appt.locationId && locationIdToName[appt.locationId]) {
     return locationIdToName[appt.locationId];
   }
-
-  // ---------- Priority 2: locationName ----------
   if (appt.locationName && String(appt.locationName).trim()) {
     return String(appt.locationName).trim();
   }
-
-  // ---------- Priority 3: bookingLocationSummary (GPS-derived) ----------
   if (
     appt.bookingLocationSummary &&
     appt.bookingLocationSummary !== 'Location not captured' &&
     appt.bookingLocationSummary !== 'Unknown Location'
   ) {
-    // "Bakalia, Chattogram" → "Bakalia"
     const first = String(appt.bookingLocationSummary).split(',')[0].trim();
     if (first) return first;
   }
-
-  // ---------- Priority 4: bookingLocation.area / city / district ----------
   if (appt.bookingLocation) {
     const bl = appt.bookingLocation;
     const candidate =
@@ -398,14 +391,10 @@ const extractLocationKey = (appt, locationIdToName) => {
       (bl.district && String(bl.district).trim());
     if (candidate) return candidate;
   }
-
-  // ---------- Priority 5: Manual address (first segment) ----------
   if (appt.address && String(appt.address).trim()) {
     const first = String(appt.address).split(',')[0].trim();
     if (first) return first;
   }
-
-  // ---------- Priority 6: checkInLocationSummary ----------
   if (
     appt.checkInLocationSummary &&
     appt.checkInLocationSummary !== 'Location not captured' &&
@@ -414,8 +403,6 @@ const extractLocationKey = (appt, locationIdToName) => {
     const first = String(appt.checkInLocationSummary).split(',')[0].trim();
     if (first) return first;
   }
-
-  // ---------- Final fallback ----------
   return 'অন্যান্য';
 };
 
@@ -433,12 +420,10 @@ export default function Overview({ appointments }) {
   const [drillPatients, setDrillPatients] = useState([]);
   const [trendDays, setTrendDays] = useState(7);
 
-  // ✅ Date filter state
   const [filterPreset, setFilterPreset] = useState('all');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
 
-  // ✅ Real-time patient subscription
   useEffect(() => {
     if (!hospitalId) {
       setLoading(false);
@@ -471,9 +456,6 @@ export default function Overview({ appointments }) {
     };
   }, [hospitalId]);
 
-  // ==================================================
-  // ✅ Compute active date range
-  // ==================================================
   const activeRange = useMemo(() => {
     if (filterPreset === 'custom') {
       return { start: customStart || '', end: customEnd || '' };
@@ -483,27 +465,19 @@ export default function Overview({ appointments }) {
 
   const isFiltered = !!(activeRange.start || activeRange.end);
 
-  // ==================================================
-  // ✅ Filtered appointments (by bookingDate)
-  // ==================================================
   const filteredAppointments = useMemo(() => {
     if (!appointments || !Array.isArray(appointments)) return [];
-
     if (!isFiltered) return appointments;
 
     return appointments.filter((appt) => {
       const apptDate = normalizeBookingDate(appt.bookingDate);
       if (!apptDate) return false;
-
       if (activeRange.start && apptDate < activeRange.start) return false;
       if (activeRange.end && apptDate > activeRange.end) return false;
       return true;
     });
   }, [appointments, activeRange, isFiltered]);
 
-  // ==================================================
-  // ✅ Patient category counts (uses filtered)
-  // ==================================================
   const categorizedCounts = useMemo(() => {
     if (!filteredAppointments.length) {
       return { new: 0, report: 0, followup: 0, total: 0 };
@@ -527,11 +501,7 @@ export default function Overview({ appointments }) {
     };
   }, [filteredAppointments, patients]);
 
-  // ==================================================
-  // ✅ Location data — Multi-source priority matching (FIXED)
-  // ==================================================
   const locationData = useMemo(() => {
-    // Build lookup: locationId → name
     const locationIdToName = {};
     locations.forEach((loc) => {
       if (loc.id && loc.name) {
@@ -540,11 +510,8 @@ export default function Overview({ appointments }) {
     });
 
     const map = {};
-
     filteredAppointments.forEach((appt) => {
-      // ✅ Extract location key using multi-source priority
       const locKey = extractLocationKey(appt, locationIdToName);
-
       if (!map[locKey]) {
         map[locKey] = {
           name: locKey,
@@ -552,7 +519,6 @@ export default function Overview({ appointments }) {
           patients: [],
         };
       }
-
       map[locKey].count += 1;
       map[locKey].patients.push(appt);
     });
@@ -562,9 +528,6 @@ export default function Overview({ appointments }) {
       .sort((a, b) => b.count - a.count);
   }, [filteredAppointments, locations]);
 
-  // ==================================================
-  // ✅ Trend data (uses filtered + multi-source location)
-  // ==================================================
   const trendData = useMemo(() => {
     if (filteredAppointments.length === 0 || locationData.length === 0) return [];
 
@@ -576,7 +539,6 @@ export default function Overview({ appointments }) {
       dateArray.push(toDateString(d));
     }
 
-    // ✅ Top 5 locations only (for chart clarity)
     const topLocations = locationData.slice(0, 5).map((loc) => loc.name);
 
     const locationIdToName = {};
@@ -605,7 +567,6 @@ export default function Overview({ appointments }) {
     });
   }, [filteredAppointments, locationData, trendDays, locations]);
 
-  // ---------- Status counts (uses filtered) ----------
   const total = filteredAppointments.length;
   const pending = filteredAppointments.filter((a) => a.status === 'pending').length;
   const confirmed = filteredAppointments.filter((a) => a.status === 'confirmed').length;
@@ -614,12 +575,15 @@ export default function Overview({ appointments }) {
   const cancelled = filteredAppointments.filter((a) => a.status === 'cancelled').length;
   const noShow = filteredAppointments.filter((a) => a.status === 'no-show').length;
 
+  // ✅ নতুন: চ্যাটবট সোর্স কাউন্ট
+  const chatbotBookings = filteredAppointments.filter((a) => a.source === 'chatbot').length;
+  const websiteBookings = filteredAppointments.filter((a) => a.source === 'website' || !a.source).length;
+
   const bookingToVisit = total > 0 ? ((completed + checkedIn) / total) * 100 : 0;
   const checkedInRate = total > 0 ? (checkedIn / total) * 100 : 0;
   const noShowRate = total > 0 ? (noShow / total) * 100 : 0;
   const cancellationRate = total > 0 ? (cancelled / total) * 100 : 0;
 
-  // ---------- Doctor Data ----------
   const doctorCounts = {};
   filteredAppointments.forEach((a) => {
     doctorCounts[a.doctorName] = (doctorCounts[a.doctorName] || 0) + 1;
@@ -628,7 +592,6 @@ export default function Overview({ appointments }) {
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count);
 
-  // ---------- Department Data ----------
   const departmentCounts = {};
   filteredAppointments.forEach((a) => {
     departmentCounts[a.doctorDept || 'Unknown'] =
@@ -638,7 +601,6 @@ export default function Overview({ appointments }) {
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count);
 
-  // ---------- Age Data ----------
   const ageGroups = { '০-১২': 0, '১৩-২০': 0, '২১-৩০': 0, '৩১-৪০': 0, '৪১-৫০': 0, '৫০+': 0 };
   filteredAppointments.forEach((a) => {
     if (a.age) {
@@ -653,7 +615,6 @@ export default function Overview({ appointments }) {
   });
   const ageData = Object.entries(ageGroups).map(([name, count]) => ({ name, count }));
 
-  // ---------- Referral Data ----------
   const referralCounts = {};
   filteredAppointments.forEach((a) => {
     const src = a.referralSource || 'Unknown';
@@ -669,7 +630,6 @@ export default function Overview({ appointments }) {
     }
   };
 
-  // ✅ Status Data
   const statusData = useMemo(
     () => [
       { name: 'Pending', value: pending },
@@ -682,7 +642,6 @@ export default function Overview({ appointments }) {
     [pending, confirmed, checkedIn, completed, cancelled, noShow]
   );
 
-  // ✅ Category Data
   const categoryPieData = useMemo(
     () => [
       { name: 'নতুন রোগী', value: categorizedCounts.new },
@@ -692,7 +651,12 @@ export default function Overview({ appointments }) {
     [categorizedCounts]
   );
 
-  // ✅ Stable keys for Pie re-render
+  // ✅ নতুন: বুকিং সোর্স পাই চার্ট ডেটা
+  const sourcePieData = useMemo(() => [
+    { name: '🤖 চ্যাটবট', value: chatbotBookings },
+    { name: '🌐 ওয়েবসাইট', value: websiteBookings }
+  ], [chatbotBookings, websiteBookings]);
+
   const statusPieKey = useMemo(
     () => `status-${statusData.map((d) => d.value).join('-')}`,
     [statusData]
@@ -704,6 +668,10 @@ export default function Overview({ appointments }) {
   const categoryPieKey = useMemo(
     () => `cat-${categorizedCounts.new}-${categorizedCounts.report}-${categorizedCounts.followup}`,
     [categorizedCounts]
+  );
+  const sourcePieKey = useMemo(
+    () => `src-${chatbotBookings}-${websiteBookings}`,
+    [chatbotBookings, websiteBookings]
   );
 
   const getLast7Days = () => {
@@ -744,6 +712,7 @@ export default function Overview({ appointments }) {
 
   const kpis = [
     { label: 'Total Bookings', value: total, color: '#1c5fa8', bg: 'rgba(28, 95, 168, 0.1)' },
+    { label: '🤖 Chatbot Bookings', value: chatbotBookings, color: '#0369a1', bg: 'rgba(3, 105, 161, 0.1)' }, // ✅ নতুন KPI
     { label: 'Pending', value: pending, color: STATUS_COLORS.pending, bg: 'rgba(245, 158, 11, 0.1)' },
     { label: 'Confirmed', value: confirmed, color: STATUS_COLORS.confirmed, bg: 'rgba(59, 130, 246, 0.1)' },
     { label: 'Checked-in', value: checkedIn, color: STATUS_COLORS['checked-in'], bg: 'rgba(139, 92, 246, 0.1)' },
@@ -789,17 +758,12 @@ export default function Overview({ appointments }) {
     setCustomEnd('');
   };
 
-  // ✅ Loading state
   if (loading) return <OverviewSkeleton />;
 
-  // ✅ Loaded state
   return (
     <div style={styles.dashboardContainer} className="content-fade-in">
       <style>{CSSString}</style>
 
-      {/* ============================================
-          ✅ Date Filter Bar
-          ============================================ */}
       <div className="ov-filter-bar">
         <div className="ov-filter-label">
           <Filter size={16} color="#1c5fa8" />
@@ -840,7 +804,6 @@ export default function Overview({ appointments }) {
         </div>
       </div>
 
-      {/* Active filter indicator */}
       {isFiltered && (
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginTop: '-12px' }}>
           <span className="ov-filter-active">
@@ -872,7 +835,6 @@ export default function Overview({ appointments }) {
         </div>
       )}
 
-      {/* KPI Grid */}
       <div style={styles.kpiGrid}>
         {kpis.map((kpi, index) => (
           <div key={index} style={styles.kpiCard}>
@@ -887,7 +849,6 @@ export default function Overview({ appointments }) {
         ))}
       </div>
 
-      {/* Conversion Metrics */}
       <div style={styles.conversionCard}>
         <h4 style={styles.chartTitle}>কনভার্সন মেট্রিক্স</h4>
         <div style={styles.conversionGrid}>
@@ -904,7 +865,6 @@ export default function Overview({ appointments }) {
         </div>
       </div>
 
-      {/* Row 1: Trend + Status Pie */}
       <div className="overview-main-grid">
         <div style={styles.chartCard}>
           <h4 style={styles.chartTitle}>সিরিয়াল ট্রেন্ড (গত ৭ দিন)</h4>
@@ -950,8 +910,31 @@ export default function Overview({ appointments }) {
         </div>
       </div>
 
-      {/* Row 2: Referral + Location */}
+      {/* ✅ নতুন রো: সোর্স পাই ও রেফারেল */}
       <div className="overview-main-grid">
+        <div style={styles.chartCard}>
+          <h4 style={styles.chartTitle}><Bot size={18} color="#0369a1" /> বুকিং সোর্স (চ্যাটবট বনাম ওয়েবসাইট)</h4>
+          <ResponsiveContainer width="100%" height={250}>
+            <PieChart key={sourcePieKey}>
+              <Pie
+                data={sourcePieData}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius={50}
+                outerRadius={80}
+                paddingAngle={5}
+              >
+                <Cell fill="#0369a1" />
+                <Cell fill="#22c55e" />
+              </Pie>
+              <Tooltip />
+              <Legend verticalAlign="bottom" height={36} formatter={renderLegend} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
         <div style={styles.chartCard}>
           <h4 style={styles.chartTitle}>রেফারেল সোর্স</h4>
           <ResponsiveContainer width="100%" height={250}>
@@ -975,7 +958,9 @@ export default function Overview({ appointments }) {
             </PieChart>
           </ResponsiveContainer>
         </div>
+      </div>
 
+      <div className="overview-main-grid">
         <div style={styles.chartCard}>
           <h4 style={{ ...styles.chartTitle, cursor: 'pointer' }}>
             <MapPin size={18} color="#d97706" />
@@ -1003,42 +988,40 @@ export default function Overview({ appointments }) {
             💡 কোনো বার ক্লিক করলে সেই লোকেশনের রোগীদের তালিকা দেখাবে
           </div>
         </div>
-      </div>
 
-      {/* Patient Category Pie */}
-      <div style={styles.chartCard}>
-        <h4 style={styles.chartTitle}>রোগীর ক্যাটাগরি বিশ্লেষণ</h4>
-        <ResponsiveContainer width="100%" height={280}>
-          <PieChart key={categoryPieKey}>
-            <Pie
-              data={categoryPieData}
-              dataKey="value"
-              nameKey="name"
-              cx="50%"
-              cy="50%"
-              innerRadius={55}
-              outerRadius={90}
-              paddingAngle={5}
-              label={({ name, value }) => `${name}: ${value}`}
-            >
-              {categoryPieData.map((entry, index) => (
-                <Cell
-                  key={`cell-${index}`}
-                  fill={['#22c55e', '#f59e0b', '#8b5cf6'][index % 3]}
-                />
-              ))}
-            </Pie>
-            <Tooltip />
-            <Legend verticalAlign="bottom" height={36} />
-          </PieChart>
-        </ResponsiveContainer>
-        <div style={{ fontSize: '12px', color: '#94a3b8', textAlign: 'center', marginTop: '8px' }}>
-          {isFiltered ? 'ফিল্টার করা' : 'মোট'} {total} টি booking এর মধ্যে {categorizedCounts.new} নতুন,{' '}
-          {categorizedCounts.report} রিপোর্ট, {categorizedCounts.followup} ফলোআপ
+        <div style={styles.chartCard}>
+          <h4 style={styles.chartTitle}>রোগীর ক্যাটাগরি বিশ্লেষণ</h4>
+          <ResponsiveContainer width="100%" height={280}>
+            <PieChart key={categoryPieKey}>
+              <Pie
+                data={categoryPieData}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius={55}
+                outerRadius={90}
+                paddingAngle={5}
+                label={({ name, value }) => `${name}: ${value}`}
+              >
+                {categoryPieData.map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={['#22c55e', '#f59e0b', '#8b5cf6'][index % 3]}
+                  />
+                ))}
+              </Pie>
+              <Tooltip />
+              <Legend verticalAlign="bottom" height={36} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div style={{ fontSize: '12px', color: '#94a3b8', textAlign: 'center', marginTop: '8px' }}>
+            {isFiltered ? 'ফিল্টার করা' : 'মোট'} {total} টি booking এর মধ্যে {categorizedCounts.new} নতুন,{' '}
+            {categorizedCounts.report} রিপোর্ট, {categorizedCounts.followup} ফলোআপ
+          </div>
         </div>
       </div>
 
-      {/* Location Trend Analysis */}
       <div style={styles.chartCard}>
         <h4 style={styles.chartTitle}>
           <TrendingUp size={18} color="#1c5fa8" />
@@ -1118,7 +1101,6 @@ export default function Overview({ appointments }) {
         </div>
       </div>
 
-      {/* Department + Age + Doctor */}
       <div className="overview-main-grid">
         <div style={styles.chartCard}>
           <h4 style={styles.chartTitle}>বিভাগভিত্তিক রোগী</h4>
