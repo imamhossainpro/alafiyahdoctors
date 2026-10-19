@@ -456,11 +456,6 @@ app.post('/api/book-appointment', async (req, res) => {
       console.error('❌ In-app notification error:', notifErr.message);
     }
 
-    // ✅ সরাসরি হোয়াটসঅ্যাপ নোটিফিকেশন পাঠান
-    sendHospitalNotification(appointmentData, apptRef.id).catch((err) =>
-      console.error('❌ [BOOKING-NOTIFY] Direct notification error:', err.message)
-    );
-
     res.json({
       success: true,
       message: `সফলভাবে বুকিং হয়েছে। আপনার সিরিয়াল নম্বর: ${serialNo}`,
