@@ -3,6 +3,7 @@
 // 💬 ChatbotWidget — Al-Afiyah Hospital
 // ==================================================
 // ✅ Custom Quick Actions & Google Maps Link Integration
+// ✅ Proactive Welcome Message (10s delay) & Messenger-style Popup
 // ==================================================
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
@@ -35,7 +36,7 @@ const GENERIC_ERROR_RESPONSE =
   'দুঃখিত, এই মুহূর্তে উত্তর দিতে পারছি না। অনুগ্রহ করে আবার চেষ্টা করুন।';
 
 // ==================================================
-// ✅ Quick-action chips (আপনার চাহিদা অনুযায়ী আপডেট করা)
+// ✅ Quick-action chips
 // ==================================================
 const QUICK_ACTIONS = [
   { label: 'আজকের ডাক্তার তালিকা', query: 'আজকের ডাক্তার তালিকা' },
@@ -86,14 +87,14 @@ function TypingIndicator() {
 // ==================================================
 export default function ChatbotWidget() {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    {
-      role: 'bot',
-      text:
-        'আসসালামু আলাইকুম! আল-আফিয়াহ হাসপাতালে স্বাগতম। আমি আপনাকে কীভাবে সাহায্য করতে পারি?',
-      doctors: [],
-    },
-  ]);
+  
+  // ✅ শুরুতে মেসেজ খালি থাকবে, ১০ সেকেন্ড পর মেসেজ আসবে
+  const [messages, setMessages] = useState([]);
+  
+  // ✅ পপআপ এবং নোটিফিকেশন ব্যাজের স্টেট
+  const [showPopup, setShowPopup] = useState(false);
+  const [hasUnread, setHasUnread] = useState(false);
+
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -112,6 +113,38 @@ export default function ChatbotWidget() {
   const messagesContainerRef = useRef(null);
   const abortControllerRef = useRef(null);
   const isMountedRef = useRef(true);
+
+  // ✅ ১০ সেকেন্ড পর স্বাগতম মেসেজ, পপআপ এবং লাল নোটিফিকেশন দেখানোর লজিক
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (isMountedRef.current) {
+        setMessages([
+          {
+            role: 'bot',
+            text: 'আসসালামু আলাইকুম! আল-আফিয়া হাসপাতালে স্বাগতম। আমি আপনাকে কীভাবে সাহায্য করতে পারি?',
+            doctors: [],
+          }
+        ]);
+        setIsOpen(false); 
+        setHasUnread(true); 
+        setShowPopup(true); // পপআপ দেখাবে
+
+        // ✅ ৭ সেকেন্ড পর পপআপ অটোমেটিক হাইড হয়ে যাবে
+        setTimeout(() => {
+          if (isMountedRef.current) setShowPopup(false);
+        }, 7000); 
+      }
+    }, 10000); // ১০ সেকেন্ড
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  // ✅ চ্যাট ওপেন করলে নোটিফিকেশন ও পপআপ মুছে যাবে
+  const handleOpenChat = () => {
+    setIsOpen(true);
+    setHasUnread(false);
+    setShowPopup(false);
+  };
 
   // ✅ Lifecycle cleanup
   useEffect(() => {
@@ -336,6 +369,57 @@ export default function ChatbotWidget() {
         }
         .chat-fab:hover { transform: scale(1.08); }
 
+        /* ✅ লাল নোটিফিকেশন ব্যাজ */
+        .chat-badge { 
+          position: absolute; 
+          top: -2px; 
+          right: -2px; 
+          background: #ef4444; 
+          color: white; 
+          font-size: 12px; 
+          font-weight: bold; 
+          width: 22px; 
+          height: 22px; 
+          border-radius: 50%; 
+          display: flex; 
+          align-items: center; 
+          justify-content: center; 
+          border: 2px solid #fff; 
+          box-shadow: 0 2px 4px rgba(0,0,0,0.2); 
+          animation: bounceIn 0.5s ease; 
+        }
+        
+        /* ✅ মেসেঞ্জার স্টাইল পপআপ মেসেজ */
+        .chat-popup { 
+          position: fixed; 
+          bottom: 100px; 
+          right: 32px; 
+          background: #fff; 
+          padding: 12px 16px; 
+          border-radius: 12px; 
+          box-shadow: 0 4px 20px rgba(0,0,0,0.15); 
+          border: 1px solid #e2e8f0; 
+          font-size: 14px; 
+          color: #1e293b; 
+          z-index: 99998; 
+          max-width: 250px; 
+          animation: popUpFade 0.5s ease; 
+          cursor: pointer; 
+          font-family: 'Hind Siliguri', sans-serif; 
+        }
+        .chat-popup::after { 
+          content: ''; 
+          position: absolute; 
+          bottom: -6px; 
+          right: 20px; 
+          width: 12px; 
+          height: 12px; 
+          background: #fff; 
+          transform: rotate(45deg); 
+          border-bottom: 1px solid #e2e8f0; 
+          border-right: 1px solid #e2e8f0; 
+        }
+
         /* === চ্যাট উইন্ডো === */
         .chat-window {
           position: fixed !important;
@@ -524,6 +608,17 @@ export default function ChatbotWidget() {
           0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
           30% { transform: translateY(-5px); opacity: 1; }
         }
+        
+        @keyframes bounceIn { 
+          0% { transform: scale(0); } 
+          50% { transform: scale(1.2); } 
+          100% { transform: scale(1); } 
+        }
+        
+        @keyframes popUpFade { 
+          0% { opacity: 0; transform: translateY(10px) scale(0.95); } 
+          100% { opacity: 1; transform: translateY(0) scale(1); } 
+        }
 
         /* === Retry button === */
         .retry-btn {
@@ -621,6 +716,7 @@ export default function ChatbotWidget() {
             border-radius: 0;
             border: none;
           }
+          .chat-popup { bottom: 90px; right: 16px; }
         }
       `}</style>
 
@@ -690,7 +786,7 @@ export default function ChatbotWidget() {
           {/* Header */}
           <div className="chat-header">
             <div>
-              <h3>আল-আফিয়াহ সহায়ক</h3>
+              <h3>আল-আফিয়াহ সহায়ক</h3>
               <p>ডাক্তার খুঁজুন · সময় জানুন</p>
             </div>
             <button
@@ -869,14 +965,24 @@ export default function ChatbotWidget() {
         </div>
       )}
 
+      {/* ✅ মেসেঞ্জারের মতো পপআপ মেসেজ */}
+      {showPopup && !isOpen && (
+        <div className="chat-popup" onClick={handleOpenChat}>
+          <strong>আল-আফিয়া হাসপাতাল:</strong><br/>
+          আসসালামু আলাইকুম! কীভাবে সাহায্য করতে পারি?
+        </div>
+      )}
+
       {!isOpen && (
         <button
           className="chat-fab"
-          onClick={() => setIsOpen(true)}
+          onClick={handleOpenChat}
           title="চ্যাট করুন"
           aria-label="চ্যাট খুলুন"
         >
           <MessageCircle size={28} />
+          {/* ✅ লাল নোটিফিকেশন ব্যাজ */}
+          {hasUnread && <span className="chat-badge">1</span>}
         </button>
       )}
     </>
