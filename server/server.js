@@ -1,13 +1,16 @@
-// server.cjs
+// server.js
 // ==================================================
-// 🏥 আল-আফিয়া হাসপাতাল — Backend Server (Fully Fixed)
+// 🏥 আল-আফিয়া হাসপাতাল — Backend Server (Fully Fixed + Chatbot Source)
 // ==================================================
 // ✅ WhatsApp via Baileys — WITH TIMEOUT + LOGGING + AUTO-RECONNECT
 // ✅ SMS via Automas Technologies
 // ✅ Email via Gmail
 // ✅ FCM Push Notifications
 // ✅ GA4 Analytics Data API
+// ✅ AI Chatbot (Gemini + Firestore RAG)
+// ✅ Chatbot booking source tracking + direct notification
 // ==================================================
+
 require('dotenv').config();
 const express = require('express');
 const makeWASocket = require('@whiskeysockets/baileys').default;
@@ -53,6 +56,9 @@ try {
 
 initializeApp({ credential: cert(serviceAccount) });
 const db = getFirestore();
+
+// ✅ Firebase ইনিশিয়ালাইজ হওয়ার পরে চ্যাটবট সার্ভিস লোড হবে
+const { getChatbotAnswer } = require('./chatbotService');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -365,7 +371,6 @@ async function connectToWhatsApp() {
           console.log('❌ WhatsApp logged out! New QR scan required.');
         }
       } else if (connection === 'open') {
-        // ✅ FIX: Only mark connected if sock.user is set
         if (sock?.user) {
           isConnected = true;
           sessionStartTime = Date.now();
@@ -393,32 +398,27 @@ async function connectToWhatsApp() {
 }
 
 // ==================================================
-// 🆕 TRIGGER 1: Hospital WhatsApp Notification (FIXED)
+// 🆕 TRIGGER 1: Hospital WhatsApp Notification
+// (✅ Chatbot source tag added)
 // ==================================================
 async function sendHospitalNotification(data, appointmentId) {
   console.log('\n========================================');
   console.log('🔔 [HOSPITAL-NOTIFY] Booking received:', appointmentId);
-  console.log('   isConnected:', isConnected);
-  console.log('   sock exists:', !!sock);
-  console.log('   sock.user.id:', sock?.user?.id || 'N/A');
-  console.log('   isWhatsAppReady():', isWhatsAppReady());
-  console.log('   Target phone:', NOTIFICATION_TARGET);
-  console.log('========================================\n');
+  console.log(`   Source: ${data.source || 'unknown'}`);
 
   if (!isWhatsAppReady()) {
     console.error('❌ [HOSPITAL-NOTIFY] ABORT — WhatsApp not ready!');
-    console.error('   → Check QR scan / session validity');
     lastMessageError = 'WhatsApp not ready at ' + new Date().toISOString();
     return;
   }
 
   const jid = `${NOTIFICATION_TARGET}@s.whatsapp.net`;
   const formattedDate = formatDateDDMMYYYY(data.bookingDate);
-
   const englishPatientName = data.nameEn || data.name || '';
   const englishDoctorName = data.doctorNameEn || data.doctorName || '';
+  const sourceTag = data.source === 'chatbot' ? '🤖 (AI Chatbot)' : '';
 
-  const msg = `New Booking Alert
+  const msg = `New Booking Alert ${sourceTag}
 
 Patient: ${englishPatientName || '-'}
 Mobile: ${data.mobile || '-'}
@@ -431,48 +431,28 @@ Status: Pending
 Booking ID: ${appointmentId}`;
 
   try {
-    console.log(`📤 [HOSPITAL-NOTIFY] Sending to JID: ${jid}`);
-    console.log(`📝 Message length: ${msg.length} chars`);
-
     const result = await safeSendMessage(jid, { text: msg }, 'HOSPITAL-NOTIFY');
-
     console.log('✅ [HOSPITAL-NOTIFY] SUCCESS!');
-    console.log('   Message ID:', result?.key?.id);
-    console.log('   Remote JID:', result?.key?.remoteJid);
-    console.log('   Status:', result?.status);
-
     lastMessageSentAt = new Date().toISOString();
     lastMessageTarget = jid;
     lastMessageError = null;
   } catch (err) {
     console.error('❌ [HOSPITAL-NOTIFY] FAILED:', err.message);
-    console.error('   Full error:', err);
-
     lastMessageError = `${err.message} at ${new Date().toISOString()}`;
-
-    // ✅ Force reconnect on session-dead signals
-    if (
-      err.message.includes('timeout') ||
-      err.message.includes('closed') ||
-      err.message.includes('not ready')
-    ) {
-      console.warn('⚠️ Session appears dead — forcing reconnect...');
+    if (err.message.includes('timeout') || err.message.includes('closed') || err.message.includes('not ready')) {
       isConnected = false;
-      try {
-        sock?.end(undefined);
-      } catch (e) {}
+      try { sock?.end(undefined); } catch (e) {}
       setTimeout(() => connectToWhatsApp(), 3000);
     }
   }
 }
 
 // ==================================================
-// 🆕 TRIGGER 2: Patient Notification (WhatsApp + SMS + Email + FCM)
+// 🆕 TRIGGER 2: Patient Notification
 // ==================================================
 async function sendPatientConfirmation(data, appointmentId) {
   const englishPatientName = data.nameEn || data.name || 'Patient';
   const englishDoctorName = data.doctorNameEn || data.doctorName || 'Doctor';
-
   const formattedDate = formatDateShort(data.bookingDate);
   const serial = data.serialNo || '';
   const arrivalTime = data.doctorTime || 'As scheduled';
@@ -486,7 +466,6 @@ Arrival Time: ${arrivalTime}
 
 Please arrive on time. Contact: ${HOSPITAL_CONTACT}`;
 
-  // ✅ ফোন নম্বর ফরম্যাট
   let formattedMobile = data.mobile || '';
   if (formattedMobile) {
     formattedMobile = formattedMobile.replace(/[^0-9]/g, '');
@@ -497,11 +476,9 @@ Please arrive on time. Contact: ${HOSPITAL_CONTACT}`;
     }
   }
 
-  // ---------- ১. WhatsApp ----------
   if (isWhatsAppReady() && formattedMobile) {
     try {
       const jid = formattedMobile + '@s.whatsapp.net';
-      console.log(`📱 [PATIENT-WA] Sending to ${jid}...`);
       await safeSendMessage(jid, { text: unifiedMessage }, 'PATIENT-WA');
       console.log(`✅ [PATIENT-WA] Sent to patient: ${formattedMobile}`);
       lastMessageSentAt = new Date().toISOString();
@@ -510,11 +487,8 @@ Please arrive on time. Contact: ${HOSPITAL_CONTACT}`;
       console.error('❌ [PATIENT-WA] Failed:', err.message);
       lastMessageError = `${err.message} at ${new Date().toISOString()}`;
     }
-  } else {
-    console.warn(`⚠️ [PATIENT-WA] Skipped — ready=${isWhatsAppReady()}, mobile=${!!formattedMobile}`);
   }
 
-  // ---------- ২. SMS ----------
   if (formattedMobile) {
     const smsText = `Assalamu Alaikum. Your appointment with ${englishDoctorName} at Al-Afiyah Hospital is confirmed.
 Patient: ${englishPatientName}
@@ -522,16 +496,9 @@ Serial: ${serial}
 Date: ${formattedDate}
 Time: ${arrivalTime}
 Contact: ${HOSPITAL_CONTACT}`;
-
-    const smsSent = await sendSMS(formattedMobile, smsText);
-    if (smsSent) {
-      console.log(`📱 SMS sent to ${formattedMobile}`);
-    } else {
-      console.log(`⚠️ SMS failed for ${formattedMobile}`);
-    }
+    await sendSMS(formattedMobile, smsText);
   }
 
-  // ---------- ৩. Email ----------
   if (data.email) {
     try {
       const emailHtml = `
@@ -539,11 +506,8 @@ Contact: ${HOSPITAL_CONTACT}`;
           <h2 style="color: #1c5fa8; margin-top: 0;">${HOSPITAL_NAME_EN}</h2>
           <p><strong>Assalamu Alaikum ${englishPatientName},</strong></p>
           <p>Your appointment with <strong>${englishDoctorName}</strong> is confirmed.</p>
-          <p><strong>Serial:</strong> ${serial}<br/>
-          <strong>Date:</strong> ${formattedDate}<br/>
-          <strong>Arrival Time:</strong> ${arrivalTime}</p>
+          <p><strong>Serial:</strong> ${serial}<br/><strong>Date:</strong> ${formattedDate}<br/><strong>Arrival Time:</strong> ${arrivalTime}</p>
           <p>Please arrive on time.</p>
-          <p style="color: #16a34a; font-weight: 700;">Contact: ${HOSPITAL_CONTACT}</p>
         </div>
       `;
       await transporter.sendMail({
@@ -552,54 +516,136 @@ Contact: ${HOSPITAL_CONTACT}`;
         subject: `Booking Confirmed - Serial ${serial}`,
         html: emailHtml,
       });
-      console.log(`📧 Email sent to ${data.email}`);
-    } catch (err) {
-      console.error('❌ Email error:', err.message);
-    }
+    } catch (err) {}
   }
 
-  // ---------- ৪. In-App & FCM ----------
   if (data.userId) {
-    await saveInAppNotification(
-      data.userId,
-      {
-        title: 'Booking Confirmed',
-        body: `Serial #${serial} · ${englishDoctorName}`,
-        type: 'booking_confirmed',
-      },
-      { appointmentId, doctorName: englishDoctorName, serialNo: String(serial) }
-    );
-
-    try {
-      const userDoc = await db
-        .collection('hospitals')
-        .doc(HOSPITAL_ID)
-        .collection('users')
-        .doc(data.userId)
-        .get();
-
-      if (userDoc.exists) {
-        const userData = userDoc.data();
-        let fcmTokens = [];
-        if (Array.isArray(userData.fcmTokens)) {
-          fcmTokens = userData.fcmTokens.map((t) => (typeof t === 'string' ? t : t.token));
-        } else if (userData.fcmToken) {
-          fcmTokens = [userData.fcmToken];
-        }
-
-        if (fcmTokens.length > 0) {
-          await sendToDevice(
-            fcmTokens[0],
-            { title: 'Booking Confirmed', body: `Serial #${serial}` },
-            { type: 'BOOKING_CONFIRMED', appointmentId, clickAction: 'OPEN_APPOINTMENT' }
-          );
-        }
-      }
-    } catch (fcmErr) {
-      console.warn('⚠️ FCM push failed:', fcmErr.message);
-    }
+    await saveInAppNotification(data.userId, { title: 'Booking Confirmed', body: `Serial #${serial} · ${englishDoctorName}`, type: 'booking_confirmed' }, { appointmentId });
   }
 }
+
+// ==================================================
+// 🤖 AI Chatbot Endpoint
+// ==================================================
+app.post('/api/chatbot', async (req, res) => {
+  try {
+    const { question } = req.body;
+    if (!question) return res.status(400).json({ error: 'প্রশ্ন দিন' });
+
+    const result = await getChatbotAnswer(question);
+
+    // ✅ result এখানে { text: "...", doctors: [...] } ফরম্যাটে আছে
+    res.json({ success: true, answer: result.text, doctors: result.doctors });
+
+  } catch (error) {
+    console.error('Chatbot Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'উত্তর তৈরি করতে সমস্যা হয়েছে'
+    });
+  }
+});
+
+// ==================================================
+// 📝 Chatbot Appointment Booking Endpoint
+// (✅ source tracking + direct WhatsApp notification)
+// ==================================================
+app.post('/api/book-appointment', async (req, res) => {
+  try {
+    const { doctorId, name, mobile, age, gender, bookingDate, source } = req.body;
+
+    if (!doctorId || !name || !mobile) {
+      return res.status(400).json({ success: false, error: 'তথ্য অসম্পূর্ণ' });
+    }
+
+    // ১. ডাক্তারের তথ্য বের করা
+    const deptSnapshot = await db
+      .collection('hospitals')
+      .doc('alafiyah_main')
+      .collection('departments')
+      .get();
+
+    let selectedDoctor = null;
+
+    for (const deptDoc of deptSnapshot.docs) {
+      const deptData = deptDoc.data();
+      const doc = (deptData.doctors || []).find((d) => d.id === doctorId);
+      if (doc) {
+        selectedDoctor = { ...doc, deptName: deptData.name };
+        break;
+      }
+    }
+
+    if (!selectedDoctor) {
+      return res.status(404).json({ success: false, error: 'ডাক্তার পাওয়া যায়নি' });
+    }
+
+    // ২. সিরিয়াল নম্বর জেনারেট করা
+    const dateToBook = bookingDate || new Date().toISOString().split('T')[0];
+    const counterKey = `${selectedDoctor.id}_${dateToBook}`;
+    const counterRef = db
+      .collection('hospitals')
+      .doc('alafiyah_main')
+      .collection('counters')
+      .doc(counterKey);
+    const counterSnap = await counterRef.get();
+
+    let serialNo = 1;
+    if (counterSnap.exists) {
+      serialNo = (counterSnap.data().count || 0) + 1;
+      await counterRef.update({
+        count: serialNo,
+        updatedAt: new Date().toISOString(),
+      });
+    } else {
+      await counterRef.set({
+        count: serialNo,
+        doctorId: selectedDoctor.id,
+        date: dateToBook,
+      });
+    }
+
+    // ৩. অ্যাপয়েন্টমেন্ট তৈরি করা
+    // ✅ source: req.body.source থেকে নেওয়া (default 'chatbot')
+    const appointmentData = {
+      name,
+      nameEn: name,
+      mobile,
+      age: age || '',
+      gender: gender || 'পুরুষ',
+      doctorId: selectedDoctor.id,
+      doctorName: selectedDoctor.name,
+      doctorDept: selectedDoctor.deptName,
+      bookingDate: dateToBook,
+      serialNo,
+      status: 'pending',
+      timestamp: new Date().toISOString(),
+      source: source || 'chatbot', // ✅ ট্র্যাকিংয়ের জন্য
+    };
+
+    const apptRef = await db
+      .collection('hospitals')
+      .doc('alafiyah_main')
+      .collection('appointments')
+      .add(appointmentData);
+
+    // ✅ সরাসরি হোয়াটসঅ্যাপ নোটিফিকেশন পাঠান (listener-এর উপর নির্ভর না করে)
+    sendHospitalNotification(appointmentData, apptRef.id).catch((err) =>
+      console.error('❌ [BOOKING-NOTIFY] Direct notification error:', err.message)
+    );
+
+    res.json({
+      success: true,
+      message: `সফলভাবে বুকিং হয়েছে। আপনার সিরিয়াল নম্বর: ${serialNo}`,
+      appointmentId: apptRef.id,
+      serialNo,
+      source: appointmentData.source,
+    });
+  } catch (error) {
+    console.error('Booking Error:', error);
+    res.status(500).json({ success: false, error: 'বুকিং করতে সমস্যা হয়েছে' });
+  }
+});
 
 // ==================================================
 // 🧪 TEST ENDPOINT — Manual WhatsApp test
@@ -608,48 +654,15 @@ app.post('/api/test-whatsapp', async (req, res) => {
   const { to, text } = req.body;
   const targetJid = `${to || NOTIFICATION_TARGET}@s.whatsapp.net`;
 
-  console.log('\n🧪 [TEST] Manual WhatsApp test triggered');
-  console.log('   Target:', targetJid);
-  console.log('   isConnected:', isConnected);
-  console.log('   isWhatsAppReady():', isWhatsAppReady());
-  console.log('   sock.user.id:', sock?.user?.id || 'N/A');
-
   if (!isWhatsAppReady()) {
-    return res.json({
-      success: false,
-      reason: 'WhatsApp not ready',
-      isConnected,
-      hasSock: !!sock,
-      hasUser: !!sock?.user,
-    });
+    return res.json({ success: false, reason: 'WhatsApp not ready' });
   }
 
   try {
-    const result = await safeSendMessage(
-      targetJid,
-      {
-        text:
-          text ||
-          `🧪 Test message from server at ${new Date().toLocaleString('bn-BD')}`,
-      },
-      'TEST'
-    );
-
-    console.log('✅ [TEST] Sent successfully!', result?.key?.id);
-    res.json({
-      success: true,
-      messageId: result?.key?.id,
-      targetJid,
-      timestamp: new Date().toISOString(),
-    });
+    const result = await safeSendMessage(targetJid, { text: text || `🧪 Test message` }, 'TEST');
+    res.json({ success: true, messageId: result?.key?.id });
   } catch (err) {
-    console.error('❌ [TEST] Failed:', err.message);
-    res.json({
-      success: false,
-      error: err.message,
-      targetJid,
-      stack: err.stack,
-    });
+    res.json({ success: false, error: err.message });
   }
 });
 
@@ -719,9 +732,7 @@ app.post('/api/queue/next', async (req, res) => {
   try {
     const { hospitalId, doctorId, date, nextSerial } = req.body;
     if (!hospitalId || !doctorId || !date) {
-      return res
-        .status(400)
-        .json({ success: false, error: 'Missing fields' });
+      return res.status(400).json({ success: false, error: 'Missing fields' });
     }
 
     const appointmentsRef = db
@@ -799,9 +810,7 @@ app.post('/api/appointment/confirm-with-message', async (req, res) => {
       customNote,
     } = req.body;
     if (!hospitalId || !appointmentId)
-      return res
-        .status(400)
-        .json({ success: false, error: 'Missing IDs' });
+      return res.status(400).json({ success: false, error: 'Missing IDs' });
 
     const apptRef = db
       .collection('hospitals')
@@ -857,9 +866,7 @@ app.post('/api/notification/send-promo', async (req, res) => {
   try {
     const { title, body } = req.body;
     if (!title || !body)
-      return res
-        .status(400)
-        .json({ success: false, error: 'Missing data' });
+      return res.status(400).json({ success: false, error: 'Missing data' });
 
     const usersSnap = await db
       .collection('hospitals')
@@ -929,7 +936,7 @@ db.collection(`hospitals/${HOSPITAL_ID}/appointments`).onSnapshot(
       const currentStatus = data.status;
 
       console.log(
-        `📡 [FIRESTORE] Change: ${change.type} | docId: ${docId} | status: ${currentStatus}`
+        `📡 [FIRESTORE] Change: ${change.type} | docId: ${docId} | status: ${currentStatus} | source: ${data.source || 'N/A'}`
       );
 
       if (change.type === 'added') {

@@ -2,6 +2,7 @@
 import { lazy, Suspense } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import AnalyticsTracker from './components/AnalyticsTracker';
+import ChatbotWidget from './components/ChatbotWidget'; // ✅ চ্যাটবট ইমপোর্ট
 
 const DoctorPanelBuilder = lazy(() => import('./doctor-panel-builder'));
 const QueueDisplay = lazy(() => import('./components/QueueDisplay'));
@@ -30,6 +31,10 @@ function App() {
   return (
     <>
       <AnalyticsTracker />
+      
+      {/* ✅ ChatbotWidget এখন Routes-এর বাইরে, তাই সব পেজে ফিক্সড থাকবে */}
+      <ChatbotWidget />
+
       <Suspense fallback={<Loader />}>
         <Routes>
           {/* ===== Public Routes ===== */}

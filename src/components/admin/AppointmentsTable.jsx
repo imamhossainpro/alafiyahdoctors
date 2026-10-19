@@ -8,6 +8,7 @@
 // ✅ Clickable location → Google Maps directions
 // ✅ UPDATED: Pending status shows Confirm, Check-in & Complete in dropdown
 // ✅ NEW: Chamber OFF badge for today's bookings
+// ✅ NEW: Chatbot source badge (🤖 AI চ্যাটবট) + source filter
 // ==================================================
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { AppointmentsTableSkeleton } from '../ui/SkeletonScreens';
@@ -79,6 +80,49 @@ const StatusBadge = ({ status }) => {
       }}
     >
       {style.label}
+    </span>
+  );
+};
+
+// ==================================================
+// ✅ Chatbot Source Badge
+// ==================================================
+const SourceBadge = ({ source }) => {
+  if (!source) return <span style={{ color: '#cbd5e1', fontSize: '11px' }}>—</span>;
+
+  if (source === 'chatbot') {
+    return (
+      <span
+        style={{
+          background: '#e0f2fe',
+          color: '#0369a1',
+          padding: '2px 8px',
+          borderRadius: '10px',
+          fontSize: '10px',
+          fontWeight: '700',
+          display: 'inline-block',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        🤖 AI চ্যাটবট
+      </span>
+    );
+  }
+
+  return (
+    <span
+      style={{
+        background: '#f1f5f9',
+        color: '#475569',
+        padding: '2px 8px',
+        borderRadius: '10px',
+        fontSize: '10px',
+        fontWeight: '600',
+        display: 'inline-block',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {source}
     </span>
   );
 };
@@ -550,6 +594,8 @@ export default function AppointmentsTable({
   const [filterOfficer, setFilterOfficer] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterDoctor, setFilterDoctor] = useState('all');
+  // ✅ নতুন: Chatbot/Website সোর্স ফিল্টার
+  const [filterSource, setFilterSource] = useState('all');
 
   const canView = can('booking.view');
   const canEdit = can('booking.edit');
@@ -595,6 +641,9 @@ export default function AppointmentsTable({
     'no-show',
   ];
 
+  // ==================================================
+  // ✅ Filtering logic (filterSource সহ + dependency array-তে যোগ)
+  // ==================================================
   const filteredAppointments = useMemo(() => {
     let filtered = appointments;
 
@@ -638,6 +687,11 @@ export default function AppointmentsTable({
       filtered = filtered.filter((a) => a.status === filterStatus);
     }
 
+    // ✅ Source filter (chatbot / website)
+    if (filterSource !== 'all') {
+      filtered = filtered.filter((a) => a.source === filterSource);
+    }
+
     if (filterDoctor !== 'all') {
       filtered = filtered.filter((a) => a.doctorName === filterDoctor);
     }
@@ -654,7 +708,18 @@ export default function AppointmentsTable({
     });
 
     return filtered;
-  }, [appointments, startDate, endDate, searchTerm, filterOfficer, filterStatus, filterDoctor, sortOrder, isArchivedView]);
+  }, [
+    appointments,
+    startDate,
+    endDate,
+    searchTerm,
+    filterOfficer,
+    filterStatus,
+    filterDoctor,
+    filterSource, // ✅ যোগ করা হয়েছে
+    sortOrder,
+    isArchivedView,
+  ]);
 
   useEffect(() => {
     if (appointments.length > 0) {
@@ -891,6 +956,7 @@ export default function AppointmentsTable({
     setFilterOfficer('all');
     setFilterStatus('all');
     setFilterDoctor('all');
+    setFilterSource('all'); // ✅ যোগ করা হয়েছে
     setDatePreset('all');
     setStartDate('');
     setEndDate('');
@@ -1231,7 +1297,6 @@ export default function AppointmentsTable({
       );
     }
 
-    // ✅ Dropdown with all valid transitions (Pending now includes Check-in & Complete)
     if (canStatusChange && nextStatuses.length > 0) {
       actions.push(
         <select
@@ -1581,6 +1646,25 @@ export default function AppointmentsTable({
             ))}
         </select>
 
+        {/* ✅ Source Filter Dropdown (chatbot / website) */}
+        {!isArchivedView && (
+          <select
+            value={filterSource}
+            onChange={(e) => setFilterSource(e.target.value)}
+            style={{
+              padding: '5px 8px',
+              border: '1px solid #e2e8f0',
+              borderRadius: '6px',
+              fontSize: '12px',
+              background: '#fff',
+            }}
+          >
+            <option value="all">সব সোর্স</option>
+            <option value="chatbot">🤖 AI চ্যাটবট</option>
+            <option value="website">ওয়েবসাইট</option>
+          </select>
+        )}
+
         <button
           onClick={resetFilters}
           style={{
@@ -1670,6 +1754,7 @@ export default function AppointmentsTable({
       {(filterOfficer !== 'all' ||
         filterStatus !== 'all' ||
         filterDoctor !== 'all' ||
+        filterSource !== 'all' ||
         searchTerm ||
         startDate ||
         endDate) && (
@@ -1731,6 +1816,20 @@ export default function AppointmentsTable({
               }}
             >
               ডাক্তার: {filterDoctor}
+            </span>
+          )}
+          {/* ✅ Source filter indicator */}
+          {filterSource !== 'all' && (
+            <span
+              style={{
+                background: '#e0f2fe',
+                padding: '2px 8px',
+                borderRadius: '12px',
+                color: '#0369a1',
+                fontWeight: '600',
+              }}
+            >
+              সোর্স: {filterSource === 'chatbot' ? '🤖 AI চ্যাটবট' : filterSource}
             </span>
           )}
           {searchTerm && (
@@ -1862,7 +1961,11 @@ export default function AppointmentsTable({
                 {!isArchivedView && !isSmallScreen && (
                   <th style={{ padding: '8px 6px' }}>রিমার্কস</th>
                 )}
-
+                {!isSmallScreen && (
+                  <th style={{ padding: '8px 6px', whiteSpace: 'nowrap' }}>
+                    সোর্স
+                  </th>
+                )}
                 {!isSmallScreen && (
                   <th style={{ padding: '8px 6px', whiteSpace: 'nowrap' }}>
                     📍 Location
@@ -2123,7 +2226,8 @@ export default function AppointmentsTable({
                               alignItems: 'center',
                             }}
                           >
-                            <input                              type="text"
+                            <input
+                              type="text"
                               value={editData.remarks || ''}
                               onChange={(e) =>
                                 setEditData({
@@ -2194,6 +2298,13 @@ export default function AppointmentsTable({
                             )}
                           </div>
                         )}
+                      </td>
+                    )}
+
+                    {/* ✅ Source Column (chatbot/website) */}
+                    {!isSmallScreen && (
+                      <td style={{ padding: '8px 6px', whiteSpace: 'nowrap' }}>
+                        <SourceBadge source={appt.source} />
                       </td>
                     )}
 
@@ -2345,6 +2456,7 @@ export default function AppointmentsTable({
                         {!isSmallScreen && <th style={{ padding: '6px 8px' }}>অফিসার</th>}
                         <th style={{ padding: '6px 8px' }}>টাইপ</th>
                         {!isSmallScreen && <th style={{ padding: '6px 8px' }}>রিমার্কস</th>}
+                        {!isSmallScreen && <th style={{ padding: '6px 8px' }}>সোর্স</th>}
                         <th style={{ padding: '6px 8px' }}>স্ট্যাটাস</th>
                         <th style={{ padding: '6px 8px' }}>অ্যাকশন</th>
                       </tr>
@@ -2462,6 +2574,11 @@ export default function AppointmentsTable({
                             {!isSmallScreen && (
                               <td style={{ padding: '6px 8px' }}>
                                 {appt.remarks || '-'}
+                              </td>
+                            )}
+                            {!isSmallScreen && (
+                              <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>
+                                <SourceBadge source={appt.source} />
                               </td>
                             )}
                             <td style={{ padding: '6px 8px' }}>
@@ -2629,6 +2746,12 @@ export default function AppointmentsTable({
                 <span style={{ fontWeight: '700' }}>
                   {viewDetails.marketingOfficer || '-'}
                 </span>
+              </div>
+              {/* ✅ Booking Source */}
+              <div>
+                <strong>বুকিং সোর্স:</strong>
+                <br />
+                <SourceBadge source={viewDetails.source} />
               </div>
               <div style={{ gridColumn: isMobile ? 'auto' : '1 / -1' }}>
                 <strong>রোগীর টাইপ:</strong>
