@@ -323,7 +323,9 @@ app.post('/api/admin/train-chatbot', async (req, res) => {
 app.post('/api/book-appointment', async (req, res) => {
   try {
     const { doctorId, name, mobile, age, gender, bookingDate, source } = req.body;
-    if (!doctorId || !name || !mobile) return res.status(400).json({ success: false, error: 'তথ্য অসম্পূর্ণ' });
+    if (!doctorId || !name || !mobile) {
+      return res.status(400).json({ success: false, error: 'তথ্য অসম্পূর্ণ' });
+    }
 
     // ১. ডাক্তারের তথ্য বের করা
     const deptSnapshot = await db.collection('hospitals').doc('alafiyah_main').collection('departments').get();
@@ -340,19 +342,26 @@ app.post('/api/book-appointment', async (req, res) => {
 
     const dateToBook = bookingDate || new Date().toISOString().split('T')[0];
 
-    // ✅ ডুপ্লিকেট বুকিং চেক (একই রোগী, একই ডাক্তার, একই দিনে একবারই বুকিং করতে পারবে)
+    // ✅ ২. ডুপ্লিকেট বুকিং চেক (ইনডেক্স এরর এড়াতে আমরা শুধু ডাক্তার ও তারিখ দিয়ে খুঁজব)
     const existingApptSnap = await db.collection('hospitals').doc('alafiyah_main').collection('appointments')
       .where('doctorId', '==', doctorId)
       .where('bookingDate', '==', dateToBook)
-      .where('mobile', '==', mobile)
-      .where('status', '!=', 'cancelled')
       .get();
 
-    if (!existingApptSnap.empty) {
+    // কোডের ভেতরেই মোবাইল নম্বর এবং স্ট্যাটাস মিলিয়ে দেখব
+    let isDuplicate = false;
+    existingApptSnap.forEach(doc => {
+      const data = doc.data();
+      if (data.mobile === mobile && data.status !== 'cancelled') {
+        isDuplicate = true;
+      }
+    });
+
+    if (isDuplicate) {
       return res.status(400).json({ success: false, error: 'এই রোগী ইতিমধ্যে এই ডাক্তারের জন্য আজ বুকিং করেছেন।' });
     }
 
-    // ২. সিরিয়াল নম্বর জেনারেট করা
+    // ৩. সিরিয়াল নম্বর জেনারেট করা
     const counterKey = `${selectedDoctor.id}_${dateToBook}`;
     const counterRef = db.collection('hospitals').doc('alafiyah_main').collection('counters').doc(counterKey);
     const counterSnap = await counterRef.get();
@@ -365,7 +374,7 @@ app.post('/api/book-appointment', async (req, res) => {
       await counterRef.set({ count: serialNo, doctorId: selectedDoctor.id, date: dateToBook });
     }
 
-    // ✅ ২.৫: রোগী ডেটাবেসে আছে কিনা চেক করা (পেশেন্ট টাইপ ঠিক করার জন্য)
+    // ✅ ৪. রোগী ডেটাবেসে আছে কিনা চেক করা (পেশেন্ট টাইপ ঠিক করার জন্য)
     let patientId = null;
     try {
       const patientRef = db.collection('hospitals').doc('alafiyah_main').collection('patients');
@@ -375,13 +384,8 @@ app.post('/api/book-appointment', async (req, res) => {
         patientId = patientSnap.docs[0].id;
       } else {
         const newPatientRef = await patientRef.add({
-          name: name,
-          nameEn: name,
-          mobile: mobile,
-          age: age || '',
-          gender: gender || 'পুরুষ',
-          createdAt: new Date().toISOString(),
-          visits: []
+          name: name, nameEn: name, mobile: mobile, age: age || '', gender: gender || 'পুরুষ',
+          createdAt: new Date().toISOString(), visits: []
         });
         patientId = newPatientRef.id;
       }
@@ -389,29 +393,19 @@ app.post('/api/book-appointment', async (req, res) => {
       console.warn('Patient save error:', err.message);
     }
 
-    // ৩. অ্যাপয়েন্টমেন্ট তৈরি করা
+    // ৫. অ্যাপয়েন্টমেন্ট তৈরি করা
     const appointmentData = {
-      name,
-      nameEn: name,
-      mobile,
-      age: age || '',
-      gender: gender || 'পুরুষ',
-      doctorId: selectedDoctor.id,
-      doctorName: selectedDoctor.name,
-      doctorDept: selectedDoctor.deptName,
-      bookingDate: dateToBook,
-      serialNo,
-      status: 'pending',
-      timestamp: new Date().toISOString(),
-      source: source || 'chatbot',
-      isNew: true, // ✅ নতুন লাইন: বুকিং হাইলাইট করার জন্য
-      patientId: patientId, // ✅ নতুন লাইন: পেশেন্ট টাইপ ঠিক করার জন্য
+      name, nameEn: name, mobile, age: age || '', gender: gender || 'পুরুষ',
+      doctorId: selectedDoctor.id, doctorName: selectedDoctor.name, doctorDept: selectedDoctor.deptName,
+      bookingDate: dateToBook, serialNo, status: 'pending', timestamp: new Date().toISOString(),
+      source: source || 'chatbot', isNew: true, patientId: patientId,
     };
 
     const apptRef = await db.collection('hospitals').doc('alafiyah_main').collection('appointments').add(appointmentData);
 
-    // ✅ ৪. অ্যাডমিনদের জন্য ইন-অ্যাপ নোটিফিকেশন তৈরি করা (বেল আইকনে দেখানোর জন্য)
+    // ✅ ৬. অ্যাডমিনদের জন্য ইন-অ্যাপ নোটিফিকেশন (বেল আইকনে দেখানোর জন্য)
     try {
+      // যেসব ইউজার অ্যাডমিন বা সাব-অ্যাডমিন, তাদের খুঁজে বের করা
       const adminsSnap = await db.collection('hospitals').doc('alafiyah_main').collection('users')
         .where('role', 'in', ['admin', 'sub-admin']).get();
 
