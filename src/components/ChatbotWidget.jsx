@@ -1,36 +1,17 @@
 // src/components/ChatbotWidget.jsx
-// ==================================================
-// 💬 ChatbotWidget — Al-Afiyah Hospital
-// ==================================================
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  MessageCircle,
-  X,
-  Send,
-  Loader2,
-  Bot,
-  User,
-  Mic,
-  CalendarPlus,
-  RotateCcw,
-  MapPin,
+  MessageCircle, X, Send, Loader2, Bot, User, Mic, CalendarPlus, RotateCcw, MapPin,
 } from 'lucide-react';
 import axios from 'axios';
 
-// ✅ Production API URL
-const API_BASE_URL =
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) ||
-  'https://api.alafiyahhospital.com';
-
-const REQUEST_TIMEOUT_MS = 30000; // 30s
+const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || 'https://api.alafiyahhospital.com';
+const REQUEST_TIMEOUT_MS = 30000;
 const EMPTY_RESPONSE_FALLBACK = 'দুঃখিত, কোনো উত্তর পাওয়া যায়নি। অনুগ্রহ করে আবার চেষ্টা করুন।';
 const TIMEOUT_RESPONSE = 'উত্তর দিতে বেশি সময় লাগছে। অনুগ্রহ করে আবার চেষ্টা করুন বা হাসপাতালে কল করুন: ০১৮৮৬-৭৭৬৫১২';
 const NETWORK_RESPONSE = 'নেটওয়ার্ক সংযোগে সমস্যা হচ্ছে। ইন্টারনেট চেক করে আবার চেষ্টা করুন।';
 const GENERIC_ERROR_RESPONSE = 'দুঃখিত, এই মুহূর্তে উত্তর দিতে পারছি না। অনুগ্রহ করে আবার চেষ্টা করুন।';
 
-// ==================================================
-// ✅ Quick-action chips
-// ==================================================
 const QUICK_ACTIONS = [
   { label: 'আজকের ডাক্তার তালিকা', query: 'আজকের ডাক্তার তালিকা' },
   { label: 'টেস্টের মূল্য', query: 'টেস্টের মূল্য' },
@@ -38,46 +19,16 @@ const QUICK_ACTIONS = [
   { label: 'যোগাযোগ করুন', query: 'হাসপাতালের ফোন নম্বর' },
 ];
 
-// ==================================================
-// ✅ TypingIndicator (reusable) — 3 animated dots
-// ==================================================
 function TypingIndicator() {
   return (
-    <div
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '4px',
-        padding: '10px 14px',
-        background: '#fff',
-        border: '1px solid #e2e8f0',
-        borderRadius: '16px',
-        borderBottomLeftRadius: '4px',
-      }}
-      aria-label="উত্তর তৈরি হচ্ছে"
-      role="status"
-    >
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '10px 14px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', borderBottomLeftRadius: '4px' }} aria-label="উত্তর তৈরি হচ্ছে" role="status">
       {[0, 1, 2].map((i) => (
-        <span
-          key={i}
-          className="typing-dot"
-          style={{
-            width: 7,
-            height: 7,
-            borderRadius: '50%',
-            background: '#1c5fa8',
-            display: 'inline-block',
-            animation: `typingBounce 1.2s ${i * 0.15}s infinite ease-in-out`,
-          }}
-        />
+        <span key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: '#1c5fa8', display: 'inline-block', animation: `typingBounce 1.2s ${i * 0.15}s infinite ease-in-out` }} />
       ))}
     </div>
   );
 }
 
-// ==================================================
-// ✅ MAIN COMPONENT
-// ==================================================
 export default function ChatbotWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([]);
@@ -88,7 +39,6 @@ export default function ChatbotWidget() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // ✅ বুকিং ফর্ম স্টেট
   const [selectedDoctorForBooking, setSelectedDoctorForBooking] = useState(null);
   const [bookingForm, setBookingForm] = useState({ name: '', mobile: '', age: '', gender: 'পুরুষ' });
   const [bookingLoading, setBookingLoading] = useState(false);
@@ -98,194 +48,114 @@ export default function ChatbotWidget() {
   const abortControllerRef = useRef(null);
   const isMountedRef = useRef(true);
 
-  // ✅ ১০ সেকেন্ড পর স্বাগতম মেসেজ এবং পপআপ
   useEffect(() => {
     const timer = setTimeout(() => {
       if (isMountedRef.current) {
-        setMessages([
-          {
-            role: 'bot',
-            text: 'আসসালামু আলাইকুম! আল-আফিয়াহ হসপিটালে স্বাগতম। আমি আপনাকে কীভাবে সাহায্য করতে পারি?',
-            doctors: [],
-          }
-        ]);
-        setIsOpen(false); 
-        setHasUnread(true); 
-        setShowPopup(true); 
-
-        setTimeout(() => {
-          if (isMountedRef.current) setShowPopup(false);
-        }, 7000); 
+        setMessages([{ role: 'bot', text: 'আসসালামু আলাইকুম! আল-আফিয়া হাসপাতালে স্বাগতম। আমি আপনাকে কীভাবে সাহায্য করতে পারি?', doctors: [] }]);
+        setIsOpen(false); setHasUnread(true); setShowPopup(true); 
+        setTimeout(() => { if (isMountedRef.current) setShowPopup(false); }, 7000); 
       }
     }, 10000); 
-
     return () => clearTimeout(timer);
   }, []);
 
-  const handleOpenChat = () => {
-    setIsOpen(true);
-    setHasUnread(false);
-    setShowPopup(false);
-  };
+  const handleOpenChat = () => { setIsOpen(true); setHasUnread(false); setShowPopup(false); };
 
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
-      }
+      if (abortControllerRef.current) { abortControllerRef.current.abort(); abortControllerRef.current = null; }
     };
   }, []);
 
   useEffect(() => {
     if (!messagesContainerRef.current) return;
     const el = messagesContainerRef.current;
-    const raf = requestAnimationFrame(() => {
-      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-    });
+    const raf = requestAnimationFrame(() => { el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }); });
     return () => cancelAnimationFrame(raf);
   }, [messages, isLoading]);
 
-  const sendMessage = useCallback(
-    async (rawText) => {
-      const userMsg = (rawText ?? '').toString().trim();
-      if (!userMsg) return;
-      if (isLoading || isSubmitting) return; // ✅ duplicate guard
-
-      setIsSubmitting(true);
-      setMessages((prev) => [...prev, { role: 'user', text: userMsg, doctors: [], ts: Date.now() }]);
-      setInput('');
-      setIsLoading(true);
-
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
-      const timeoutId = setTimeout(() => controller.abort('timeout'), REQUEST_TIMEOUT_MS);
-
-      try {
-        const res = await axios.post(
-          `${API_BASE_URL}/api/chatbot`,
-          { question: userMsg },
-          { signal: controller.signal, timeout: REQUEST_TIMEOUT_MS }
-        );
-
-        if (!isMountedRef.current) return;
-
-        const answerText = (res?.data?.answer && String(res.data.answer).trim()) || '';
-        const doctors = Array.isArray(res?.data?.doctors) ? res.data.doctors : [];
-
-        if (!answerText && doctors.length === 0) {
-          setMessages((prev) => [...prev, { role: 'bot', text: EMPTY_RESPONSE_FALLBACK, doctors: [], isError: true, retryText: userMsg }]);
-          return;
-        }
-
-        setMessages((prev) => [...prev, { role: 'bot', text: answerText || 'ডাক্তারের তথ্য নিচে দেওয়া হলো।', doctors, ts: Date.now() }]);
-      } catch (err) {
-        if (!isMountedRef.current) return;
-        if (axios.isCancel(err) || err?.name === 'CanceledError') return;
-
-        let errorText = GENERIC_ERROR_RESPONSE;
-        if (err?.code === 'ECONNABORTED' || err?.message?.includes('timeout')) errorText = TIMEOUT_RESPONSE;
-        else if (!err?.response && err?.request) errorText = NETWORK_RESPONSE;
-        else if (err?.response?.status >= 500) errorText = 'সার্ভারে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।';
-
-        setMessages((prev) => [...prev, { role: 'bot', text: errorText, doctors: [], isError: true, retryText: userMsg }]);
-      } finally {
-        clearTimeout(timeoutId);
-        if (abortControllerRef.current === controller) abortControllerRef.current = null;
-        if (isMountedRef.current) {
-          setIsLoading(false);
-          setIsSubmitting(false);
-        }
+  const sendMessage = useCallback(async (rawText) => {
+    const userMsg = (rawText ?? '').toString().trim();
+    if (!userMsg || isLoading || isSubmitting) return;
+    setIsSubmitting(true);
+    setMessages((prev) => [...prev, { role: 'user', text: userMsg, doctors: [], ts: Date.now() }]);
+    setInput('');
+    setIsLoading(true);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const timeoutId = setTimeout(() => controller.abort('timeout'), REQUEST_TIMEOUT_MS);
+    try {
+      const res = await axios.post(`${API_BASE_URL}/api/chatbot`, { question: userMsg }, { signal: controller.signal, timeout: REQUEST_TIMEOUT_MS });
+      if (!isMountedRef.current) return;
+      const answerText = (res?.data?.answer && String(res.data.answer).trim()) || '';
+      const doctors = Array.isArray(res?.data?.doctors) ? res.data.doctors : [];
+      if (!answerText && doctors.length === 0) {
+        setMessages((prev) => [...prev, { role: 'bot', text: EMPTY_RESPONSE_FALLBACK, doctors: [], isError: true, retryText: userMsg }]);
+        return;
       }
-    },
-    [isLoading, isSubmitting]
-  );
+      setMessages((prev) => [...prev, { role: 'bot', text: answerText || 'ডাক্তারের তথ্য নিচে দেওয়া হলো।', doctors, ts: Date.now() }]);
+    } catch (err) {
+      if (!isMountedRef.current || axios.isCancel(err)) return;
+      let errorText = GENERIC_ERROR_RESPONSE;
+      if (err?.code === 'ECONNABORTED' || err?.message?.includes('timeout')) errorText = TIMEOUT_RESPONSE;
+      else if (!err?.response && err?.request) errorText = NETWORK_RESPONSE;
+      else if (err?.response?.status >= 500) errorText = 'সার্ভারে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।';
+      setMessages((prev) => [...prev, { role: 'bot', text: errorText, doctors: [], isError: true, retryText: userMsg }]);
+    } finally {
+      clearTimeout(timeoutId);
+      if (abortControllerRef.current === controller) abortControllerRef.current = null;
+      if (isMountedRef.current) { setIsLoading(false); setIsSubmitting(false); }
+    }
+  }, [isLoading, isSubmitting]);
 
   const handleSubmit = (e) => { e?.preventDefault(); sendMessage(input); };
   const handleRetry = (retryText) => { if (retryText) sendMessage(retryText); };
   const handleQuickAction = (q) => { sendMessage(q); };
 
-  // ==================================================
-  // ✅ Booking submit (ডাবল ক্লিক বন্ধ করা হয়েছে)
-  // ==================================================
   const handleBookingSubmit = async (e) => {
     e.preventDefault();
-
-    // ✅ ডুপ্লিকেট বুকিং প্রতিরোধ (ডাবল ক্লিক বন্ধ)
-    if (bookingLoading) return; 
-
+    if (bookingLoading) return;
     const mobileRegex = /^(?:\+?88)?01[3-9]\d{8}$/;
     const cleanMobile = bookingForm.mobile.replace(/[^0-9]/g, '');
-
-    if (!mobileRegex.test(cleanMobile) && !mobileRegex.test('0' + cleanMobile)) {
-      alert('অনুগ্রহ করে সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (যেমন: 01712345678)');
-      return;
-    }
-    if (!bookingForm.name || !bookingForm.mobile) {
-      alert('নাম এবং মোবাইল নম্বর দিন');
-      return;
-    }
+    if (!mobileRegex.test(cleanMobile) && !mobileRegex.test('0' + cleanMobile)) { alert('অনুগ্রহ করে সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন।'); return; }
+    if (!bookingForm.name || !bookingForm.mobile) { alert('নাম এবং মোবাইল নম্বর দিন'); return; }
 
     setBookingLoading(true);
     try {
       const res = await axios.post(`${API_BASE_URL}/api/book-appointment`, {
-        doctorId: selectedDoctorForBooking.id,
-        name: bookingForm.name,
-        mobile: bookingForm.mobile,
-        age: bookingForm.age,
-        gender: bookingForm.gender,
-        bookingDate: new Date().toISOString().split('T')[0],
+        doctorId: selectedDoctorForBooking.id, name: bookingForm.name, mobile: bookingForm.mobile, age: bookingForm.age, gender: bookingForm.gender, bookingDate: new Date().toISOString().split('T')[0],
       });
 
       if (res.data.success) {
         const successMsg = `বুকিং সফল হয়েছে! আপনার সিরিয়াল নম্বর: ${res.data.serialNo}। অনুগ্রহ করে সময়মতো হাসপাতালে আসুন।`;
-
         setMessages((prev) => [...prev, { role: 'bot', text: `✅ ${successMsg}`, doctors: [], ts: Date.now() }]);
-
         setTimeout(() => {
           if (!isMountedRef.current) return;
           setMessages((prev) => [...prev, { role: 'bot', text: 'আরও কিছু জানতে চান? অন্য ডাক্তার খুঁজতে পারেন, অথবা হাসপাতালের ঠিকানা/সময় জিজ্ঞেস করতে পারেন।', doctors: [], ts: Date.now() }]);
         }, 1200);
-
-        setSelectedDoctorForBooking(null);
-        setBookingForm({ name: '', mobile: '', age: '', gender: 'পুরুষ' });
+        setSelectedDoctorForBooking(null); setBookingForm({ name: '', mobile: '', age: '', gender: 'পুরুষ' });
       } else {
-        alert(res.data.error || 'বুকিং ব্যর্থ হয়েছে');
+        setMessages((prev) => [...prev, { role: 'bot', text: `⚠️ ${res.data.error || 'বুকিং ব্যর্থ হয়েছে'}`, doctors: [], ts: Date.now() }]);
+        setSelectedDoctorForBooking(null);
       }
     } catch (err) {
       console.error(err);
-      alert('বুকিং করতে সমস্যা হয়েছে');
-    } finally {
-      setBookingLoading(false);
-    }
+      const errorMsg = err?.response?.data?.error || 'বুকিং করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।';
+      setMessages((prev) => [...prev, { role: 'bot', text: `⚠️ ${errorMsg}`, doctors: [], ts: Date.now() }]);
+      setSelectedDoctorForBooking(null);
+    } finally { setBookingLoading(false); }
   };
 
   return (
     <>
       <style>{`
-        /* === চ্যাট বাটন === */
-        .chat-fab {
-          position: fixed !important;
-          bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important;
-          right: max(24px, env(safe-area-inset-right, 24px)) !important;
-          width: 60px; height: 60px; border-radius: 50%;
-          background: linear-gradient(135deg, #1c5fa8, #0d9488); color: white;
-          display: flex; align-items: center; justify-content: center;
-          box-shadow: 0 4px 16px rgba(13, 148, 136, 0.4); cursor: pointer;
-          z-index: 99999 !important; border: none; transition: transform 0.2s ease;
-        }
+        .chat-fab { position: fixed !important; bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; right: max(24px, env(safe-area-inset-right, 24px)) !important; width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #1c5fa8, #0d9488); color: white; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(13, 148, 136, 0.4); cursor: pointer; z-index: 99999 !important; border: none; transition: transform 0.2s ease; }
         .chat-fab:hover { transform: scale(1.08); }
-
-        /* ✅ লাল নোটিফিকেশন ব্যাজ */
         .chat-badge { position: absolute; top: -2px; right: -2px; background: #ef4444; color: white; font-size: 12px; font-weight: bold; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.2); animation: bounceIn 0.5s ease; }
-        
-        /* ✅ মেসেঞ্জার স্টাইল পপআপ মেসেজ */
         .chat-popup { position: fixed; bottom: 100px; right: 32px; background: #fff; padding: 12px 16px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); border: 1px solid #e2e8f0; font-size: 14px; color: #1e293b; z-index: 99998; max-width: 250px; animation: popUpFade 0.5s ease; cursor: pointer; font-family: 'Hind Siliguri', sans-serif; }
         .chat-popup::after { content: ''; position: absolute; bottom: -6px; right: 20px; width: 12px; height: 12px; background: #fff; transform: rotate(45deg); border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; }
-
-        /* === চ্যাট উইন্ডো === */
         .chat-window { position: fixed !important; bottom: max(96px, calc(env(safe-area-inset-bottom, 0px) + 96px)) !important; right: max(24px, env(safe-area-inset-right, 24px)) !important; width: 380px; height: min(560px, calc(100dvh - 120px)); background: #ffffff; border-radius: 16px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15); display: flex; flex-direction: column; z-index: 99999 !important; overflow: hidden; font-family: 'Hind Siliguri', 'Noto Sans Bengali', sans-serif; border: 1px solid #e2e8f0; }
         .chat-header { background: linear-gradient(135deg, #1c5fa8, #0d9488); color: #fff; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
         .chat-header h3 { margin: 0; font-size: 16px; font-weight: 700; }

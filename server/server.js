@@ -283,9 +283,6 @@ Contact: ${HOSPITAL_CONTACT}`;
   }
 }
 
-// ==================================================
-// 🤖 AI Chatbot Endpoint
-// ==================================================
 app.post('/api/chatbot', async (req, res) => {
   try {
     const { question } = req.body;
@@ -297,9 +294,6 @@ app.post('/api/chatbot', async (req, res) => {
   }
 });
 
-// ==================================================
-// 🧠 Chatbot Training Endpoint (Admin)
-// ==================================================
 app.post('/api/admin/train-chatbot', async (req, res) => {
   try {
     const { question, answer } = req.body;
@@ -318,14 +312,12 @@ app.post('/api/admin/train-chatbot', async (req, res) => {
 });
 
 // ==================================================
-// 📝 Chatbot Appointment Booking Endpoint
+// 📝 Chatbot Appointment Booking Endpoint (FIXED DOUBLE MESSAGE)
 // ==================================================
 app.post('/api/book-appointment', async (req, res) => {
   try {
     const { doctorId, name, mobile, age, gender, bookingDate, source } = req.body;
-    if (!doctorId || !name || !mobile) {
-      return res.status(400).json({ success: false, error: 'তথ্য অসম্পূর্ণ' });
-    }
+    if (!doctorId || !name || !mobile) return res.status(400).json({ success: false, error: 'তথ্য অসম্পূর্ণ' });
 
     // ১. ডাক্তারের তথ্য বের করা
     const deptSnapshot = await db.collection('hospitals').doc('alafiyah_main').collection('departments').get();
@@ -342,13 +334,12 @@ app.post('/api/book-appointment', async (req, res) => {
 
     const dateToBook = bookingDate || new Date().toISOString().split('T')[0];
 
-    // ✅ ২. ডুপ্লিকেট বুকিং চেক (ইনডেক্স এরর এড়াতে আমরা শুধু ডাক্তার ও তারিখ দিয়ে খুঁজব)
+    // ✅ ২. ডুপ্লিকেট বুকিং চেক (ইনডেক্স এরর এড়াতে)
     const existingApptSnap = await db.collection('hospitals').doc('alafiyah_main').collection('appointments')
       .where('doctorId', '==', doctorId)
       .where('bookingDate', '==', dateToBook)
       .get();
 
-    // কোডের ভেতরেই মোবাইল নম্বর এবং স্ট্যাটাস মিলিয়ে দেখব
     let isDuplicate = false;
     existingApptSnap.forEach(doc => {
       const data = doc.data();
@@ -374,7 +365,7 @@ app.post('/api/book-appointment', async (req, res) => {
       await counterRef.set({ count: serialNo, doctorId: selectedDoctor.id, date: dateToBook });
     }
 
-    // ✅ ৪. রোগী ডেটাবেসে আছে কিনা চেক করা (পেশেন্ট টাইপ ঠিক করার জন্য)
+    // ✅ ৪. রোগী ডেটাবেসে আছে কিনা চেক করা
     let patientId = null;
     try {
       const patientRef = db.collection('hospitals').doc('alafiyah_main').collection('patients');
@@ -405,7 +396,6 @@ app.post('/api/book-appointment', async (req, res) => {
 
     // ✅ ৬. অ্যাডমিনদের জন্য ইন-অ্যাপ নোটিফিকেশন (বেল আইকনে দেখানোর জন্য)
     try {
-      // যেসব ইউজার অ্যাডমিন বা সাব-অ্যাডমিন, তাদের খুঁজে বের করা
       const adminsSnap = await db.collection('hospitals').doc('alafiyah_main').collection('users')
         .where('role', 'in', ['admin', 'sub-admin']).get();
 
@@ -431,10 +421,8 @@ app.post('/api/book-appointment', async (req, res) => {
       console.error('❌ In-app notification error:', notifErr.message);
     }
 
-    // ✅ সরাসরি হোয়াটসঅ্যাপ নোটিফিকেশন পাঠান
-    sendHospitalNotification(appointmentData, apptRef.id).catch((err) =>
-      console.error('❌ [BOOKING-NOTIFY] Direct notification error:', err.message)
-    );
+    // ❌ সরাসরি হোয়াটসঅ্যাপ নোটিফিকেশন পাঠানো বন্ধ করা হলো (ফায়ারস্টোর লিসেনার এটি করবে)
+    // sendHospitalNotification(appointmentData, apptRef.id).catch((err) => ...);
 
     res.json({
       success: true,
@@ -449,9 +437,6 @@ app.post('/api/book-appointment', async (req, res) => {
   }
 });
 
-// ==================================================
-// 🧪 TEST ENDPOINT — Manual WhatsApp test
-// ==================================================
 app.post('/api/test-whatsapp', async (req, res) => {
   const { to, text } = req.body;
   const targetJid = `${to || NOTIFICATION_TARGET}@s.whatsapp.net`;
@@ -468,9 +453,6 @@ app.post('/api/test-whatsapp', async (req, res) => {
   }
 });
 
-// ==================================================
-// 📊 GA4 Analytics Endpoint
-// ==================================================
 app.get('/api/analytics/ga4', async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
@@ -513,9 +495,6 @@ app.get('/api/analytics/ga4', async (req, res) => {
   }
 });
 
-// ==================================================
-// 📢 Queue Next API
-// ==================================================
 app.post('/api/queue/next', async (req, res) => {
   try {
     const { hospitalId, doctorId, date, nextSerial } = req.body;
@@ -550,9 +529,6 @@ app.post('/api/queue/next', async (req, res) => {
   }
 });
 
-// ==================================================
-// ✅ Confirm Appointment API
-// ==================================================
 app.post('/api/appointment/confirm-with-message', async (req, res) => {
   try {
     const { hospitalId, appointmentId, customSerial, customDoctorTime, customNote } = req.body;
@@ -585,9 +561,6 @@ app.post('/api/appointment/confirm-with-message', async (req, res) => {
   }
 });
 
-// ==================================================
-// 📢 Promo Notification API
-// ==================================================
 app.post('/api/notification/send-promo', async (req, res) => {
   try {
     const { title, body } = req.body;
@@ -605,9 +578,6 @@ app.post('/api/notification/send-promo', async (req, res) => {
   }
 });
 
-// ==================================================
-// 🏠 Root API — Health check
-// ==================================================
 app.get('/', (req, res) => {
   res.json({
     status: 'ok',
@@ -662,9 +632,6 @@ db.collection(`hospitals/${HOSPITAL_ID}/appointments`).onSnapshot(
   (error) => console.error('❌ [FIRESTORE] listener error:', error.message)
 );
 
-// ==================================================
-// 🚀 Run Server
-// ==================================================
 app.listen(PORT, () => {
   console.log(`🚀 Backend running on port: ${PORT}`);
 });
