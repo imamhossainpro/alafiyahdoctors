@@ -1,8 +1,15 @@
 // server.js
+// ==================================================
+// 🏥 আল-আফিয়া হাসপাতাল — Backend Server (Fully Fixed + Chatbot Source)
+// ==================================================
 require('dotenv').config();
 const express = require('express');
 const makeWASocket = require('@whiskeysockets/baileys').default;
-const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const {
+  useMultiFileAuthState,
+  DisconnectReason,
+  fetchLatestBaileysVersion,
+} = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const qrcode = require('qrcode-terminal');
 const nodemailer = require('nodemailer');
@@ -12,6 +19,9 @@ const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
 
+// ==================================================
+// ✅ Load service account
+// ==================================================
 let serviceAccount;
 try {
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
@@ -29,12 +39,23 @@ try {
 
 initializeApp({ credential: cert(serviceAccount) });
 const db = getFirestore();
+
 const { getChatbotAnswer } = require('./chatbotService');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-const ALLOWED_ORIGINS = ['https://doctors.alafiyahhospital.com', 'https://alafiyahhospital.com', 'https://www.alafiyahhospital.com', 'https://api.alafiyahhospital.com', 'http://localhost:5173', 'http://localhost:3000'];
+// ==================================================
+// ✅ CORS Middleware
+// ==================================================
+const ALLOWED_ORIGINS = [
+  'https://doctors.alafiyahhospital.com',
+  'https://alafiyahhospital.com',
+  'https://www.alafiyahhospital.com',
+  'https://api.alafiyahhospital.com',
+  'http://localhost:5173',
+  'http://localhost:3000',
+];
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
@@ -47,12 +68,18 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Max-Age', '86400');
-  if (req.method === 'OPTIONS') return res.status(204).end();
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
   next();
 });
 
 app.use(express.json());
 
+// ==================================================
+// ---------- Constants ----------
+// ==================================================
 const HOSPITAL_ID = process.env.HOSPITAL_ID || 'alafiyah_main';
 const HOSPITAL_NAME_EN = 'Al-Afiyah Hospital';
 const HOSPITAL_CONTACT = '01886-776512';
@@ -68,12 +95,18 @@ let lastMessageSentAt = null;
 let lastMessageError = null;
 let lastMessageTarget = null;
 
-function isWhatsAppReady() { return isConnected === true && sock !== null && sock.user != null; }
+function isWhatsAppReady() {
+  return isConnected === true && sock !== null && sock.user != null;
+}
 
 async function safeSendMessage(jid, payload, label = 'WhatsApp') {
-  if (!isWhatsAppReady()) throw new Error(`${label} not ready`);
+  if (!isWhatsAppReady()) {
+    throw new Error(`${label} not ready (isConnected=${isConnected}, sock=${!!sock})`);
+  }
   const promise = sock.sendMessage(jid, payload);
-  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timeout`)), 15000));
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error(`${label} sendMessage timeout after 15s`)), 15000)
+  );
   return Promise.race([promise, timeout]);
 }
 
@@ -124,13 +157,20 @@ async function sendToDevice(fcmToken, notification, data = {}) {
     const message = {
       token: fcmToken,
       notification: { title: notification.title || HOSPITAL_NAME_EN, body: notification.body || '' },
-      data: { ...Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])), clickAction: data.clickAction || 'OPEN_APP' },
-      android: { priority: 'high', notification: { channelId: 'alafiyah_default', sound: 'default', priority: 'high', color: '#1c5fa8' } },
+      data: {
+        ...Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])),
+        clickAction: data.clickAction || 'OPEN_APP',
+      },
+      android: {
+        priority: 'high',
+        notification: { channelId: 'alafiyah_default', sound: 'default', priority: 'high', color: '#1c5fa8' },
+      },
       apns: { payload: { aps: { sound: 'default', badge: 1 } } },
     };
     const response = await getMessaging().send(message);
     return { success: true, messageId: response };
   } catch (error) {
+    console.error('❌ FCM send error:', error.message);
     return { success: false, error: error.message };
   }
 }
@@ -141,19 +181,30 @@ async function sendSMS(phoneNumber, message) {
     const senderId = process.env.AUTOMAS_SENDER_ID || 'AL AFIYAH';
     const apiUrl = 'https://api.automas.com.bd/smsapiv4';
     if (!apiKey) return false;
+
     let number = phoneNumber.replace(/[^0-9]/g, '');
     if (number.startsWith('88')) number = number.substring(2);
     if (!number.startsWith('0')) number = '0' + number;
-    const isLongMessage = message.length > 160;
-    const payload = { api_key: apiKey, senderid: senderId, type: isLongMessage ? 'long' : 'text', scheduledDateTime: '', msg: message, contacts: number };
+
+    const payload = {
+      api_key: apiKey,
+      senderid: senderId,
+      type: message.length > 160 ? 'long' : 'text',
+      scheduledDateTime: '',
+      msg: message,
+      contacts: number,
+    };
+
     const response = await axios.post(apiUrl, payload, { headers: { 'Content-Type': 'application/json' }, timeout: 15000 });
     const resp = response.data;
     let resultsArray = null;
     if (resp && Array.isArray(resp.response) && resp.response.length > 0) resultsArray = resp.response;
     else if (Array.isArray(resp) && resp.length > 0) resultsArray = resp;
+
     if (resultsArray && resultsArray.length > 0 && resultsArray[0].status === 0) return true;
     return false;
   } catch (error) {
+    console.error('❌ SMS API error:', error.message);
     return false;
   }
 }
@@ -190,6 +241,7 @@ async function connectToWhatsApp() {
           sessionStartTime = Date.now();
           reconnectAttempts = 0;
           console.log('\n✅ WhatsApp connected!');
+          console.log(`   Logged in as: ${sock.user.id}`);
         }
       }
     });
@@ -283,6 +335,9 @@ Contact: ${HOSPITAL_CONTACT}`;
   }
 }
 
+// ==================================================
+// 🤖 AI Chatbot Endpoint
+// ==================================================
 app.post('/api/chatbot', async (req, res) => {
   try {
     const { question } = req.body;
@@ -290,10 +345,14 @@ app.post('/api/chatbot', async (req, res) => {
     const result = await getChatbotAnswer(question);
     res.json({ success: true, answer: result.text, doctors: result.doctors });
   } catch (error) {
+    console.error('Chatbot Error:', error);
     res.status(500).json({ success: false, error: error.message || 'উত্তর তৈরি করতে সমস্যা হয়েছে' });
   }
 });
 
+// ==================================================
+// 🧠 Chatbot Training Endpoint (Admin)
+// ==================================================
 app.post('/api/admin/train-chatbot', async (req, res) => {
   try {
     const { question, answer } = req.body;
@@ -312,7 +371,7 @@ app.post('/api/admin/train-chatbot', async (req, res) => {
 });
 
 // ==================================================
-// 📝 Chatbot Appointment Booking Endpoint (FIXED DOUBLE MESSAGE)
+// 📝 Chatbot Appointment Booking Endpoint (FIXED)
 // ==================================================
 app.post('/api/book-appointment', async (req, res) => {
   try {
@@ -334,7 +393,7 @@ app.post('/api/book-appointment', async (req, res) => {
 
     const dateToBook = bookingDate || new Date().toISOString().split('T')[0];
 
-    // ✅ ২. ডুপ্লিকেট বুকিং চেক (ইনডেক্স এরর এড়াতে)
+    // ✅ ২. ডুপ্লিকেট বুকিং চেক (কোনো ইনডেক্স এরর ছাড়াই)
     const existingApptSnap = await db.collection('hospitals').doc('alafiyah_main').collection('appointments')
       .where('doctorId', '==', doctorId)
       .where('bookingDate', '==', dateToBook)
@@ -343,9 +402,7 @@ app.post('/api/book-appointment', async (req, res) => {
     let isDuplicate = false;
     existingApptSnap.forEach(doc => {
       const data = doc.data();
-      if (data.mobile === mobile && data.status !== 'cancelled') {
-        isDuplicate = true;
-      }
+      if (data.mobile === mobile && data.status !== 'cancelled') isDuplicate = true;
     });
 
     if (isDuplicate) {
@@ -421,8 +478,10 @@ app.post('/api/book-appointment', async (req, res) => {
       console.error('❌ In-app notification error:', notifErr.message);
     }
 
-    // ❌ সরাসরি হোয়াটসঅ্যাপ নোটিফিকেশন পাঠানো বন্ধ করা হলো (ফায়ারস্টোর লিসেনার এটি করবে)
-    // sendHospitalNotification(appointmentData, apptRef.id).catch((err) => ...);
+    // ✅ ৭. সরাসরি হোয়াটসঅ্যাপ নোটিফিকেশন পাঠান (একবারই যাবে)
+    sendHospitalNotification(appointmentData, apptRef.id).catch((err) =>
+      console.error('❌ [BOOKING-NOTIFY] Direct notification error:', err.message)
+    );
 
     res.json({
       success: true,
@@ -437,6 +496,9 @@ app.post('/api/book-appointment', async (req, res) => {
   }
 });
 
+// ==================================================
+// 🧪 TEST ENDPOINT — Manual WhatsApp test
+// ==================================================
 app.post('/api/test-whatsapp', async (req, res) => {
   const { to, text } = req.body;
   const targetJid = `${to || NOTIFICATION_TARGET}@s.whatsapp.net`;
@@ -453,12 +515,13 @@ app.post('/api/test-whatsapp', async (req, res) => {
   }
 });
 
+// ==================================================
+// 📊 GA4 Analytics Endpoint
+// ==================================================
 app.get('/api/analytics/ga4', async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
-    if (!startDate || !endDate) {
-      return res.status(400).json({ success: false, error: 'Missing dates' });
-    }
+    if (!startDate || !endDate) return res.status(400).json({ success: false, error: 'Missing dates' });
 
     const analyticsDataClient = new BetaAnalyticsDataClient({
       credentials: { client_email: serviceAccount.client_email, private_key: serviceAccount.private_key },
@@ -469,11 +532,7 @@ app.get('/api/analytics/ga4', async (req, res) => {
       property: `properties/${GA4_PROPERTY_ID}`,
       dateRanges: [{ startDate, endDate }],
       metrics: [
-        { name: 'activeUsers' },
-        { name: 'newUsers' },
-        { name: 'screenPageViews' },
-        { name: 'sessions' },
-        { name: 'averageSessionDuration' },
+        { name: 'activeUsers' }, { name: 'newUsers' }, { name: 'screenPageViews' }, { name: 'sessions' }, { name: 'averageSessionDuration' },
       ],
     });
 
@@ -488,13 +547,15 @@ app.get('/api/analytics/ga4', async (req, res) => {
         avgSessionDuration: parseFloat(values[4]?.value || '0'),
       };
     }
-
     res.json({ success: true, data: overview });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
+// ==================================================
+// 📢 Queue Next API
+// ==================================================
 app.post('/api/queue/next', async (req, res) => {
   try {
     const { hospitalId, doctorId, date, nextSerial } = req.body;
@@ -529,6 +590,9 @@ app.post('/api/queue/next', async (req, res) => {
   }
 });
 
+// ==================================================
+// ✅ Confirm Appointment API
+// ==================================================
 app.post('/api/appointment/confirm-with-message', async (req, res) => {
   try {
     const { hospitalId, appointmentId, customSerial, customDoctorTime, customNote } = req.body;
@@ -561,6 +625,9 @@ app.post('/api/appointment/confirm-with-message', async (req, res) => {
   }
 });
 
+// ==================================================
+// 📢 Promo Notification API
+// ==================================================
 app.post('/api/notification/send-promo', async (req, res) => {
   try {
     const { title, body } = req.body;
@@ -578,6 +645,9 @@ app.post('/api/notification/send-promo', async (req, res) => {
   }
 });
 
+// ==================================================
+// 🏠 Root API — Health check
+// ==================================================
 app.get('/', (req, res) => {
   res.json({
     status: 'ok',
@@ -595,10 +665,9 @@ app.get('/', (req, res) => {
 });
 
 // ==================================================
-// 🔥 Firestore Listener (FIXED)
+// 🔥 Firestore Listener (FIXED — STOPPED DUP NOTIFICATION)
 // ==================================================
 const previousStatuses = new Map();
-
 setInterval(() => {
   if (previousStatuses.size > 1000) {
     previousStatuses.clear();
@@ -615,9 +684,10 @@ db.collection(`hospitals/${HOSPITAL_ID}/appointments`).onSnapshot(
 
       if (change.type === 'added') {
         previousStatuses.set(docId, currentStatus);
-        if (data.status === 'pending') {
-          await sendHospitalNotification(data, docId);
-        }
+        // ❌ হোয়াটসঅ্যাপ নোটিফিকেশন এখান থেকে পাঠানো বন্ধ করা হলো (কারণ API থেকেই যাচ্ছে)
+        // if (data.status === 'pending') {
+        //   await sendHospitalNotification(data, docId);
+        // }
       }
 
       if (change.type === 'modified') {
@@ -632,8 +702,13 @@ db.collection(`hospitals/${HOSPITAL_ID}/appointments`).onSnapshot(
   (error) => console.error('❌ [FIRESTORE] listener error:', error.message)
 );
 
+// ==================================================
+// 🚀 Run Server
+// ==================================================
 app.listen(PORT, () => {
   console.log(`🚀 Backend running on port: ${PORT}`);
+  console.log(`🏥 Hospital: ${HOSPITAL_ID}`);
+  console.log(`📱 Notification target: ${NOTIFICATION_TARGET}`);
 });
 
 connectToWhatsApp();
