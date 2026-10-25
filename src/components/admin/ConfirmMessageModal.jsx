@@ -1,10 +1,10 @@
 // src/components/admin/ConfirmMessageModal.jsx
 // ==================================================
-// 📩 ConfirmMessageModal — Real-time Data Sync
+// 📩 ConfirmMessageModal — Patient arrival time & custom message preview
 // ==================================================
 import React, { useState, useEffect } from 'react';
 import { X, Send, Loader2, Edit3, AlertCircle, Clock } from 'lucide-react';
-import { db, doc, onSnapshot } from '../../firebase'; // ✅ onSnapshot ইমপোর্ট করুন
+import { db, doc, getDoc } from '../../firebase'; // ✅ ফায়ারবেস getDoc ইমপোর্ট
 
 // ✅ Nur Host — Production API
 const API_BASE_URL = 'https://api.alafiyahhospital.com';
@@ -36,6 +36,9 @@ const TIME_PRESETS = [
   { label: '10:00 PM', value: '10:00 PM' },
 ];
 
+// ==================================================
+// ✅ Helper: Format date as DD/MM/YY
+// ==================================================
 const formatDateShort = (dateStr) => {
   if (!dateStr) return '';
   const parts = String(dateStr).split('-');
@@ -59,48 +62,69 @@ export default function ConfirmMessageModal({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   
-  // ✅ রিয়েল-টাইম ডেটা রাখার স্টেট
-  const [latestAppointment, setLatestAppointment] = useState(appointment);
+  // ✅ সর্বশেষ ডেটা এবং লোডিং স্টেট
+  const [latestAppointment, setLatestAppointment] = useState(null);
+  const [loadingData, setLoadingData] = useState(true);
 
-  // ✅ রিয়েল-টাইম লিসেনার (onSnapshot)
+  // ✅ মডাল ওপেন হলে ফায়ারস্টোর থেকে সর্বশেষ ডেটা ফেচ করা
   useEffect(() => {
-    if (!appointment?.id || !hospitalId) return;
-    
-    const apptRef = doc(db, 'hospitals', hospitalId, 'appointments', appointment.id);
-    
-    const unsubscribe = onSnapshot(apptRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = { id: docSnap.id, ...docSnap.data() };
-        setLatestAppointment(data);
+    const fetchLatestData = async () => {
+      if (!appointment?.id || !hospitalId) {
+        setLoadingData(false);
+        return;
       }
-    });
+      
+      try {
+        setLoadingData(true);
+        const apptRef = doc(db, 'hospitals', hospitalId, 'appointments', appointment.id);
+        const apptSnap = await getDoc(apptRef);
+        
+        if (apptSnap.exists()) {
+          const data = { id: apptSnap.id, ...apptSnap.data() };
+          setLatestAppointment(data);
+          setSerialNo(data.serialNo || '');
+          
+          const now = new Date();
+          const nextHour = now.getHours() + 1;
+          const hour12 = nextHour > 12 ? nextHour - 12 : nextHour === 0 ? 12 : nextHour;
+          const period = nextHour < 12 ? 'AM' : 'PM';
+          setArrivalTime(`${String(hour12).padStart(2, '0')}:00 ${period}`);
+        } else {
+          setLatestAppointment(appointment); // ফলব্যাক
+        }
+      } catch (err) {
+        console.error('Error fetching latest appointment:', err);
+        setLatestAppointment(appointment); // এরর হলে আগের ডেটা ব্যবহার করব
+      } finally {
+        setLoadingData(false);
+      }
+    };
 
-    return () => unsubscribe();
+    fetchLatestData();
   }, [appointment?.id, hospitalId]);
 
-  // ✅ ডেটা লোড হলে সিরিয়াল ও সময় সেট করা
-  useEffect(() => {
-    if (latestAppointment) {
-      setSerialNo(latestAppointment.serialNo || '');
-
-      const now = new Date();
-      const nextHour = now.getHours() + 1;
-      const hour12 =
-        nextHour > 12 ? nextHour - 12 : nextHour === 0 ? 12 : nextHour;
-      const period = nextHour < 12 ? 'AM' : 'PM';
-      setArrivalTime(`${String(hour12).padStart(2, '0')}:00 ${period}`);
-    }
-  }, [latestAppointment]);
+  // ✅ লোডিং স্টেট
+  if (loadingData) {
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
+          <Loader2 className="spin" size={32} color="#1c5fa8" />
+          <span style={{ fontWeight: '600', color: '#475569' }}>সর্বশেষ তথ্য লোড হচ্ছে...</span>
+        </div>
+      </div>
+    );
+  }
 
   if (!latestAppointment) return null;
 
-  // ✅ সর্বশেষ ডেটা ব্যবহার
   const englishPatientName = latestAppointment.nameEn || latestAppointment.name || 'Patient';
   const englishDoctorName = latestAppointment.doctorNameEn || latestAppointment.doctorName || 'Doctor';
   const bookingDate = latestAppointment.bookingDate || '';
   const formattedDate = formatDateShort(bookingDate);
 
-  // ✅ প্রিভিউ মেসেজ (রিয়েল-টাইম ডেটা দিয়ে তৈরি)
+  // ==================================================
+  // ✅ নতুন মেসেজ ফরম্যাট (সর্বশেষ ডেটা ব্যবহার করে)
+  // ==================================================
   const previewMessage = `Assalamu Alaikum. Your appointment with ${englishDoctorName} at Al-Afiyah Hospital is confirmed.
 
 Patient: ${englishPatientName}
@@ -381,16 +405,10 @@ Please arrive on time. Contact: 01886-776512`;
                 marginBottom: '8px',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'space-between',
                 gap: '6px',
-                flexWrap: 'wrap',
               }}
             >
-              <span
-                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-              >
-                📱 রোগী এই মেসেজ পাবেন
-              </span>
+              📱 রোগী এই মেসেজ পাবেন
             </div>
             <pre
               style={{
