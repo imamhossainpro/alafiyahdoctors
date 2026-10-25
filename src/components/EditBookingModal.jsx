@@ -2,9 +2,6 @@
 // ==================================================
 // ✏️ EditBookingModal — Change date/doctor with serial re-assignment
 // ==================================================
-// ✅ Fixed: Bengali day-name matching (trim + lowercase + id fallback)
-// ✅ Fixed: departments/panels empty state debugging
-// ==================================================
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   X,
@@ -69,9 +66,6 @@ export default function EditBookingModal({
     return d.toISOString().split('T')[0];
   }, []);
 
-  // ==================================================
-  // ✅ Load available doctors for selected date
-  // ==================================================
   useEffect(() => {
     if (!panels || panels.length === 0) {
       setAvailableDoctors([]);
@@ -85,7 +79,6 @@ export default function EditBookingModal({
     const dayName = getBanglaDay(newDate);
     const dayLower = dayName.toLowerCase().trim();
 
-    // ✅ Robust matching
     const dayPanel = panels.find((p) => {
       const nameLower = (p.name || '').toLowerCase().trim();
       const idLower = (p.id || '').toLowerCase().trim();
@@ -115,29 +108,19 @@ export default function EditBookingModal({
 
     setAvailableDoctors(docs);
 
-    // If current doctor not in this date's list, auto-deselect
     if (newDoctor && !docs.some((d) => d.id === newDoctor.id)) {
       setNewDoctor(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newDate, panels, departments]);
 
-  // ==================================================
-  // ✅ Initialize newDoctor from appointment
-  // ==================================================
   useEffect(() => {
     if (!appointment || newDoctor) return;
-
     const match = availableDoctors.find((d) => d.id === appointment.doctorId);
     if (match) {
       setNewDoctor(match);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availableDoctors, appointment]);
 
-  // ==================================================
-  // ✅ Preview new serial
-  // ==================================================
   useEffect(() => {
     if (!newDoctor || !newDate) {
       setSerialPreview(null);
@@ -167,7 +150,6 @@ export default function EditBookingModal({
           isUnchanged: false,
         });
       } catch (err) {
-        console.error('Preview error:', err);
         setSerialPreview(null);
       } finally {
         setLoading(false);
@@ -175,7 +157,6 @@ export default function EditBookingModal({
     };
 
     loadPreview();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newDoctor?.id, newDate]);
 
   // ==================================================
@@ -213,9 +194,7 @@ export default function EditBookingModal({
     setError('');
 
     try {
-      // ==================================================
       // Step 1: নতুন serial number নিন
-      // ==================================================
       let newSerial;
       const newCounterKey = `${newDoctor.id}_${newDate}`;
       const newCounterRef = doc(db, 'hospitals', hospitalId, 'counters', newCounterKey);
@@ -223,17 +202,13 @@ export default function EditBookingModal({
       const newCounterSnap = await getDoc(newCounterRef);
       if (newCounterSnap.exists()) {
         newSerial = (newCounterSnap.data().count || 0) + 1;
-        await setDoc(
-          newCounterRef,
-          {
-            count: newSerial,
-            doctorId: newDoctor.id,
-            doctorName: newDoctor.name,
-            date: newDate,
-            updatedAt: new Date().toISOString(),
-          },
-          { merge: true }
-        );
+        await setDoc(newCounterRef, {
+          count: newSerial,
+          doctorId: newDoctor.id,
+          doctorName: newDoctor.name,
+          date: newDate,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
       } else {
         newSerial = 1;
         await setDoc(newCounterRef, {
@@ -245,9 +220,7 @@ export default function EditBookingModal({
         });
       }
 
-      // ==================================================
       // Step 2: Old counter থেকে serial decrement
-      // ==================================================
       const oldCounterKey = `${appointment.doctorId}_${appointment.bookingDate}`;
       const oldCounterRef = doc(db, 'hospitals', hospitalId, 'counters', oldCounterKey);
       const oldCounterSnap = await getDoc(oldCounterRef);
@@ -262,9 +235,7 @@ export default function EditBookingModal({
         }
       }
 
-      // ==================================================
       // Step 3: Appointment update
-      // ==================================================
       const doctorTime =
         newDoctor.timeSlots && newDoctor.timeSlots.length > 0
           ? `${newDoctor.timeSlots[0].start} - ${newDoctor.timeSlots[0].end}`
@@ -286,18 +257,21 @@ export default function EditBookingModal({
         editedAt: new Date().toISOString(),
       });
 
-      console.log('✅ Booking updated:', {
-        oldDate: appointment.bookingDate,
-        newDate,
-        oldDoctor: appointment.doctorName,
-        newDoctor: newDoctor.name,
-        newSerial,
-      });
-
-      if (onSuccess) onSuccess();
+      // ✅ নতুন ডেটা প্যারেন্টকে পাঠানো হলো (Confirm Modal আপডেটের জন্য)
+      if (onSuccess) {
+        onSuccess({
+          id: appointment.id,
+          doctorId: newDoctor.id,
+          doctorName: newDoctor.name,
+          doctorDept: newDoctor.deptName || '',
+          bookingDate: newDate,
+          bookingDay: getBanglaDay(newDate),
+          serialNo: newSerial,
+          doctorTime: doctorTime,
+        });
+      }
       onClose();
     } catch (err) {
-      console.error('❌ Save error:', err);
       setError('সংরক্ষণ ব্যর্থ: ' + err.message);
     } finally {
       setSaving(false);
@@ -368,12 +342,7 @@ export default function EditBookingModal({
           </div>
           <button
             onClick={onClose}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              color: '#64748b',
-            }}
+            style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b' }}
           >
             <X size={22} />
           </button>
@@ -498,21 +467,6 @@ export default function EditBookingModal({
                 }}
               >
                 ⚠️ এই তারিখে কোনো ডাক্তার উপলব্ধ নেই।
-                {panels.length === 0 && (
-                  <div style={{ fontSize: '11px', marginTop: '4px', color: '#a16207' }}>
-                    (কারণ: panels ডেটা লোড হয়নি)
-                  </div>
-                )}
-                {panels.length > 0 && departments.length === 0 && (
-                  <div style={{ fontSize: '11px', marginTop: '4px', color: '#a16207' }}>
-                    (কারণ: departments ডেটা লোড হয়নি)
-                  </div>
-                )}
-                {panels.length > 0 && departments.length > 0 && (
-                  <div style={{ fontSize: '11px', marginTop: '4px', color: '#a16207' }}>
-                    (এই দিনের প্যানেলে কোনো ডাক্তার assign করা নেই)
-                  </div>
-                )}
               </div>
             ) : (
               <div

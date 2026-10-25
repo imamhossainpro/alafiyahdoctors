@@ -823,9 +823,18 @@ export default function AppointmentsTable({
     setEditBookingModalAppt(appt);
   };
 
-  const handleEditBookingSuccess = async () => {
+    const handleEditBookingSuccess = async (updatedData) => {
+    // ✅ প্যারেন্টকে রিফ্রেশ করতে বলুন
     if (onAppointmentsChange) {
       await onAppointmentsChange();
+    }
+
+    // ✅ যদি কনফার্ম মডাল খোলা থাকে, তবে তার ডেটা আপডেট করুন
+    if (confirmModalAppt && updatedData) {
+      setConfirmModalAppt({
+        ...confirmModalAppt,
+        ...updatedData,
+      });
     }
   };
 
