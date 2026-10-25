@@ -4,7 +4,6 @@
 // ==================================================
 import React, { useState, useEffect } from 'react';
 import { X, Send, Loader2, Edit3, AlertCircle, Clock } from 'lucide-react';
-import { db, doc, getDoc } from '../../firebase'; // ✅ ফায়ারবেস getDoc ইমপোর্ট
 
 // ✅ Nur Host — Production API
 const API_BASE_URL = 'https://api.alafiyahhospital.com';
@@ -61,74 +60,36 @@ export default function ConfirmMessageModal({
   const [arrivalTime, setArrivalTime] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
-  
-  // ✅ সর্বশেষ ডেটা এবং লোডিং স্টেট
-  const [latestAppointment, setLatestAppointment] = useState(null);
-  const [loadingData, setLoadingData] = useState(true);
 
-  // ✅ মডাল ওপেন হলে ফায়ারস্টোর থেকে সর্বশেষ ডেটা ফেচ করা
   useEffect(() => {
-    const fetchLatestData = async () => {
-      if (!appointment?.id || !hospitalId) {
-        setLoadingData(false);
-        return;
-      }
-      
-      try {
-        setLoadingData(true);
-        const apptRef = doc(db, 'hospitals', hospitalId, 'appointments', appointment.id);
-        const apptSnap = await getDoc(apptRef);
-        
-        if (apptSnap.exists()) {
-          const data = { id: apptSnap.id, ...apptSnap.data() };
-          setLatestAppointment(data);
-          setSerialNo(data.serialNo || '');
-          
-          const now = new Date();
-          const nextHour = now.getHours() + 1;
-          const hour12 = nextHour > 12 ? nextHour - 12 : nextHour === 0 ? 12 : nextHour;
-          const period = nextHour < 12 ? 'AM' : 'PM';
-          setArrivalTime(`${String(hour12).padStart(2, '0')}:00 ${period}`);
-        } else {
-          setLatestAppointment(appointment); // ফলব্যাক
-        }
-      } catch (err) {
-        console.error('Error fetching latest appointment:', err);
-        setLatestAppointment(appointment); // এরর হলে আগের ডেটা ব্যবহার করব
-      } finally {
-        setLoadingData(false);
-      }
-    };
+    if (appointment) {
+      setSerialNo(appointment.serialNo || '');
 
-    fetchLatestData();
-  }, [appointment?.id, hospitalId]);
+      const now = new Date();
+      const nextHour = now.getHours() + 1;
+      const hour12 =
+        nextHour > 12 ? nextHour - 12 : nextHour === 0 ? 12 : nextHour;
+      const period = nextHour < 12 ? 'AM' : 'PM';
+      setArrivalTime(`${String(hour12).padStart(2, '0')}:00 ${period}`);
+    }
+  }, [appointment]);
 
-  // ✅ লোডিং স্টেট
-  if (loadingData) {
-    return (
-      <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
-          <Loader2 className="spin" size={32} color="#1c5fa8" />
-          <span style={{ fontWeight: '600', color: '#475569' }}>সর্বশেষ তথ্য লোড হচ্ছে...</span>
-        </div>
-      </div>
-    );
-  }
+  if (!appointment) return null;
 
-  if (!latestAppointment) return null;
-
-  const englishPatientName = latestAppointment.nameEn || latestAppointment.name || 'Patient';
-  const englishDoctorName = latestAppointment.doctorNameEn || latestAppointment.doctorName || 'Doctor';
-  const bookingDate = latestAppointment.bookingDate || '';
+  const englishPatientName =
+    appointment.nameEn || appointment.name || 'Patient';
+  const englishDoctorName =
+    appointment.doctorNameEn || appointment.doctorName || 'Doctor';
+  const bookingDate = appointment.bookingDate || '';
   const formattedDate = formatDateShort(bookingDate);
 
   // ==================================================
-  // ✅ নতুন মেসেজ ফরম্যাট (সর্বশেষ ডেটা ব্যবহার করে)
+  // ✅ নতুন মেসেজ ফরম্যাট
   // ==================================================
   const previewMessage = `Assalamu Alaikum. Your appointment with ${englishDoctorName} at Al-Afiyah Hospital is confirmed.
 
 Patient: ${englishPatientName}
-Serial: ${serialNo || latestAppointment.serialNo}
+Serial: ${serialNo || appointment.serialNo}
 Date: ${formattedDate}
 Arrival Time: ${arrivalTime}
 
@@ -157,7 +118,7 @@ Please arrive on time. Contact: 01886-776512`;
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             hospitalId,
-            appointmentId: latestAppointment.id,
+            appointmentId: appointment.id,
             customSerial: serialNo,
             customDoctorTime: arrivalTime.trim(),
             customNote: '',
@@ -241,7 +202,7 @@ Please arrive on time. Contact: 01886-776512`;
                 color: '#64748b',
               }}
             >
-              {englishPatientName} · {latestAppointment.mobile} · {englishDoctorName}
+              {englishPatientName} · {appointment.mobile} · {englishDoctorName}
             </p>
           </div>
           <button
@@ -405,10 +366,16 @@ Please arrive on time. Contact: 01886-776512`;
                 marginBottom: '8px',
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'space-between',
                 gap: '6px',
+                flexWrap: 'wrap',
               }}
             >
-              📱 রোগী এই মেসেজ পাবেন
+              <span
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                📱 রোগী এই মেসেজ পাবেন
+              </span>
             </div>
             <pre
               style={{
