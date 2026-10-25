@@ -789,7 +789,7 @@ export default function AppointmentsTable({
     }
   };
 
-  const handleOpenConfirmModal = async (appt) => {
+ const handleOpenConfirmModal = async (appt) => {
   if (!canStatusChange) {
     alert('❌ আপনার status পরিবর্তন করার permission নেই।');
     return;
@@ -798,9 +798,8 @@ export default function AppointmentsTable({
     alert('হাসপাতাল আইডি পাওয়া যায়নি!');
     return;
   }
-
-  // ✅ ফায়ারস্টোর থেকে সরাসরি সর্বশেষ ডেটা নিয়ে মডালে পাঠানো
   try {
+    // ✅ ফায়ারস্টোর থেকে সর্বশেষ ডেটা নিয়ে আসা
     const apptRef = doc(db, 'hospitals', hospitalId, 'appointments', appt.id);
     const apptSnap = await getDoc(apptRef);
     if (apptSnap.exists()) {
@@ -811,6 +810,16 @@ export default function AppointmentsTable({
   } catch (err) {
     console.error('Error fetching latest appointment:', err);
     setConfirmModalAppt(appt);
+  }
+};
+
+const handleConfirmSuccess = async () => {
+  try {
+    if (onAppointmentsChange) {
+      await onAppointmentsChange();
+    }
+  } catch (err) {
+    console.error('Refresh error:', err);
   }
 };
 
