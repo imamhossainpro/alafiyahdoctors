@@ -244,18 +244,18 @@ export default function EditBookingModal({
       const apptRef = doc(db, 'hospitals', hospitalId, 'appointments', appointment.id);
 
       await updateDoc(apptRef, {
-        bookingDate: newDate,
-        bookingDay: getBanglaDay(newDate),
-        doctorId: newDoctor.id,
-        doctorName: newDoctor.name,
-        doctorDept: newDoctor.deptName || '',
-        doctorQuals: newDoctor.quals || '',
-        doctorTime: doctorTime,
-        serialNo: newSerial,
-        updatedAt: new Date().toISOString(),
-        editedBy: 'admin',
-        editedAt: new Date().toISOString(),
-      });
+      bookingDate: newDate,
+      bookingDay: getBanglaDay(newDate),
+      doctorId: newDoctor.id,
+      doctorName: newDoctor.name, // ✅ নতুন ডাক্তারের নাম
+      doctorDept: newDoctor.deptName || '', // ✅ নতুন বিভাগ
+      doctorQuals: newDoctor.quals || '',
+      doctorTime: doctorTime,
+      serialNo: newSerial,
+      updatedAt: new Date().toISOString(),
+      editedBy: 'admin',
+      editedAt: new Date().toISOString(),
+    });
 
       // ✅ নতুন ডেটা প্যারেন্টকে পাঠানো হলো (Confirm Modal আপডেটের জন্য)
       if (onSuccess) {

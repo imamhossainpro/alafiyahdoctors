@@ -599,21 +599,36 @@ app.post('/api/appointment/confirm-with-message', async (req, res) => {
     if (!hospitalId || !appointmentId) return res.status(400).json({ success: false, error: 'Missing IDs' });
 
     const apptRef = db.collection('hospitals').doc(hospitalId).collection('appointments').doc(appointmentId);
+    
+    // ✅ ১. প্রথমে ফায়ারস্টোর থেকে একদম নতুন ডেটা লোড করা
     const apptDoc = await apptRef.get();
     if (!apptDoc.exists) return res.status(404).json({ success: false, error: 'Not found' });
 
-    const data = apptDoc.data();
-    const updates = { status: 'confirmed', confirmedAt: new Date().toISOString(), confirmedBy: 'admin' };
+    const data = apptDoc.data(); // এখানে নতুন ডাক্তারের নাম থাকবে
+    
+    // ✅ ২. আপডেট অবজেক্ট তৈরি করা
+    const updates = {
+      status: 'confirmed',
+      confirmedAt: new Date().toISOString(),
+      confirmedBy: 'admin',
+    };
     if (customSerial) updates.serialNo = customSerial;
     if (customDoctorTime) updates.doctorTime = customDoctorTime;
     if (customNote) updates.confirmNote = customNote;
 
+    // ✅ ৩. ফায়ারস্টোরে আপডেট সেভ করা
     await apptRef.update(updates);
 
-    const editedData = { ...data, serialNo: customSerial || data.serialNo, doctorTime: customDoctorTime || data.doctorTime };
+    // ✅ ৪. মেসেজ পাঠানোর জন্য নতুন ডেটা প্রস্তুত করা
+    const editedData = {
+      ...data, // এখানে নতুন ডাক্তারের নাম ও তারিখ আছে
+      serialNo: customSerial || data.serialNo,
+      doctorTime: customDoctorTime || data.doctorTime,
+    };
 
     let notificationError = null;
     try {
+      // ✅ ৫. sendPatientConfirmation ফাংশনে নতুন ডেটা পাঠানো
       await sendPatientConfirmation(editedData, appointmentId);
     } catch (notifErr) {
       notificationError = notifErr.message;
