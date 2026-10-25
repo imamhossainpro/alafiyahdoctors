@@ -1,10 +1,10 @@
 // src/components/admin/ConfirmMessageModal.jsx
 // ==================================================
-// 📩 ConfirmMessageModal — Patient arrival time & custom message preview
+// 📩 ConfirmMessageModal — Real-time Data Sync
 // ==================================================
 import React, { useState, useEffect } from 'react';
 import { X, Send, Loader2, Edit3, AlertCircle, Clock } from 'lucide-react';
-import { db, doc, getDoc } from '../../firebase'; // ✅ ফায়ারবেস ইমপোর্ট
+import { db, doc, onSnapshot } from '../../firebase'; // ✅ onSnapshot ইমপোর্ট করুন
 
 // ✅ Nur Host — Production API
 const API_BASE_URL = 'https://api.alafiyahhospital.com';
@@ -36,9 +36,6 @@ const TIME_PRESETS = [
   { label: '10:00 PM', value: '10:00 PM' },
 ];
 
-// ==================================================
-// ✅ Helper: Format date as DD/MM/YY
-// ==================================================
 const formatDateShort = (dateStr) => {
   if (!dateStr) return '';
   const parts = String(dateStr).split('-');
@@ -62,26 +59,26 @@ export default function ConfirmMessageModal({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   
-  // ✅ নতুন স্টেট: সর্বশেষ আপডেট করা ডেটা রাখার জন্য
+  // ✅ রিয়েল-টাইম ডেটা রাখার স্টেট
   const [latestAppointment, setLatestAppointment] = useState(appointment);
 
-  // ✅ মডাল ওপেন হলে ফায়ারস্টোর থেকে সর্বশেষ ডেটা ফেচ করা
+  // ✅ রিয়েল-টাইম লিসেনার (onSnapshot)
   useEffect(() => {
-    const fetchLatestData = async () => {
-      if (!appointment?.id || !hospitalId) return;
-      try {
-        const apptRef = doc(db, 'hospitals', hospitalId, 'appointments', appointment.id);
-        const apptSnap = await getDoc(apptRef);
-        if (apptSnap.exists()) {
-          setLatestAppointment({ id: apptSnap.id, ...apptSnap.data() });
-        }
-      } catch (err) {
-        console.error('Error fetching latest appointment:', err);
+    if (!appointment?.id || !hospitalId) return;
+    
+    const apptRef = doc(db, 'hospitals', hospitalId, 'appointments', appointment.id);
+    
+    const unsubscribe = onSnapshot(apptRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = { id: docSnap.id, ...docSnap.data() };
+        setLatestAppointment(data);
       }
-    };
-    fetchLatestData();
+    });
+
+    return () => unsubscribe();
   }, [appointment?.id, hospitalId]);
 
+  // ✅ ডেটা লোড হলে সিরিয়াল ও সময় সেট করা
   useEffect(() => {
     if (latestAppointment) {
       setSerialNo(latestAppointment.serialNo || '');
@@ -97,15 +94,13 @@ export default function ConfirmMessageModal({
 
   if (!latestAppointment) return null;
 
-  // ✅ নতুন ডেটা ব্যবহার করা
+  // ✅ সর্বশেষ ডেটা ব্যবহার
   const englishPatientName = latestAppointment.nameEn || latestAppointment.name || 'Patient';
   const englishDoctorName = latestAppointment.doctorNameEn || latestAppointment.doctorName || 'Doctor';
   const bookingDate = latestAppointment.bookingDate || '';
   const formattedDate = formatDateShort(bookingDate);
 
-  // ==================================================
-  // ✅ নতুন মেসেজ ফরম্যাট (সর্বশেষ ডেটা ব্যবহার করে)
-  // ==================================================
+  // ✅ প্রিভিউ মেসেজ (রিয়েল-টাইম ডেটা দিয়ে তৈরি)
   const previewMessage = `Assalamu Alaikum. Your appointment with ${englishDoctorName} at Al-Afiyah Hospital is confirmed.
 
 Patient: ${englishPatientName}
