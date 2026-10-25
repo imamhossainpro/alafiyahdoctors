@@ -789,27 +789,30 @@ export default function AppointmentsTable({
     }
   };
 
-  const handleOpenConfirmModal = (appt) => {
-    if (!canStatusChange) {
-      alert('❌ আপনার status পরিবর্তন করার permission নেই।');
-      return;
-    }
-    if (!hospitalId) {
-      alert('হাসপাতাল আইডি পাওয়া যায়নি!');
-      return;
-    }
-    setConfirmModalAppt(appt);
-  };
+  const handleOpenConfirmModal = async (appt) => {
+  if (!canStatusChange) {
+    alert('❌ আপনার status পরিবর্তন করার permission নেই।');
+    return;
+  }
+  if (!hospitalId) {
+    alert('হাসপাতাল আইডি পাওয়া যায়নি!');
+    return;
+  }
 
-  const handleConfirmSuccess = async () => {
-    try {
-      if (onAppointmentsChange) {
-        await onAppointmentsChange();
-      }
-    } catch (err) {
-      console.error('Refresh error:', err);
+  // ✅ ফায়ারস্টোর থেকে সরাসরি সর্বশেষ ডেটা নিয়ে মডালে পাঠানো
+  try {
+    const apptRef = doc(db, 'hospitals', hospitalId, 'appointments', appt.id);
+    const apptSnap = await getDoc(apptRef);
+    if (apptSnap.exists()) {
+      setConfirmModalAppt({ id: apptSnap.id, ...apptSnap.data() });
+    } else {
+      setConfirmModalAppt(appt);
     }
-  };
+  } catch (err) {
+    console.error('Error fetching latest appointment:', err);
+    setConfirmModalAppt(appt);
+  }
+};
 
   const handleOpenEditBookingModal = (appt) => {
     if (!canEdit && !canStatusChange) {
