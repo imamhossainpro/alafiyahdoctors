@@ -716,4 +716,4 @@ connectToWhatsApp();
 process.on('SIGINT', () => {
   if (sock) try { sock.end(undefined); } catch (e) {}
   process.exit(0);
-});
+});c
