@@ -983,7 +983,7 @@ const handleConfirmSuccess = async () => {
     setEndDate('');
   };
 
-  const startEdit = (appt) => {
+   const startEdit = (appt) => {
     if (!canEdit && !canReferralEdit && !canMarketingAssign) {
       alert('❌ আপনার edit permission নেই।');
       return;
@@ -993,11 +993,11 @@ const handleConfirmSuccess = async () => {
       referralSource: appt.referralSource || '',
       marketingOfficer: appt.marketingOfficer || '',
       marketingOfficerId: appt.marketingOfficerId || '',
-      remarks: appt.remarks || '',
+      remarks: appt.remarks || '', // ✅ রিমার্কস ঠিকমতো সেট হচ্ছে
     });
   };
 
-  const saveEdit = async (id) => {
+    const saveEdit = async (id) => {
     if (!hospitalId) {
       alert('হাসপাতাল আইডি পাওয়া যায়নি!');
       return;
@@ -1011,6 +1011,7 @@ const handleConfirmSuccess = async () => {
     try {
       const updates = {};
 
+      // ✅ Referral Source এবং Remarks আপডেট
       if (canReferralEdit) {
         if ((oldAppt.referralSource || '') !== (editData.referralSource || '')) {
           updates.referralSource = editData.referralSource;
@@ -1020,6 +1021,7 @@ const handleConfirmSuccess = async () => {
         }
       }
 
+      // ✅ Marketing Officer আপডেট
       if (canMarketingAssign) {
         const oldOffId = oldAppt.marketingOfficerId || '';
         const newOffId = editData.marketingOfficerId || '';
@@ -1034,10 +1036,13 @@ const handleConfirmSuccess = async () => {
         return;
       }
 
+      // ✅ ফায়ারস্টোরে আপডেট
       await updateDoc(doc(db, 'hospitals', hospitalId, 'appointments', id), updates);
 
+      // ✅ লোকাল স্টেট আপডেট করা (যাতে রিফ্রেশ ছাড়াই দেখা যায়)
       setEditingId(null);
 
+      // ✅ প্যারেন্টকে রিফ্রেশ করতে বলুন
       if (onAppointmentsChange) {
         try {
           await onAppointmentsChange();
