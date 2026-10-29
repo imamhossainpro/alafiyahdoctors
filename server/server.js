@@ -104,6 +104,10 @@ async function safeSendMessage(jid, payload, label = 'WhatsApp') {
   if (!isWhatsAppReady()) {
     throw new Error(`${label} not ready (isConnected=${isConnected}, sock=${!!sock})`);
   }
+  
+  // ✅ WhatsApp-এর সাথে সিঙ্ক হতে ২ সেকেন্ড সময় দেওয়া হচ্ছে
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
   const promise = sock.sendMessage(jid, payload);
   const timeout = new Promise((_, reject) =>
     setTimeout(() => reject(new Error(`${label} sendMessage timeout after 15s`)), 15000)

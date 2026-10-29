@@ -852,6 +852,10 @@ export default function BookingSystem({
         mobile: formData.mobile,
         doctorNameEn: selectedDoctor.nameEn || '',
         referralSource: finalReferralSource,
+        // ✅ এই লাইনটি যোগ করুন: রেফার ডাক্তারের নাম রিমার্কসে সেভ হবে
+        remarks: formData.referralSource === 'Refer Doctor' 
+          ? formData.referredDoctorName 
+          : (formData.referralSource === 'অন্যান্য' ? formData.otherReferralNote : ''),
         patientId,
         doctorId: selectedDoctor.id,
         doctorName: selectedDoctor.name,
