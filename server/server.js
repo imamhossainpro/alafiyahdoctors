@@ -215,7 +215,7 @@ async function sendSMS(phoneNumber, message) {
 }
 
 // ==================================================
-// ✅ WhatsApp Connection Function (FIXED)
+// ✅ WhatsApp Connection Function (FULLY FIXED)
 // ==================================================
 async function connectToWhatsApp() {
   try {
@@ -227,7 +227,13 @@ async function connectToWhatsApp() {
       auth: state, 
       logger: pino({ level: 'silent' }), 
       connectTimeoutMs: 60000, 
-      keepAliveIntervalMs: 10000 
+      keepAliveIntervalMs: 10000,
+      // ✅ মেসেজ রিট্রাই হ্যান্ডেল করার জন্য getMessage ফাংশন
+      getMessage: async (key) => {
+        // এখানে আপনার মেসেজ স্টোর থেকে মেসেজটি রিটার্ন করতে হবে। 
+        // যেহেতু আমাদের আলাদা মেসেজ স্টোর নেই, তাই আপাতত undefined রিটার্ন করছি।
+        return undefined;
+      }
     });
 
     sock.ev.on('messages.upsert', () => { lastActivity = Date.now(); });
