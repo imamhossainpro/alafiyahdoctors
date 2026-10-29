@@ -105,8 +105,8 @@ async function safeSendMessage(jid, payload, label = 'WhatsApp') {
     throw new Error(`${label} not ready (isConnected=${isConnected}, sock=${!!sock})`);
   }
   
-  // ✅ WhatsApp-এর সাথে সিঙ্ক হতে ২ সেকেন্ড সময় দেওয়া হচ্ছে
-  await new Promise(resolve => setTimeout(resolve, 2000));
+  // ✅ প্রতিটি মেসেজ পাঠানোর আগে ৩ সেকেন্ড অপেক্ষা করা (Waiting for this message ঠিক করতে)
+  await new Promise(resolve => setTimeout(resolve, 4000));
 
   const promise = sock.sendMessage(jid, payload);
   const timeout = new Promise((_, reject) =>
@@ -691,9 +691,11 @@ app.get('/', (req, res) => {
 });
 
 // ==================================================
-// 🔥 Firestore Listener (FIXED - WAIT FOR THIS MESSAGE)
+// 🔥 Firestore Listener (FIXED - PREVENT DUPLICATES)
 // ==================================================
 const previousStatuses = new Map();
+const processedBookings = new Set(); // ✅ একই বুকিং একবারই প্রসেস হবে
+
 setInterval(() => {
   if (previousStatuses.size > 1000) {
     previousStatuses.clear();
@@ -708,30 +710,37 @@ db.collection(`hospitals/${HOSPITAL_ID}/appointments`).onSnapshot(
       const data = change.doc.data();
       const currentStatus = data.status;
 
-      // ✅ নতুন বুকিং (pending) হলে এবং আগে নোটিফিকেশন না গেলে
+      // ✅ নতুন বুকিং (pending) হলে
       if (change.type === 'added') {
         previousStatuses.set(docId, currentStatus);
-        if (data.status === 'pending') {
-          // ⚠️ "wait for this message" এরর এড়াতে ২ সেকেন্ড দেরি করে পাঠানো হচ্ছে
+        
+        // ✅ যদি আগে প্রসেস না হয়ে থাকে
+        if (data.status === 'pending' && !processedBookings.has(docId)) {
+          processedBookings.add(docId);
+          console.log(`🔔 [FIRESTORE] New booking detected: ${docId}`);
+          
+          // ✅ ৩ সেকেন্ড দেরি করে নোটিফিকেশন পাঠানো
           setTimeout(async () => {
             if (isWhatsAppReady()) {
-              console.log(`🔔 [FIRESTORE] Sending delayed notification for: ${docId}`);
               await sendHospitalNotification(data, docId);
             }
-          }, 2000);
+          }, 3000);
         }
       }
 
+      // ✅ কনফার্মেশন হলে
       if (change.type === 'modified') {
         const prev = previousStatuses.get(docId);
         if (prev === 'pending' && currentStatus === 'confirmed' && data.confirmedBy !== 'admin') {
-          // ⚠️ কনফার্মেশনেও দেরি করা হচ্ছে
-          setTimeout(async () => {
-            if (isWhatsAppReady()) {
-              console.log(`🔔 [FIRESTORE] Sending delayed confirmation for: ${docId}`);
-              await sendPatientConfirmation(data, docId);
-            }
-          }, 2000);
+          if (!processedBookings.has(`${docId}_confirmed`)) {
+            processedBookings.add(`${docId}_confirmed`);
+            
+            setTimeout(async () => {
+              if (isWhatsAppReady()) {
+                await sendPatientConfirmation(data, docId);
+              }
+            }, 3000);
+          }
         }
         previousStatuses.set(docId, currentStatus);
       }
