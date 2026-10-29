@@ -1,6 +1,6 @@
 // server.js
 // ==================================================
-// 🏥 আল-আফিয়া হাসপাতাল — Backend Server (Fully Fixed + Chatbot Source)
+// 🏥 আল-আফিয়া হাসপাতাল — Backend Server (Fully Fixed)
 // ==================================================
 require('dotenv').config();
 const express = require('express');
@@ -94,6 +94,7 @@ let sessionStartTime = null;
 let lastMessageSentAt = null;
 let lastMessageError = null;
 let lastMessageTarget = null;
+let lastActivity = Date.now();
 
 function isWhatsAppReady() {
   return isConnected === true && sock !== null && sock.user != null;
@@ -209,25 +210,42 @@ async function sendSMS(phoneNumber, message) {
   }
 }
 
+// ==================================================
+// ✅ WhatsApp Connection Function (FIXED)
+// ==================================================
 async function connectToWhatsApp() {
   try {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
     const { version } = await fetchLatestBaileysVersion();
-    sock = makeWASocket({ version, auth: state, logger: pino({ level: 'silent' }), connectTimeoutMs: 60000, keepAliveIntervalMs: 10000 });
+    
+    sock = makeWASocket({ 
+      version, 
+      auth: state, 
+      logger: pino({ level: 'silent' }), 
+      connectTimeoutMs: 60000, 
+      keepAliveIntervalMs: 10000 
+    });
+
+    sock.ev.on('messages.upsert', () => { lastActivity = Date.now(); });
+
     sock.ev.on('creds.update', saveCreds);
+    
     sock.ev.on('connection.update', (update) => {
       const { connection, lastDisconnect, qr } = update;
+      
       if (qr) {
         console.log('\n====================');
         console.log('📱 WhatsApp QR Scan করুন:');
         qrcode.generate(qr, { small: true });
         console.log('\n====================\n');
       }
+      
       if (connection === 'close') {
         isConnected = false;
         sessionStartTime = null;
         const statusCode = lastDisconnect?.error?.output?.statusCode;
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+        
         if (shouldReconnect) {
           reconnectAttempts++;
           if (reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
@@ -240,26 +258,34 @@ async function connectToWhatsApp() {
           isConnected = true;
           sessionStartTime = Date.now();
           reconnectAttempts = 0;
+          lastActivity = Date.now();
           console.log('\n✅ WhatsApp connected!');
           console.log(`   Logged in as: ${sock.user.id}`);
         }
       }
     });
   } catch (error) {
+    console.error('❌ Connection error:', error.message);
     setTimeout(() => connectToWhatsApp(), 5000);
   }
 }
 
+// ==================================================
+// 🆕 TRIGGER 1: Hospital WhatsApp Notification
+// ==================================================
 async function sendHospitalNotification(data, appointmentId) {
   if (!isWhatsAppReady()) {
+    console.error('❌ [HOSPITAL-NOTIFY] ABORT — WhatsApp not ready!');
     lastMessageError = 'WhatsApp not ready at ' + new Date().toISOString();
     return;
   }
+
   const jid = `${NOTIFICATION_TARGET}@s.whatsapp.net`;
   const formattedDate = formatDateDDMMYYYY(data.bookingDate);
   const englishPatientName = data.nameEn || data.name || '';
   const englishDoctorName = data.doctorNameEn || data.doctorName || '';
   const sourceTag = data.source === 'chatbot' ? '🤖 (AI Chatbot)' : '';
+  const bookingId = appointmentId || data.id || 'Unknown';
 
   const msg = `New Booking Alert ${sourceTag}
 
@@ -271,14 +297,17 @@ Date: ${formattedDate} (${data.bookingDay || '-'})
 Time: ${data.doctorTime || 'As scheduled'}
 
 Status: Pending
-Booking ID: ${appointmentId}`;
+Booking ID: ${bookingId}`;
 
   try {
+    console.log(`🔔 [HOSPITAL-NOTIFY] Sending message to ${jid} for booking ${bookingId}...`);
     await safeSendMessage(jid, { text: msg }, 'HOSPITAL-NOTIFY');
+    console.log('✅ [HOSPITAL-NOTIFY] SUCCESS!');
     lastMessageSentAt = new Date().toISOString();
     lastMessageTarget = jid;
     lastMessageError = null;
   } catch (err) {
+    console.error('❌ [HOSPITAL-NOTIFY] FAILED:', err.message);
     lastMessageError = `${err.message} at ${new Date().toISOString()}`;
     if (err.message.includes('timeout') || err.message.includes('closed') || err.message.includes('not ready')) {
       isConnected = false;
@@ -288,6 +317,9 @@ Booking ID: ${appointmentId}`;
   }
 }
 
+// ==================================================
+// 🆕 TRIGGER 2: Patient Notification
+// ==================================================
 async function sendPatientConfirmation(data, appointmentId) {
   const englishPatientName = data.nameEn || data.name || 'Patient';
   const englishDoctorName = data.doctorNameEn || data.doctorName || 'Doctor';
@@ -315,9 +347,13 @@ Please arrive on time. Contact: ${HOSPITAL_CONTACT}`;
     try {
       const jid = formattedMobile + '@s.whatsapp.net';
       await safeSendMessage(jid, { text: unifiedMessage }, 'PATIENT-WA');
+      console.log(`✅ [PATIENT-WA] Sent to patient: ${formattedMobile}`);
       lastMessageSentAt = new Date().toISOString();
       lastMessageTarget = jid;
-    } catch (err) {}
+    } catch (err) {
+      console.error('❌ [PATIENT-WA] Failed:', err.message);
+      lastMessageError = `${err.message} at ${new Date().toISOString()}`;
+    }
   }
 
   if (formattedMobile) {
@@ -371,29 +407,24 @@ app.post('/api/admin/train-chatbot', async (req, res) => {
 });
 
 // ==================================================
-// 📝 Chatbot Appointment Booking Endpoint (FIXED)
+// 📝 Chatbot Appointment Booking Endpoint
 // ==================================================
 app.post('/api/book-appointment', async (req, res) => {
   try {
     const { doctorId, name, mobile, age, gender, bookingDate, source } = req.body;
     if (!doctorId || !name || !mobile) return res.status(400).json({ success: false, error: 'তথ্য অসম্পূর্ণ' });
 
-    // ১. ডাক্তারের তথ্য বের করা
     const deptSnapshot = await db.collection('hospitals').doc('alafiyah_main').collection('departments').get();
     let selectedDoctor = null;
     for (const deptDoc of deptSnapshot.docs) {
       const deptData = deptDoc.data();
       const doc = (deptData.doctors || []).find((d) => d.id === doctorId);
-      if (doc) {
-        selectedDoctor = { ...doc, deptName: deptData.name };
-        break;
-      }
+      if (doc) { selectedDoctor = { ...doc, deptName: deptData.name }; break; }
     }
     if (!selectedDoctor) return res.status(404).json({ success: false, error: 'ডাক্তার পাওয়া যায়নি' });
 
     const dateToBook = bookingDate || new Date().toISOString().split('T')[0];
 
-    // ✅ ২. ডুপ্লিকেট বুকিং চেক (কোনো ইনডেক্স এরর ছাড়াই)
     const existingApptSnap = await db.collection('hospitals').doc('alafiyah_main').collection('appointments')
       .where('doctorId', '==', doctorId)
       .where('bookingDate', '==', dateToBook)
@@ -409,7 +440,6 @@ app.post('/api/book-appointment', async (req, res) => {
       return res.status(400).json({ success: false, error: 'এই রোগী ইতিমধ্যে এই ডাক্তারের জন্য আজ বুকিং করেছেন।' });
     }
 
-    // ৩. সিরিয়াল নম্বর জেনারেট করা
     const counterKey = `${selectedDoctor.id}_${dateToBook}`;
     const counterRef = db.collection('hospitals').doc('alafiyah_main').collection('counters').doc(counterKey);
     const counterSnap = await counterRef.get();
@@ -422,7 +452,6 @@ app.post('/api/book-appointment', async (req, res) => {
       await counterRef.set({ count: serialNo, doctorId: selectedDoctor.id, date: dateToBook });
     }
 
-    // ✅ ৪. রোগী ডেটাবেসে আছে কিনা চেক করা
     let patientId = null;
     try {
       const patientRef = db.collection('hospitals').doc('alafiyah_main').collection('patients');
@@ -441,7 +470,6 @@ app.post('/api/book-appointment', async (req, res) => {
       console.warn('Patient save error:', err.message);
     }
 
-    // ৫. অ্যাপয়েন্টমেন্ট তৈরি করা
     const appointmentData = {
       name, nameEn: name, mobile, age: age || '', gender: gender || 'পুরুষ',
       doctorId: selectedDoctor.id, doctorName: selectedDoctor.name, doctorDept: selectedDoctor.deptName,
@@ -451,7 +479,6 @@ app.post('/api/book-appointment', async (req, res) => {
 
     const apptRef = await db.collection('hospitals').doc('alafiyah_main').collection('appointments').add(appointmentData);
 
-    // ✅ ৬. অ্যাডমিনদের জন্য ইন-অ্যাপ নোটিফিকেশন (বেল আইকনে দেখানোর জন্য)
     try {
       const adminsSnap = await db.collection('hospitals').doc('alafiyah_main').collection('users')
         .where('role', 'in', ['admin', 'sub-admin']).get();
@@ -477,11 +504,6 @@ app.post('/api/book-appointment', async (req, res) => {
     } catch (notifErr) {
       console.error('❌ In-app notification error:', notifErr.message);
     }
-
-    // ✅ ৭. সরাসরি হোয়াটসঅ্যাপ নোটিফিকেশন পাঠান (একবারই যাবে)
-    sendHospitalNotification(appointmentData, apptRef.id).catch((err) =>
-      console.error('❌ [BOOKING-NOTIFY] Direct notification error:', err.message)
-    );
 
     res.json({
       success: true,
@@ -591,7 +613,7 @@ app.post('/api/queue/next', async (req, res) => {
 });
 
 // ==================================================
-// ✅ Confirm Appointment API
+// ✅ Confirm Appointment API (FIXED)
 // ==================================================
 app.post('/api/appointment/confirm-with-message', async (req, res) => {
   try {
@@ -599,36 +621,21 @@ app.post('/api/appointment/confirm-with-message', async (req, res) => {
     if (!hospitalId || !appointmentId) return res.status(400).json({ success: false, error: 'Missing IDs' });
 
     const apptRef = db.collection('hospitals').doc(hospitalId).collection('appointments').doc(appointmentId);
-    
-    // ✅ ১. প্রথমে ফায়ারস্টোর থেকে একদম নতুন ডেটা লোড করা
     const apptDoc = await apptRef.get();
     if (!apptDoc.exists) return res.status(404).json({ success: false, error: 'Not found' });
 
-    const data = apptDoc.data(); // এখানে নতুন ডাক্তারের নাম থাকবে
-    
-    // ✅ ২. আপডেট অবজেক্ট তৈরি করা
-    const updates = {
-      status: 'confirmed',
-      confirmedAt: new Date().toISOString(),
-      confirmedBy: 'admin',
-    };
+    const data = apptDoc.data();
+    const updates = { status: 'confirmed', confirmedAt: new Date().toISOString(), confirmedBy: 'admin' };
     if (customSerial) updates.serialNo = customSerial;
     if (customDoctorTime) updates.doctorTime = customDoctorTime;
     if (customNote) updates.confirmNote = customNote;
 
-    // ✅ ৩. ফায়ারস্টোরে আপডেট সেভ করা
     await apptRef.update(updates);
 
-    // ✅ ৪. মেসেজ পাঠানোর জন্য নতুন ডেটা প্রস্তুত করা
-    const editedData = {
-      ...data, // এখানে নতুন ডাক্তারের নাম ও তারিখ আছে
-      serialNo: customSerial || data.serialNo,
-      doctorTime: customDoctorTime || data.doctorTime,
-    };
+    const editedData = { ...data, serialNo: customSerial || data.serialNo, doctorTime: customDoctorTime || data.doctorTime };
 
     let notificationError = null;
     try {
-      // ✅ ৫. sendPatientConfirmation ফাংশনে নতুন ডেটা পাঠানো
       await sendPatientConfirmation(editedData, appointmentId);
     } catch (notifErr) {
       notificationError = notifErr.message;
@@ -680,7 +687,7 @@ app.get('/', (req, res) => {
 });
 
 // ==================================================
-// 🔥 Firestore Listener (FIXED — STOPPED DUP NOTIFICATION)
+// 🔥 Firestore Listener (FIXED - WAIT FOR THIS MESSAGE)
 // ==================================================
 const previousStatuses = new Map();
 setInterval(() => {
@@ -697,18 +704,30 @@ db.collection(`hospitals/${HOSPITAL_ID}/appointments`).onSnapshot(
       const data = change.doc.data();
       const currentStatus = data.status;
 
+      // ✅ নতুন বুকিং (pending) হলে এবং আগে নোটিফিকেশন না গেলে
       if (change.type === 'added') {
         previousStatuses.set(docId, currentStatus);
-        // ❌ হোয়াটসঅ্যাপ নোটিফিকেশন এখান থেকে পাঠানো বন্ধ করা হলো (কারণ API থেকেই যাচ্ছে)
-        // if (data.status === 'pending') {
-        //   await sendHospitalNotification(data, docId);
-        // }
+        if (data.status === 'pending') {
+          // ⚠️ "wait for this message" এরর এড়াতে ২ সেকেন্ড দেরি করে পাঠানো হচ্ছে
+          setTimeout(async () => {
+            if (isWhatsAppReady()) {
+              console.log(`🔔 [FIRESTORE] Sending delayed notification for: ${docId}`);
+              await sendHospitalNotification(data, docId);
+            }
+          }, 2000);
+        }
       }
 
       if (change.type === 'modified') {
         const prev = previousStatuses.get(docId);
         if (prev === 'pending' && currentStatus === 'confirmed' && data.confirmedBy !== 'admin') {
-          await sendPatientConfirmation(data, docId);
+          // ⚠️ কনফার্মেশনেও দেরি করা হচ্ছে
+          setTimeout(async () => {
+            if (isWhatsAppReady()) {
+              console.log(`🔔 [FIRESTORE] Sending delayed confirmation for: ${docId}`);
+              await sendPatientConfirmation(data, docId);
+            }
+          }, 2000);
         }
         previousStatuses.set(docId, currentStatus);
       }
@@ -716,6 +735,18 @@ db.collection(`hospitals/${HOSPITAL_ID}/appointments`).onSnapshot(
   },
   (error) => console.error('❌ [FIRESTORE] listener error:', error.message)
 );
+
+// ==================================================
+// ✅ Global Health Checker
+// ==================================================
+setInterval(() => {
+  if (isConnected && (Date.now() - lastActivity) > 20 * 60 * 1000) {
+    console.log('⚠️ Zombie socket detected. Reconnecting...');
+    isConnected = false;
+    try { sock?.end(undefined); } catch (e) {}
+    connectToWhatsApp();
+  }
+}, 5 * 60 * 1000);
 
 // ==================================================
 // 🚀 Run Server
@@ -731,4 +762,4 @@ connectToWhatsApp();
 process.on('SIGINT', () => {
   if (sock) try { sock.end(undefined); } catch (e) {}
   process.exit(0);
-});c
+});
